@@ -11,13 +11,36 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Router for Veo video generation endpoints."""
 
 from fastapi import APIRouter, BackgroundTasks, Request
-from models.requests import VideoGenerationRequest
-from services.veo_service import create_initial_job, process_veo_generation_task
+from pydantic import BaseModel
+
 from common.metadata import get_media_item_by_id
+from models.requests import VideoGenerationRequest
+from services.veo_service import (
+    create_initial_job,
+    process_veo_generation_task,
+    run_thumbnail_job,
+)
 
 router = APIRouter(prefix="/api/veo", tags=["veo"])
+
+
+class ThumbnailRequest(BaseModel):
+    """Request schema for thumbnail generation."""
+
+    job_id: str
+    video_uri: str
+
+
+@router.post("/thumbnail")
+async def generate_thumbnail(request: ThumbnailRequest):
+    """FastAPI endpoint triggered by Cloud Tasks to extract a thumbnail."""
+    # The extraction is already happening in a task/thread, so we call it synchronously.
+    run_thumbnail_job(request.job_id, request.video_uri)
+    return {"status": "ok"}
+
 
 @router.post("/generate_async")
 async def generate_veo_async(
@@ -25,8 +48,8 @@ async def generate_veo_async(
     background_tasks: BackgroundTasks,
     req: Request,
 ):
-    """
-    Initiates an asynchronous Veo video generation task.
+    """Initiates an asynchronous Veo video generation task.
+
     Returns a job ID immediately.
     """
     # Extract user email from the request scope, set by middleware
@@ -51,11 +74,10 @@ async def generate_veo_async(
     # 3. Return the tracking number immediately
     return {"job_id": job_id, "status": "pending"}
 
+
 @router.get("/job/{job_id}")
 async def get_veo_job_status(job_id: str):
-    """
-    Checks the status of a Veo generation job.
-    """
+    """Checks the status of a Veo generation job."""
     item = get_media_item_by_id(job_id)
     if not item:
         return {"error": "Job not found"}, 404

@@ -14,6 +14,12 @@
 * limitations under the License.
 */
 
+variable "api_base_url" {
+  description = "Base URL for the application. If not provided, it will be inferred if possible."
+  type        = string
+  default     = ""
+}
+
 variable "project_id" {
   type = string
 }
