@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import time
 
 import google.auth
@@ -26,7 +25,7 @@ from common.analytics import get_logger
 from common.error_handling import GenerationError
 from config.default import Default
 from config.veo_models import get_veo_model_config
-from models.requests import APIReferenceImage, VideoGenerationRequest
+from models.requests import VideoGenerationRequest
 
 config = Default()
 
@@ -55,7 +54,7 @@ def generate_video(request: VideoGenerationRequest) -> tuple[str, str]:
     model_config = get_veo_model_config(request.model_version_id)
     if not model_config:
         raise GenerationError(
-            f"Unsupported VEO model version: {request.model_version_id}"
+            f"Unsupported VEO model version: {request.model_version_id}",
         )
 
     # Prepare Generation Configuration
@@ -77,20 +76,24 @@ def generate_video(request: VideoGenerationRequest) -> tuple[str, str]:
         "output_gcs_uri": f"gs://{config.VIDEO_BUCKET}",
         "resolution": request.resolution,
         "person_generation": PERSON_GENERATION_MAP.get(
-            request.person_generation, "allow_adult"
+            request.person_generation, "allow_adult",
         ),
     }
-    
+
     # Add generate_audio only for Veo 3 models
     if request.model_version_id.startswith("3."):
         gen_config_args["generate_audio"] = request.generate_audio
-        
+
     if request.negative_prompt:
         gen_config_args["negative_prompt"] = request.negative_prompt
 
     extra_params = {}
     # Add support for social rewriter if specified
-    if hasattr(request, "rewriter_type") and request.rewriter_type == "social" and request.model_version_id.startswith("3.1"):
+    if (
+        hasattr(request, "rewriter_type")
+        and request.rewriter_type == "social"
+        and request.model_version_id.startswith("3.1")
+    ):
         # Note: If the SDK doesn't support this in the config object yet,
         # we pass it as an extra parameter to the model call.
         extra_params["prompt_rewriter"] = "social"
@@ -103,8 +106,8 @@ def generate_video(request: VideoGenerationRequest) -> tuple[str, str]:
     # Check for Video Extension
     if request.video_input_gcs:
         if not model_config.supports_video_extension:
-             raise GenerationError(
-                f"Video extension is not supported by model: {request.model_version_id}"
+            raise GenerationError(
+                f"Video extension is not supported by model: {request.model_version_id}",
             )
         logger.info("Mode: Video Extension")
         logger.info(f" video_input: {request.video_input_gcs}")
@@ -124,7 +127,7 @@ def generate_video(request: VideoGenerationRequest) -> tuple[str, str]:
                     mime_type=request.r2v_style_image.mime_type,
                 ),
                 reference_type="style",
-            )
+            ),
         )
 
     if request.r2v_references:
@@ -136,7 +139,7 @@ def generate_video(request: VideoGenerationRequest) -> tuple[str, str]:
                 types.VideoGenerationReferenceImage(
                     image=types.Image(gcs_uri=ref.gcs_uri, mime_type=ref.mime_type),
                     reference_type="asset",
-                )
+                ),
             )
 
     if reference_images_list:
@@ -171,7 +174,9 @@ def generate_video(request: VideoGenerationRequest) -> tuple[str, str]:
     logger.info(f"Calling generate_videos with model: {model_config.model_name}")
     logger.info(f"Config: {gen_config_args}")
     if image_input:
-        logger.info(f"Image Input: gcs_uri={image_input.gcs_uri}, mime_type={image_input.mime_type}")
+        logger.info(
+            f"Image Input: gcs_uri={image_input.gcs_uri}, mime_type={image_input.mime_type}",
+        )
     if reference_images_list:
         logger.info(f"Reference Images Count: {len(reference_images_list)}")
 
@@ -195,13 +200,14 @@ def generate_video(request: VideoGenerationRequest) -> tuple[str, str]:
         if operation.error:
             error_details = str(operation.error)
             logger.info(f"Video generation failed with error: {error_details}")
-            
+
             # Check for specific safety reasons
             from common.error_handling import get_safety_reason
+
             safety_reason = get_safety_reason(error_details)
             if safety_reason:
                 raise GenerationError(safety_reason)
-                
+
             raise GenerationError(f"API Error: {error_details}")
 
         if operation.response:
@@ -219,14 +225,12 @@ def generate_video(request: VideoGenerationRequest) -> tuple[str, str]:
                 video_uris = [v.video.uri for v in operation.result.generated_videos]
                 logger.info(f"Successfully generated {len(video_uris)} videos.")
                 return video_uris, request.resolution
-            else:
-                raise GenerationError(
-                    "API reported success but no video URI was found in the response."
-                )
-        else:
             raise GenerationError(
-                "Unexpected API response structure or operation not done."
+                "API reported success but no video URI was found in the response.",
             )
+        raise GenerationError(
+            "Unexpected API response structure or operation not done.",
+        )
 
     except Exception as e:
         logger.info(f"An unexpected error occurred in generate_video: {e}")
@@ -279,8 +283,7 @@ def compose_videogen_request(
 
 
 def send_request_to_google_api(api_endpoint, data=None):
-    """
-    Sends an HTTP request to a Google API endpoint.
+    """Sends an HTTP request to a Google API endpoint.
 
     Args:
         api_endpoint: The URL of the Google API endpoint.
@@ -288,8 +291,8 @@ def send_request_to_google_api(api_endpoint, data=None):
 
     Returns:
         The response from the Google API.
-    """
 
+    """
     # Get access token calling API
     creds, project = google.auth.default()
     auth_req = google.auth.transport.requests.Request()
@@ -313,7 +316,7 @@ def fetch_operation(fetch_endpoint, lro_name):
     # The generation usually takes 2 minutes. Loop 30 times, around 5 minutes.
     for i in range(60):
         resp = send_request_to_google_api(fetch_endpoint, request)
-        if "done" in resp and resp["done"]:
+        if resp.get("done"):
             logger.info("FOUND RESPONSE")
             logger.info(resp)
             return resp

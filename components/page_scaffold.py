@@ -15,7 +15,6 @@ import mesop as me
 
 from common.analytics import log_page_view
 from components.side_nav import sidenav
-from state.state import AppState
 from components.styles import (
     MAIN_COLUMN_STYLE,
     PAGE_BACKGROUND_PADDING_STYLE,
@@ -24,6 +23,8 @@ from components.styles import (
     SIDENAV_MIN_WIDTH,
 )
 from components.theme_manager.theme_manager import theme_manager
+from state.state import AppState
+
 
 def on_theme_load(e: me.WebEvent):
     s = me.state(AppState)
@@ -34,8 +35,7 @@ def on_theme_load(e: me.WebEvent):
 
 @me.content_component
 def page_scaffold(page_name: str):
-    """page scaffold component"""
-
+    """Page scaffold component"""
     app_state = me.state(AppState)
     app_state.current_page = page_name
     log_page_view(page_name=page_name, session_id=app_state.session_id)
@@ -53,22 +53,20 @@ def page_scaffold(page_name: str):
                 left=SIDENAV_MAX_WIDTH if app_state.sidenav_open else SIDENAV_MIN_WIDTH,
             ),
         ),
+    ), me.box(
+        style=me.Style(
+            background=me.theme_var("background"),
+            height="100%",
+            overflow_y="scroll",
+            margin=me.Margin(bottom=20),
+        ),
     ):
-        with me.box(
-            style=me.Style(
-                background=me.theme_var("background"),
-                height="100%",
-                overflow_y="scroll",
-                margin=me.Margin(bottom=20),
-            )
-        ):
-            me.slot()
+        me.slot()
 
 
 @me.content_component
 def page_frame():
     """Page Frame"""
-    with me.box(style=MAIN_COLUMN_STYLE):
-        with me.box(style=PAGE_BACKGROUND_STYLE):
-            with me.box(style=PAGE_BACKGROUND_PADDING_STYLE):
-                me.slot()
+    with me.box(style=MAIN_COLUMN_STYLE), me.box(style=PAGE_BACKGROUND_STYLE):
+        with me.box(style=PAGE_BACKGROUND_PADDING_STYLE):
+            me.slot()

@@ -14,8 +14,8 @@
 """Component for displaying video details."""
 
 import os
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable
 
 import mesop as me
 
@@ -23,6 +23,7 @@ from common.metadata import MediaItem
 from common.utils import gcs_uri_to_https_url
 from components.download_button.download_button import download_button
 from components.pill import pill
+
 from ..video_thumbnail.video_thumbnail import video_thumbnail
 
 
@@ -34,18 +35,17 @@ def video_details(
     on_thumbnail_click: Callable,
 ):
     """Renders the details for a video item, including a gallery for multiple videos."""
-
     with me.box(
         style=me.Style(
             display="flex",
             flex_direction="column",
             gap=12,
-        )
+        ),
     ):
         # Main video player
         if selected_url and not item.error_message:
             me.video(
-                key=selected_url, # Add key to force re-render
+                key=selected_url,  # Add key to force re-render
                 src=gcs_uri_to_https_url(selected_url),
                 style=me.Style(
                     width="100%",
@@ -67,7 +67,7 @@ def video_details(
                     justify_content="center",
                     margin=me.Margin(top=16, bottom=16),
                     flex_wrap="wrap",
-                )
+                ),
             ):
                 for url in item.gcs_uris:
                     is_selected = url == selected_url
@@ -106,7 +106,7 @@ def video_details(
                 if isinstance(item.timestamp, datetime):
                     ts_str_detail = item.timestamp.isoformat()
                 dialog_timestamp_str_detail = datetime.fromisoformat(
-                    ts_str_detail.replace("Z", "+00:00")
+                    ts_str_detail.replace("Z", "+00:00"),
                 ).strftime("%Y-%m-%d %H:%M:%S %Z")
             except Exception:
                 dialog_timestamp_str_detail = str(item.timestamp)
@@ -122,12 +122,15 @@ def video_details(
             me.text(f"Aspect Ratio: {item.aspect}")
         if item.duration is not None:
             me.text(f"Duration: {item.duration} seconds")
-        
+
         # Display resolution with a pill
         res_label = item.resolution or "720p"
         with me.box(style=me.Style(display="flex", align_items="center", gap=8)):
             me.text("Resolution: ")
-            pill(label=res_label, pill_type="resolution_4k" if res_label == "4k" else "resolution")
+            pill(
+                label=res_label,
+                pill_type="resolution_4k" if res_label == "4k" else "resolution",
+            )
 
         if item.reference_image:
             ref_url = gcs_uri_to_https_url(item.reference_image)
@@ -165,8 +168,8 @@ def video_details(
 
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="row", gap=10, margin=me.Margin(top=16)
-            )
+                display="flex", flex_direction="row", gap=10, margin=me.Margin(top=16),
+            ),
         ):
             with me.content_button(
                 on_click=on_click_permalink,
@@ -178,12 +181,12 @@ def video_details(
                         flex_direction="row",
                         align_items="center",
                         gap=5,
-                    )
+                    ),
                 ):
                     me.icon(icon="link")
                     me.text("permalink")
 
             # Download button should download the selected video
             if selected_url:
-                filename = os.path.basename(selected_url.split("?")[0])
+                filename = os.path.basename(selected_url.split("?", maxsplit=1)[0])
                 download_button(url=selected_url, filename=filename)

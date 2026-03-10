@@ -20,7 +20,7 @@ import mesop as me
 @me.stateclass
 class PageState:
     """Mesop Page State"""
-    
+
     # pylint: disable=E3701:invalid-field-call
 
     veo_model: str = "3.1-fast"
@@ -75,7 +75,7 @@ class PageState:
 
     is_loading: bool = False
     is_converting_gif: bool = False
-    
+
     gif_url: str = ""
 
     show_error_dialog: bool = False
@@ -84,7 +84,7 @@ class PageState:
     result_display_urls: list[str] = field(default_factory=list)
     selected_video_url: str = ""
     timing: str
-    
+
     person_generation: str = "Allow (Adults only)"
 
     # Async Job Tracking

@@ -15,7 +15,6 @@
 
 import json
 import time
-from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import mesop as me
@@ -30,6 +29,7 @@ from common.storage import store_to_gcs
 from common.utils import create_display_url, https_url_to_gcs_uri
 from components.banana_studio.description_accordion import description_accordion
 from components.dialog import dialog
+from components.feedback.feedback import feedback
 from components.header import header
 from components.image_thumbnail import image_thumbnail
 from components.library.events import LibrarySelectionChangeEvent
@@ -39,7 +39,6 @@ from components.pill import pill
 from components.snackbar import snackbar
 from components.svg_icon.svg_icon import svg_icon
 from components.veo_button.veo_button import veo_button
-from components.feedback.feedback import feedback
 from config.default import Default as cfg
 from config.gemini_image_models import get_gemini_image_model_config
 from models.gemini import (
@@ -72,7 +71,7 @@ def _uploader_placeholder(on_upload, on_open_library, key_prefix: str, disabled:
                     width=1,
                     style="dashed",
                     color=me.theme_var("outline"),
-                )
+                ),
             ),
             border_radius=8,
             display="flex",
@@ -81,7 +80,7 @@ def _uploader_placeholder(on_upload, on_open_library, key_prefix: str, disabled:
             justify_content="center",
             gap=8,
             opacity=0.5 if disabled else 1.0,
-        )
+        ),
     ):
         me.uploader(
             label="Upload Image",
@@ -107,11 +106,11 @@ def _empty_placeholder():
             height=100,
             width=100,
             border=me.Border.all(
-                me.BorderSide(width=1, style="dashed", color=me.theme_var("outline"))
+                me.BorderSide(width=1, style="dashed", color=me.theme_var("outline")),
             ),
             border_radius=8,
             opacity=0.5,
-        )
+        ),
     )
 
 
@@ -120,17 +119,16 @@ def _generate_images_button():
     """Renders the main generate button and its loading state."""
     state = me.state(PageState)
     if state.is_generating:
-        with me.content_button(type="raised", disabled=True):
-            with me.box(
-                style=me.Style(
-                    display="flex",
-                    flex_direction="row",
-                    align_items="center",
-                    gap=8,
-                )
-            ):
-                me.progress_spinner(diameter=20, stroke_width=3)
-                me.text("Generating Images...")
+        with me.content_button(type="raised", disabled=True), me.box(
+            style=me.Style(
+                display="flex",
+                flex_direction="row",
+                align_items="center",
+                gap=8,
+            ),
+        ):
+            me.progress_spinner(diameter=20, stroke_width=3)
+            me.text("Generating Images...")
     else:
         me.button(
             "Generate Images",
@@ -155,7 +153,7 @@ def _image_upload_slots(on_upload, on_open_library, on_remove_image):
             margin=me.Margin(bottom=16),
             justify_content="center",
             flex_wrap="wrap",
-        )
+        ),
     ):
         for i in range(max_input_images):
             if i < len(state.uploaded_image_display_urls):
@@ -207,7 +205,7 @@ class PageState:
     is_suggesting_transformations: bool = False
     critique_questions: list[str] = field(default_factory=list)  # pylint: disable=invalid-field-call
     is_generating_questions: bool = False
-    prompt_templates: list[dict] = field(default_factory=list) # pylint: disable=invalid-field-call
+    prompt_templates: list[dict] = field(default_factory=list)  # pylint: disable=invalid-field-call
 
     evaluations: dict[str, Evaluation] = field(default_factory=dict)  # pylint: disable=invalid-field-call
     is_evaluating: bool = False
@@ -218,7 +216,6 @@ class PageState:
     initial_load_complete: bool = False
 
 
-from components.banana_studio.description_tabs import description_tabs
 
 NUM_IMAGES_PROMPTS = {
     2: "Give me 2 options.",
@@ -226,7 +223,7 @@ NUM_IMAGES_PROMPTS = {
     4: "Give me 4 options.",
 }
 
-with open("config/about_content.json", "r") as f:
+with open("config/about_content.json") as f:
     about_content = json.load(f)
     NANO_BANANA_INFO = next(
         (
@@ -239,8 +236,7 @@ with open("config/about_content.json", "r") as f:
 
 
 def on_media_select(e: LibrarySelectionChangeEvent):
-    """
-    Handles the selection of an image from the library dialog.
+    """Handles the selection of an image from the library dialog.
     Adds a placeholder, and queues the description generation.
     """
     state = me.state(PageState)
@@ -251,7 +247,7 @@ def on_media_select(e: LibrarySelectionChangeEvent):
     # Check if there's space for a new image
     if len(state.uploaded_image_gcs_uris) >= max_input_images:
         yield from show_snackbar(
-            state, f"You can add a maximum of {max_input_images} images."
+            state, f"You can add a maximum of {max_input_images} images.",
         )
         return
 
@@ -292,17 +288,16 @@ def _critique_questions_button():
     state = me.state(PageState)
     with me.box(style=me.Style(margin=me.Margin(top=16))):
         if state.is_generating_questions:
-            with me.content_button(type="stroked", disabled=True):
-                with me.box(
-                    style=me.Style(
-                        display="flex",
-                        flex_direction="row",
-                        align_items="center",
-                        gap=8,
-                    )
-                ):
-                    me.progress_spinner(diameter=20, stroke_width=3)
-                    me.text("Generating Questions...")
+            with me.content_button(type="stroked", disabled=True), me.box(
+                style=me.Style(
+                    display="flex",
+                    flex_direction="row",
+                    align_items="center",
+                    gap=8,
+                ),
+            ):
+                me.progress_spinner(diameter=20, stroke_width=3)
+                me.text("Generating Questions...")
         else:
             me.button(
                 "Generate Critique Questions",
@@ -346,9 +341,7 @@ def _actions_row():
                 on_click=on_continue_click,
                 type="stroked",
             )
-            veo_button(
-                gcs_uri=https_url_to_gcs_uri(state.selected_image_url)
-            )
+            veo_button(gcs_uri=https_url_to_gcs_uri(state.selected_image_url))
 
 
 @me.component
@@ -420,7 +413,7 @@ def _suggest_transformations_ui():
                             flex_direction="row",
                             align_items="center",
                             gap=8,
-                        )
+                        ),
                     ):
                         me.progress_spinner(diameter=20, stroke_width=3)
                         me.text("Suggesting...")
@@ -439,40 +432,37 @@ def _suggest_transformations_ui():
                 flex_direction="row",
                 gap=16,
                 margin=me.Margin(top=16),
-            )
+            ),
+        ), me.box(
+            style=me.Style(
+                display="flex",
+                flex_direction="column",
+                align_items="flex-start",
+                gap=8,
+            ),
         ):
-            with me.box(
-                style=me.Style(
-                    display="flex",
-                    flex_direction="column",
-                    align_items="flex-start",
-                    gap=8,
-                ),
-            ):
-                for transformation in state.suggested_transformations:
-                    with me.content_button(
-                        on_click=on_transformation_click,
-                        key=json.dumps(transformation),
-                        type="stroked",
-                        style=CHIP_STYLE,
-                    ):
-                        with me.box(
-                            style=me.Style(
-                                display="flex",
-                                flex_direction="row",
-                                align_items="center",
-                                gap=8,
-                            )
-                        ):
-                            svg_icon(icon_name="image_edit_auto")
-                            me.text(transformation["title"])
+            for transformation in state.suggested_transformations:
+                with me.content_button(
+                    on_click=on_transformation_click,
+                    key=json.dumps(transformation),
+                    type="stroked",
+                    style=CHIP_STYLE,
+                ), me.box(
+                    style=me.Style(
+                        display="flex",
+                        flex_direction="row",
+                        align_items="center",
+                        gap=8,
+                    ),
+                ):
+                    svg_icon(icon_name="image_edit_auto")
+                    me.text(transformation["title"])
 
 
 def gemini_image_gen_page_content():
     """Renders the main UI for the Gemini Image Generation page."""
-
     state = me.state(PageState)
-    
+
     current_model_name = cfg().GEMINI_IMAGE_GEN_MODEL
     model_config = get_gemini_image_model_config(current_model_name)
 
@@ -538,7 +528,9 @@ def gemini_image_gen_page_content():
 
                 me.box(style=me.Style(height=8))
 
-                with me.box(style=me.Style(display="flex", flex_direction="row", gap=16)):
+                with me.box(
+                    style=me.Style(display="flex", flex_direction="row", gap=16),
+                ):
                     me.select(
                         label="Aspect Ratio",
                         options=[
@@ -619,7 +611,7 @@ def gemini_image_gen_page_content():
                     border_radius=12,
                     padding=me.Padding.all(16),
                     min_height=400,
-                )
+                ),
             ):
                 if state.generation_complete and not state.generated_image_urls:
                     me.text("No images returned.")
@@ -633,7 +625,7 @@ def gemini_image_gen_page_content():
                             height="100%",
                             display="flex",
                             flex_direction="column",
-                        )
+                        ),
                     ):
                         if len(state.generated_image_urls) == 1:
                             # Display single, maximized image
@@ -652,20 +644,23 @@ def gemini_image_gen_page_content():
 
                             if state.generated_resolution:
                                 with me.box(style=me.Style(margin=me.Margin(top=8))):
-                                    pill(label=f"Resolution: {state.generated_resolution}", pill_type="resolution")
-                                    
+                                    pill(
+                                        label=f"Resolution: {state.generated_resolution}",
+                                        pill_type="resolution",
+                                    )
+
                             feedback(media_item_id=state.previous_media_item_id)
 
                             # Evaluation display
 
                             with me.box(
-                                style=me.Style(width="100%", margin=me.Margin(top=16))
+                                style=me.Style(width="100%", margin=me.Margin(top=16)),
                             ):
                                 if state.is_evaluating:
                                     with me.box(
                                         style=me.Style(
-                                            display="flex", align_items="center", gap=8
-                                        )
+                                            display="flex", align_items="center", gap=8,
+                                        ),
                                     ):
                                         me.progress_spinner(diameter=20)
 
@@ -687,7 +682,7 @@ def gemini_image_gen_page_content():
                                     )
 
                                     with me.expansion_panel(
-                                        title=f"Critique Score: {score}", icon="rule"
+                                        title=f"Critique Score: {score}", icon="rule",
                                     ):
                                         for item in details:
                                             with me.box(
@@ -697,15 +692,15 @@ def gemini_image_gen_page_content():
                                                     align_items="center",
                                                     gap=8,
                                                     margin=me.Margin(bottom=8),
-                                                )
+                                                ),
                                             ):
                                                 if item["answer"]:
                                                     me.icon(
                                                         "check_circle",
                                                         style=me.Style(
                                                             color=me.theme_var(
-                                                                "success"
-                                                            )
+                                                                "success",
+                                                            ),
                                                         ),
                                                     )
 
@@ -713,7 +708,7 @@ def gemini_image_gen_page_content():
                                                     me.icon(
                                                         "cancel",
                                                         style=me.Style(
-                                                            color=me.theme_var("error")
+                                                            color=me.theme_var("error"),
                                                         ),
                                                     )
 
@@ -724,8 +719,8 @@ def gemini_image_gen_page_content():
 
                             with me.box(
                                 style=me.Style(
-                                    display="flex", flex_direction="column", gap=16
-                                )
+                                    display="flex", flex_direction="column", gap=16,
+                                ),
                             ):
                                 # Main image
 
@@ -740,16 +735,21 @@ def gemini_image_gen_page_content():
                                 )
 
                                 if state.generated_resolution:
-                                    with me.box(style=me.Style(margin=me.Margin(top=8))):
-                                        pill(label=f"Resolution: {state.generated_resolution}", pill_type="resolution")
+                                    with me.box(
+                                        style=me.Style(margin=me.Margin(top=8)),
+                                    ):
+                                        pill(
+                                            label=f"Resolution: {state.generated_resolution}",
+                                            pill_type="resolution",
+                                        )
 
                                 feedback(media_item_id=state.previous_media_item_id)
 
                                 # Evaluation display
                                 with me.box(
                                     style=me.Style(
-                                        width="100%", margin=me.Margin(top=16)
-                                    )
+                                        width="100%", margin=me.Margin(top=16),
+                                    ),
                                 ):
                                     if state.is_evaluating:
                                         with me.box(
@@ -757,7 +757,7 @@ def gemini_image_gen_page_content():
                                                 display="flex",
                                                 align_items="center",
                                                 gap=8,
-                                            )
+                                            ),
                                         ):
                                             me.progress_spinner(diameter=20)
 
@@ -792,15 +792,15 @@ def gemini_image_gen_page_content():
                                                         align_items="center",
                                                         gap=8,
                                                         margin=me.Margin(bottom=8),
-                                                    )
+                                                    ),
                                                 ):
                                                     if item["answer"]:
                                                         me.icon(
                                                             "check_circle",
                                                             style=me.Style(
                                                                 color=me.theme_var(
-                                                                    "success"
-                                                                )
+                                                                    "success",
+                                                                ),
                                                             ),
                                                         )
 
@@ -809,8 +809,8 @@ def gemini_image_gen_page_content():
                                                             "cancel",
                                                             style=me.Style(
                                                                 color=me.theme_var(
-                                                                    "error"
-                                                                )
+                                                                    "error",
+                                                                ),
                                                             ),
                                                         )
 
@@ -824,7 +824,7 @@ def gemini_image_gen_page_content():
                                         flex_direction="row",
                                         gap=16,
                                         justify_content="center",
-                                    )
+                                    ),
                                 ):
                                     for url in state.generated_image_urls:
                                         is_selected = url == state.selected_image_url
@@ -843,7 +843,7 @@ def gemini_image_gen_page_content():
                                                             if is_selected
                                                             else "transparent"
                                                         ),
-                                                    )
+                                                    ),
                                                 ),
                                                 border_radius=12,
                                                 cursor="pointer",
@@ -868,7 +868,7 @@ def gemini_image_gen_page_content():
                             width=128,
                             height=128,
                             color=me.theme_var("on-surface-variant"),
-                        )
+                        ),
                     ):
                         svg_icon(icon_name="banana")
 
@@ -876,8 +876,7 @@ def gemini_image_gen_page_content():
 
 
 def on_upload(e: me.UploadEvent):
-    """
-    Handles file uploads, stores them in GCS, updates the UI with placeholders,
+    """Handles file uploads, stores them in GCS, updates the UI with placeholders,
     and then generates descriptions asynchronously.
     """
     state = me.state(PageState)
@@ -891,7 +890,7 @@ def on_upload(e: me.UploadEvent):
 
     if not files_to_upload:
         yield from show_snackbar(
-            state, f"You can upload a maximum of {max_input_images} images."
+            state, f"You can upload a maximum of {max_input_images} images.",
         )
         return
 
@@ -937,8 +936,7 @@ def on_upload(e: me.UploadEvent):
 
 
 def process_description_queue():
-    """
-    Processes one item from the description queue asynchronously.
+    """Processes one item from the description queue asynchronously.
     This is a generator function that will be called after the initial UI update.
     """
     # This initial yield is crucial. It forces the event handler to return
@@ -1047,7 +1045,7 @@ def on_generate_questions_click(e: me.ClickEvent):
 
     try:
         questions = generate_critique_questions(
-            prompt=state.prompt, image_descriptions=state.image_descriptions
+            prompt=state.prompt, image_descriptions=state.image_descriptions,
         )
         state.critique_questions = questions
     except Exception as ex:
@@ -1097,7 +1095,7 @@ def on_suggest_transformations_click(e: me.ClickEvent):
 
     if not state.generated_image_urls:
         yield from show_snackbar(
-            state, "No image available to suggest transformations for."
+            state, "No image available to suggest transformations for.",
         )
         return
 
@@ -1163,7 +1161,7 @@ def on_image_action_click(e: me.ClickEvent):
 
     # The action now uses the combined list of images
     yield from _generate_and_save(
-        base_prompt=template["prompt"], input_gcs_uris=input_gcs_uris
+        base_prompt=template["prompt"], input_gcs_uris=input_gcs_uris,
     )
 
 
@@ -1234,13 +1232,15 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
             # num_input_images=len(input_gcs_uris),
             # num_images_generated=state.num_images_to_generate,
         ):
-            gcs_uris, execution_time, captions, _ = generate_image_from_prompt_and_images(
-                prompt=final_prompt,
-                images=input_gcs_uris,
-                aspect_ratio=state.aspect_ratio,
-                gcs_folder="gemini_image_generations",
-                file_prefix="gemini_image",
-                image_size=state.image_size,
+            gcs_uris, execution_time, captions, _ = (
+                generate_image_from_prompt_and_images(
+                    prompt=final_prompt,
+                    images=input_gcs_uris,
+                    aspect_ratio=state.aspect_ratio,
+                    gcs_folder="gemini_image_generations",
+                    file_prefix="gemini_image",
+                    image_size=state.image_size,
+                )
             )
 
         state.generation_time = execution_time
@@ -1299,7 +1299,7 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
                 for uri in gcs_uris:
                     try:
                         evaluation_result = evaluate_image_with_questions(
-                            image_uri=uri, questions=state.critique_questions
+                            image_uri=uri, questions=state.critique_questions,
                         )
 
                         # Process results
@@ -1327,7 +1327,7 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
 
                     except Exception as eval_ex:
                         print(
-                            f"ERROR: Failed to evaluate image {uri}. Details: {eval_ex}"
+                            f"ERROR: Failed to evaluate image {uri}. Details: {eval_ex}",
                         )
                         # Optionally, store an error state for this evaluation
 
@@ -1379,7 +1379,7 @@ def on_load(e: me.LoadEvent):
     # Load templates once on initial load.
     if not state.prompt_templates:
         templates = prompt_template_service.load_templates(
-            config_path="config/image_prompt_templates.json", template_type="image"
+            config_path="config/image_prompt_templates.json", template_type="image",
         )
         state.prompt_templates = [t.model_dump() for t in templates]
         print(f"Loaded {len(state.prompt_templates)} image prompt templates.")

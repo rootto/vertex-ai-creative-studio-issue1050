@@ -15,6 +15,7 @@
 # upscale example
 
 import os
+
 from google import genai
 from google.genai import types
 
@@ -32,6 +33,6 @@ image = "gs://cloud-samples-data/generative-ai/image/daisy.jpg"
 upscale = client.models.upscale_image(
     model=upscale_model,
     image=types.Image(gcs_uri=image),
-    upscale_factor='x4',
+    upscale_factor="x4",
 )
 upscale.generated_images[0].image.show()

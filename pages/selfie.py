@@ -20,9 +20,9 @@ import mesop as me
 from common.metadata import MediaItem, add_media_item_to_firestore
 from common.storage import store_to_gcs
 from common.utils import create_display_url
+from components.feedback.feedback import feedback
 from components.page_scaffold import page_scaffold
 from components.selfie_camera.selfie_camera import selfie_camera
-from components.feedback.feedback import feedback
 from state.state import AppState
 
 
@@ -92,14 +92,18 @@ def page():
                 flex_direction="column",
                 align_items="center",
                 gap=16,
-            )
+            ),
         ):
             me.text("Selfie Capture", type="headline-5")
 
             if state.show_camera:
                 selfie_camera(on_capture=on_capture)
             else:
-                me.button("Start Camera", on_click=lambda e: setattr(state, "show_camera", True), type="raised")
+                me.button(
+                    "Start Camera",
+                    on_click=lambda e: setattr(state, "show_camera", True),
+                    type="raised",
+                )
 
             if state.is_saving:
                 me.progress_spinner()
@@ -111,7 +115,7 @@ def page():
                     src=state.captured_image_url,
                     style=me.Style(width=400, border_radius=12),
                 )
-                
+
                 if state.current_media_item_id:
                     with me.box(style=me.Style(margin=me.Margin(top=16))):
                         feedback(media_item_id=state.current_media_item_id)

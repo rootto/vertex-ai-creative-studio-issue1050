@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+
 import pytest
 from google import genai
 from google.genai import types
@@ -32,17 +33,13 @@ if not PROJECT_ID:
     print("Skipping test: GOOGLE_CLOUD_PROJECT not set.")
     pytest.skip("GOOGLE_CLOUD_PROJECT not set", allow_module_level=True)
 
+
 def test_gemini_search_grounding():
     """Tests Gemini Image Generation with Google Search to inspect grounding metadata."""
-    
-    client = genai.Client(
-        vertexai=True,
-        project=PROJECT_ID,
-        location=LOCATION
-    )
+    client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
 
     prompt = "A realistic image of the current weather in New York City."
-    
+
     print(f"\n--- Testing Model: {MODEL_ID} ---")
     print(f"Prompt: {prompt}")
 
@@ -55,29 +52,39 @@ def test_gemini_search_grounding():
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())],
                 response_modalities=["IMAGE", "TEXT"],
-            )
+            ),
         )
-        
+
         print("Response received.")
-        
+
         if response_search.candidates:
             candidate = response_search.candidates[0]
-            print(f"Candidate has grounding_metadata: {hasattr(candidate, 'grounding_metadata')}")
-            
-            if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+            print(
+                f"Candidate has grounding_metadata: {hasattr(candidate, 'grounding_metadata')}",
+            )
+
+            if (
+                hasattr(candidate, "grounding_metadata")
+                and candidate.grounding_metadata
+            ):
                 print("\nGrounding Metadata:")
                 print(candidate.grounding_metadata)
-                
+
                 # Check specific fields we might want
-                if hasattr(candidate.grounding_metadata, 'search_entry_point'):
-                     print(f"Search Entry Point: {candidate.grounding_metadata.search_entry_point}")
-                if hasattr(candidate.grounding_metadata, 'grounding_chunks'):
-                     print(f"Grounding Chunks: {candidate.grounding_metadata.grounding_chunks}")
+                if hasattr(candidate.grounding_metadata, "search_entry_point"):
+                    print(
+                        f"Search Entry Point: {candidate.grounding_metadata.search_entry_point}",
+                    )
+                if hasattr(candidate.grounding_metadata, "grounding_chunks"):
+                    print(
+                        f"Grounding Chunks: {candidate.grounding_metadata.grounding_chunks}",
+                    )
             else:
                 print("No grounding_metadata found in candidate.")
-                
+
     except Exception as e:
         print(f"Error with search: {e}")
+
 
 if __name__ == "__main__":
     test_gemini_search_grounding()

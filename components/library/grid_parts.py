@@ -14,9 +14,11 @@
 """Reusable parts for the library grid items."""
 
 import mesop as me
+
 from common.metadata import MediaItem
 from common.utils import gcs_uri_to_https_url
 from components.pill import pill
+
 from ..video_thumbnail.video_thumbnail import video_thumbnail
 
 
@@ -37,7 +39,10 @@ def render_video_pills(item: MediaItem):
     if item.duration is not None:
         pill(item_duration_str, "duration")
     if item.resolution:
-        pill(item.resolution, "resolution_4k" if item.resolution == "4k" else "resolution")
+        pill(
+            item.resolution,
+            "resolution_4k" if item.resolution == "4k" else "resolution",
+        )
     pill("24 fps", "fps")
     if item.enhanced_prompt_used:
         with me.tooltip(message="Prompt was auto-enhanced"):
@@ -85,11 +90,13 @@ def render_video_preview(item: MediaItem, item_url: str):
             justify_content="center",
             margin=me.Margin(top=8, bottom=8),
             height="150px",  # Set a fixed height for the container
-        )
+        ),
     ):
         if item_url:
             # Use the new, robust video_thumbnail component
-            with me.box(style=me.Style(width="100%", height="100%")): # Add a sized wrapper
+            with me.box(
+                style=me.Style(width="100%", height="100%"),
+            ):  # Add a sized wrapper
                 video_thumbnail(
                     video_src=item_url,
                     # This component is not selectable in the grid, so on_click is not set
@@ -98,7 +105,7 @@ def render_video_preview(item: MediaItem, item_url: str):
             me.text(
                 "Video not available.",
                 style=me.Style(
-                    height="150px", # Match the container height
+                    height="150px",  # Match the container height
                     display="flex",
                     align_items="center",
                     justify_content="center",
@@ -112,7 +119,7 @@ def render_video_preview(item: MediaItem, item_url: str):
                 display="flex",
                 flex_direction="column",
                 gap=5,
-            )
+            ),
         ):
             if item.reference_image:
                 ref_img_url = gcs_uri_to_https_url(item.reference_image)
@@ -136,6 +143,7 @@ def render_video_preview(item: MediaItem, item_url: str):
                         object_fit="contain",
                     ),
                 )
+
 
 @me.component
 def render_image_preview(item: MediaItem, item_url: str):
@@ -162,6 +170,7 @@ def render_image_preview(item: MediaItem, item_url: str):
                 color=me.theme_var("onsurfacevariant"),
             ),
         )
+
 
 @me.component
 def render_audio_preview(item: MediaItem, item_url: str):

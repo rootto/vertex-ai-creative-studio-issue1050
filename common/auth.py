@@ -13,12 +13,14 @@
 # limitations under the License.
 
 import uuid
-from fastapi import Request, Response
+
+from fastapi import Request
+
 from common.storage import get_or_create_session
 
+
 async def set_user_identity_and_session(request: Request, call_next):
-    """
-    FastAPI middleware to set user identity and session information.
+    """FastAPI middleware to set user identity and session information.
     """
     # Get user email from header - assuming IAP
     user_email = request.headers.get("X-Goog-Authenticated-User-Email")
@@ -41,7 +43,8 @@ async def set_user_identity_and_session(request: Request, call_next):
     response = await call_next(request)
 
     # Set session ID cookie on the response
-    response.set_cookie(key="session_id", value=session_id, httponly=True, samesite='Lax')
+    response.set_cookie(
+        key="session_id", value=session_id, httponly=True, samesite="Lax",
+    )
 
     return response
-

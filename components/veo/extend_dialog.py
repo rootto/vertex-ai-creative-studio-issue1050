@@ -13,13 +13,12 @@
 # limitations under the License.
 
 import time
-from dataclasses import dataclass, field
-from typing import Callable
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import mesop as me
 import requests
 
-from common.analytics import log_ui_click
 from common.utils import create_display_url
 from common.veo_utils import start_async_veo_job
 from components.dialog import dialog, dialog_actions
@@ -49,12 +48,13 @@ class VeoExtendDialogState:
 
 @me.component
 def extend_dialog(state: VeoExtendDialogState, on_close: Callable):
-    """
-    Renders a dialog to extend a Veo video.
+    """Renders a dialog to extend a Veo video.
     """
     print(f"DEBUG: Rendering extend_dialog. is_open={state.is_open}")
 
-    with dialog(is_open=state.is_open, dialog_style=me.Style(width="800px", max_width="90vw")):  # pylint: disable=E1129:not-context-manager
+    with dialog(
+        is_open=state.is_open, dialog_style=me.Style(width="800px", max_width="90vw"),
+    ):  # pylint: disable=E1129:not-context-manager
         if state.is_open:
             me.text("Extend Video", type="headline-5")
 
@@ -66,7 +66,7 @@ def extend_dialog(state: VeoExtendDialogState, on_close: Callable):
                         align_items="center",
                         gap=16,
                         padding=me.Padding.all(24),
-                    )
+                    ),
                 ):
                     me.progress_spinner()
                     me.text(state.loading_message)
@@ -79,19 +79,19 @@ def extend_dialog(state: VeoExtendDialogState, on_close: Callable):
         # Main Layout: Row with Preview and Form
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="row", gap=24, margin=me.Margin(top=16)
-            )
+                display="flex", flex_direction="row", gap=24, margin=me.Margin(top=16),
+            ),
         ):
             # Left: Input Video Preview
             with me.box(
                 style=me.Style(
-                    flex_basis="40%", display="flex", flex_direction="column", gap=8
-                )
+                    flex_basis="40%", display="flex", flex_direction="column", gap=8,
+                ),
             ):
                 me.text(
                     "Input Video",
                     style=me.Style(
-                        font_weight="bold", color=me.theme_var("on-surface-variant")
+                        font_weight="bold", color=me.theme_var("on-surface-variant"),
                     ),
                 )
                 if state.input_video_uri:
@@ -104,8 +104,8 @@ def extend_dialog(state: VeoExtendDialogState, on_close: Callable):
             # Right: Input Form
             with me.box(
                 style=me.Style(
-                    flex_basis="60%", display="flex", flex_direction="column", gap=16
-                )
+                    flex_basis="60%", display="flex", flex_direction="column", gap=16,
+                ),
             ):
                 # Prompt Input
                 me.textarea(
@@ -119,7 +119,7 @@ def extend_dialog(state: VeoExtendDialogState, on_close: Callable):
 
                 # Configuration Row
                 with me.box(
-                    style=me.Style(display="flex", flex_direction="row", gap=16)
+                    style=me.Style(display="flex", flex_direction="row", gap=16),
                 ):
                     # Filter models that support extension
                     extension_models = [
@@ -161,10 +161,10 @@ def extend_dialog(state: VeoExtendDialogState, on_close: Callable):
 
                 if state.error_message:
                     me.text(
-                        state.error_message, style=me.Style(color=me.theme_var("error"))
+                        state.error_message, style=me.Style(color=me.theme_var("error")),
                     )
 
-        with dialog_actions(): # pylint: disable=E1129:not-context-manager
+        with dialog_actions():  # pylint: disable=E1129:not-context-manager
             me.button("Cancel", on_click=on_close)
             me.button(
                 "Extend",
@@ -178,8 +178,8 @@ def _render_success_view(state: VeoExtendDialogState, on_close: Callable):
     """Renders the success view with the new video."""
     with me.box(
         style=me.Style(
-            display="flex", flex_direction="column", gap=16, align_items="center"
-        )
+            display="flex", flex_direction="column", gap=16, align_items="center",
+        ),
     ):
         me.text(
             "Video Extended Successfully!",
@@ -276,7 +276,7 @@ def on_extend_click(e: me.ClickEvent):
         )
 
         response_data = start_async_veo_job(
-            request, app_state.user_email, mode="video_extension"
+            request, app_state.user_email, mode="video_extension",
         )
         state.job_id = response_data["job_id"]
         state.job_status = response_data["status"]

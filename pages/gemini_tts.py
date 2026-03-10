@@ -22,16 +22,16 @@ from dataclasses import field
 
 import mesop as me
 
-import common.storage as storage
+from common import storage
 from common.analytics import log_ui_click, track_click
 from common.metadata import MediaItem, add_media_item_to_firestore
 from common.utils import create_display_url
 from components.dialog import dialog, dialog_actions
+from components.feedback.feedback import feedback
 from components.header import header
 from components.page_scaffold import page_frame, page_scaffold
 from components.pill import pill
 from components.snackbar import snackbar
-from components.feedback.feedback import feedback
 from config.gemini_tts import (
     GEMINI_TTS_LANGUAGES,
     GEMINI_TTS_MODEL_NAMES,
@@ -44,14 +44,14 @@ from models.gemini_tts import synthesize_speech
 from state.state import AppState
 
 # Load about content from JSON
-with open("config/about_content.json", "r") as f:
+with open("config/about_content.json") as f:
     about_content = json.load(f)
     GEMINI_TTS_INFO = next(
-        (s for s in about_content["sections"] if s.get("id") == "gemini-tts"), None
+        (s for s in about_content["sections"] if s.get("id") == "gemini-tts"), None,
     )
 
 # Load presets from JSON
-with open("config/tts_presets.json", "r") as f:
+with open("config/tts_presets.json") as f:
     tts_presets = json.load(f)["presets"]
 
 
@@ -141,7 +141,7 @@ def gemini_tts_page_content():
                     display="flex",
                     flex_direction="column",
                     gap=3,
-                )
+                ),
             ):
                 me.textarea(
                     label="Text to Synthesize",
@@ -168,7 +168,8 @@ def gemini_tts_page_content():
                         label="Model",
                         options=[
                             me.SelectOption(
-                                label=GEMINI_TTS_MODELS[m]["label"], value=m,
+                                label=GEMINI_TTS_MODELS[m]["label"],
+                                value=m,
                             )
                             for m in GEMINI_TTS_MODEL_NAMES
                         ],
@@ -203,7 +204,7 @@ def gemini_tts_page_content():
                         appearance="outline",
                     )
                 with me.box(
-                    style=me.Style(display="flex", flex_direction="row", gap=16)
+                    style=me.Style(display="flex", flex_direction="row", gap=16),
                 ):
                     me.button(
                         "Generate",
@@ -224,7 +225,7 @@ def gemini_tts_page_content():
                 # Dynamically render presets based on selected language
                 with me.box(
                     style=me.Style(
-                        display="flex", flex_direction="row", gap=16, flex_wrap="wrap"
+                        display="flex", flex_direction="row", gap=16, flex_wrap="wrap",
                     ),
                 ):
                     filtered_presets = [
@@ -251,16 +252,22 @@ def gemini_tts_page_content():
                     border=me.Border.all(me.BorderSide(width=1, style="solid")),
                     border_radius=12,
                     padding=me.Padding.all(16),
-                )
+                ),
             ):
                 if state.is_generating:
                     me.progress_spinner()
                     me.text("Generating audio...")
                 elif state.audio_display_url:
                     me.audio(src=state.audio_display_url)
-                    
+
                     if state.current_media_item_id:
-                        with me.box(style=me.Style(display="flex", justify_content="center", margin=me.Margin(top=16))):
+                        with me.box(
+                            style=me.Style(
+                                display="flex",
+                                justify_content="center",
+                                margin=me.Margin(top=16),
+                            ),
+                        ):
                             feedback(media_item_id=state.current_media_item_id)
 
                     # Evaluation Section
@@ -272,7 +279,7 @@ def gemini_tts_page_content():
                                 flex_direction="column",
                                 align_items="center",
                                 gap=8,
-                            )
+                            ),
                         ):
                             me.progress_spinner(diameter=24)
                             me.text("Listening closely to the audio...")
@@ -284,14 +291,14 @@ def gemini_tts_page_content():
                                 background=me.theme_var("surface-container-low"),
                                 border_radius=8,
                                 width="100%",
-                            )
+                            ),
                         ):
                             me.text("AI Quality Assurance", type="headline-6")
                             me.text(
                                 f"Quality Score: {state.evaluation_result.quality_score}/100",
                                 type="subtitle-1",
                                 style=me.Style(
-                                    font_weight="bold", color=me.theme_var("primary")
+                                    font_weight="bold", color=me.theme_var("primary"),
                                 ),
                             )
                             me.markdown(state.evaluation_result.justification)
@@ -301,7 +308,7 @@ def gemini_tts_page_content():
                                     flex_wrap="wrap",
                                     gap=8,
                                     margin=me.Margin(top=8),
-                                )
+                                ),
                             ):
                                 for tag in state.evaluation_result.key_tags:
                                     pill(label=tag, pill_type="genre")
@@ -309,7 +316,7 @@ def gemini_tts_page_content():
                             # Technical Metrics Expansion Panel
                             me.box(style=me.Style(height=8))
                             with me.expansion_panel(
-                                title="Technical Audio Metrics", icon="graphic_eq"
+                                title="Technical Audio Metrics", icon="graphic_eq",
                             ):
                                 metrics = state.evaluation_result.audio_metrics
                                 with me.box(
@@ -317,7 +324,7 @@ def gemini_tts_page_content():
                                         display="grid",
                                         grid_template_columns="1fr 1fr",
                                         gap=0,
-                                    )
+                                    ),
                                 ):
                                     me.text(
                                         f"Duration: {metrics.duration_sec:.2f}s",
@@ -518,7 +525,7 @@ def on_click_generate(e: me.ClickEvent):
         try:
             item = MediaItem(
                 user_email=app_state.user_email,
-                timestamp=datetime.datetime.now(datetime.timezone.utc),
+                timestamp=datetime.datetime.now(datetime.UTC),
                 prompt=state.text,  # The main text is the core prompt
                 comment=f"Voice: {state.selected_voice}, Style Prompt: {state.prompt}",
                 model=state.selected_model,
