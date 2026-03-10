@@ -22,6 +22,7 @@ from common.storage import store_to_gcs
 from common.utils import create_display_url
 from components.page_scaffold import page_scaffold
 from components.selfie_camera.selfie_camera import selfie_camera
+from components.feedback.feedback import feedback
 from state.state import AppState
 
 
@@ -30,6 +31,7 @@ class PageState:
     captured_image_url: str = ""
     is_saving: bool = False
     show_camera: bool = False
+    current_media_item_id: str | None = None
 
 
 def on_capture(e: me.WebEvent):
@@ -66,6 +68,7 @@ def on_capture(e: me.WebEvent):
             comment="captured by selfie camera",
         )
         add_media_item_to_firestore(item)
+        state.current_media_item_id = item.id
 
         state.captured_image_url = create_display_url(gcs_uri)
 
@@ -108,3 +111,7 @@ def page():
                     src=state.captured_image_url,
                     style=me.Style(width=400, border_radius=12),
                 )
+                
+                if state.current_media_item_id:
+                    with me.box(style=me.Style(margin=me.Margin(top=16))):
+                        feedback(media_item_id=state.current_media_item_id)

@@ -31,6 +31,7 @@ from components.header import header
 from components.page_scaffold import page_frame, page_scaffold
 from components.pill import pill
 from components.snackbar import snackbar
+from components.feedback.feedback import feedback
 from config.gemini_tts import (
     GEMINI_TTS_LANGUAGES,
     GEMINI_TTS_MODEL_NAMES,
@@ -91,6 +92,7 @@ class GeminiTtsState:
     snackbar_message: str = ""
     is_evaluating: bool = False
     evaluation_result: TTSEvaluationState = field(default_factory=TTSEvaluationState)  # pylint: disable=invalid-field-call
+    current_media_item_id: str | None = None
 
 
 @me.page(
@@ -256,6 +258,10 @@ def gemini_tts_page_content():
                     me.text("Generating audio...")
                 elif state.audio_display_url:
                     me.audio(src=state.audio_display_url)
+                    
+                    if state.current_media_item_id:
+                        with me.box(style=me.Style(display="flex", justify_content="center", margin=me.Margin(top=16))):
+                            feedback(media_item_id=state.current_media_item_id)
 
                     # Evaluation Section
                     if state.is_evaluating:
@@ -461,6 +467,7 @@ def on_click_clear(e: me.ClickEvent):
     state.evaluation_result.audio_metrics.hnr_db = 0.0
     state.evaluation_result.audio_metrics.estimated_tempo_bpm = 0.0
     state.evaluation_result.audio_metrics.duration_sec = 0.0
+    state.current_media_item_id = None
     yield
 
 
@@ -522,6 +529,7 @@ def on_click_generate(e: me.ClickEvent):
                 style_prompt=state.prompt,
             )
             add_media_item_to_firestore(item)
+            state.current_media_item_id = item.id
         except Exception as ex:
             print(f"CRITICAL: Failed to store metadata: {ex}")
 

@@ -20,7 +20,7 @@ from dataclasses import field
 import mesop as me
 
 from common.analytics import analytics_logger, log_ui_click, track_model_call
-from common.metadata import MediaItem, add_media_item_to_firestore
+from common.metadata import MediaItem, add_media_item_to_firestore, update_media_feedback
 from common.prompt_template_service import prompt_template_service
 from common.storage import store_to_gcs
 from common.utils import create_display_url, https_url_to_gcs_uri
@@ -213,6 +213,9 @@ def _render_grounding_info(grounding_info_str: str, theme_mode: str):
     except Exception as e:
         me.text(f"Error parsing grounding info: {e}")
         me.text(grounding_info_str)
+
+
+from components.feedback.feedback import feedback
 
 
 def gemini_image_gen_page_content():
@@ -658,6 +661,8 @@ def gemini_image_gen_page_content():
                                         state.grounding_info, app_state.theme_mode,
                                     )
 
+                            feedback(media_item_id=state.previous_media_item_id)
+
                         else:
                             # Display multiple images in a gallery view
                             with me.box(
@@ -776,6 +781,8 @@ def gemini_image_gen_page_content():
                                         _render_grounding_info(
                                             state.grounding_info, app_state.theme_mode,
                                         )
+
+                                feedback(media_item_id=state.previous_media_item_id)
                 else:
                     # Placeholder
                     with me.box(

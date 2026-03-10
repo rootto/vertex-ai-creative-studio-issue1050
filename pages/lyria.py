@@ -25,6 +25,7 @@ from components.content_credentials.content_credentials import (
     content_credentials_viewer,
 )
 from components.dialog import dialog, dialog_actions
+from components.feedback.feedback import feedback
 from components.header import header
 from components.image_thumbnail import image_thumbnail
 from components.library.events import LibrarySelectionChangeEvent
@@ -283,6 +284,10 @@ def lyria_content(app_state: me.state):
                     else pagestate.music_display_urls[0]
                 )
                 me.audio(src=current_audio_url)
+
+                if pagestate.current_media_item_id and not pagestate.is_loading and not pagestate.show_error_dialog:
+                    with me.box(style=me.Style(display="flex", justify_content="center", margin=me.Margin(top=8, bottom=16))):
+                        feedback(media_item_id=pagestate.current_media_item_id)
 
                 if pagestate.c2pa_manifest_json:
                     with me.box(style=me.Style(margin=me.Margin(top=16))):
@@ -761,6 +766,7 @@ def on_click_lyria(e: me.ClickEvent):
             # duration might be available if analysis_dict_for_metadata contains it, or if Lyria API provides it
         )
         add_media_item_to_firestore(item)
+        state.current_media_item_id = item.id
     except Exception as meta_err:
         print(f"CRITICAL: Failed to store metadata: {meta_err}")
 
@@ -784,6 +790,7 @@ def clear_music(e: me.ClickEvent):
     state.analysis_error_message = ""
     state.loading_operation_message = ""  # Clear loading message
     state.has_audio_metrics = False
+    state.current_media_item_id = None
     # Reset metrics
     state.audio_metrics.mean_pitch_hz = 0.0
     state.audio_metrics.pitch_std_hz = 0.0
