@@ -22,6 +22,7 @@ from ..pill import pill
 from models.video_processing import convert_mp4_to_gif
 from common.utils import https_url_to_gcs_uri, create_display_url
 from config.veo_models import get_veo_model_config
+from components.feedback.feedback import feedback
 
 @me.component
 def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
@@ -143,6 +144,9 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
             if state.is_converting_gif:
                 with me.box(style=me.Style(display="flex", justify_content="center")):
                     me.progress_spinner()
+                    
+        with me.box(style=me.Style(width="100%", max_width="90vh", margin=me.Margin(left="auto", right="auto"))):
+            feedback(media_item_id=state.current_job_id)
 
         # Thumbnail strip for multiple videos
         if len(state.result_display_urls) > 1:

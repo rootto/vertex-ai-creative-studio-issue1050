@@ -41,6 +41,7 @@ from components.page_scaffold import (
     page_frame,
     page_scaffold,
 )
+from components.feedback.feedback import feedback
 from components.selfie_camera.selfie_camera import selfie_camera
 from config.default import ABOUT_PAGE_CONTENT, Default
 from models.model_setup import GeminiModelSetup, VeoModelSetup
@@ -102,6 +103,7 @@ class PageState:
 
     info_dialog_open: bool = False
     show_selfie_dialog: bool = False
+    current_media_item_id: str | None = None
 
 
 from config.portrait_styles import PORTRAIT_STYLES
@@ -474,6 +476,10 @@ def motion_portraits_content(app_state: me.state):
                             with me.box(style=me.Style(display="flex", justify_content="center")):
                                 me.progress_spinner()
                                 
+                        if state.current_media_item_id:
+                            with me.box(style=me.Style(display="flex", justify_content="center", margin=me.Margin(top=16))):
+                                feedback(media_item_id=state.current_media_item_id)
+                                
                         
                     if state.gif_display_url:
                         with me.box(
@@ -572,6 +578,7 @@ def on_click_clear_reference_image(e: me.ClickEvent):
     state.error_message = ""
     state.gif_gcs_uri = ""
     state.gif_display_url = ""
+    state.current_media_item_id = None
     yield
 
 
@@ -865,23 +872,23 @@ Do not describe the frame. There should be no lip movement like speaking, but th
 
     if gcs_uri and not current_error_message:
         try:
-            add_media_item_to_firestore(
-                MediaItem(
-                    gcsuri=gcs_uri,
-                    prompt=state.veo_prompt_input,
-                    aspect=state.aspect_ratio,
-                    model=state.veo_model,
-                    generation_time=execution_time,
-                    duration=float(state.video_length),
-                    reference_image=state.reference_image_gcs,
-                    enhanced_prompt_used=state.auto_enhance_prompt,
-                    error_message="",
-                    comment="motion portrait",
-                    last_reference_image=None,
-                    user_email=app_state.user_email,
-                    mime_type="video/mp4",
-                )
+            media_item = MediaItem(
+                gcsuri=gcs_uri,
+                prompt=state.veo_prompt_input,
+                aspect=state.aspect_ratio,
+                model=state.veo_model,
+                generation_time=execution_time,
+                duration=float(state.video_length),
+                reference_image=state.reference_image_gcs,
+                enhanced_prompt_used=state.auto_enhance_prompt,
+                error_message="",
+                comment="motion portrait",
+                last_reference_image=None,
+                user_email=app_state.user_email,
+                mime_type="video/mp4",
             )
+            add_media_item_to_firestore(media_item)
+            state.current_media_item_id = media_item.id
         except Exception as meta_err:
             print(f"CRITICAL: Failed to store metadata: {meta_err}")
             additional_meta_error = f" (Metadata storage failed: {meta_err})"

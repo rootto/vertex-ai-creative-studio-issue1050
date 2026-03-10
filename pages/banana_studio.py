@@ -39,6 +39,7 @@ from components.pill import pill
 from components.snackbar import snackbar
 from components.svg_icon.svg_icon import svg_icon
 from components.veo_button.veo_button import veo_button
+from components.feedback.feedback import feedback
 from config.default import Default as cfg
 from config.gemini_image_models import get_gemini_image_model_config
 from models.gemini import (
@@ -652,6 +653,8 @@ def gemini_image_gen_page_content():
                             if state.generated_resolution:
                                 with me.box(style=me.Style(margin=me.Margin(top=8))):
                                     pill(label=f"Resolution: {state.generated_resolution}", pill_type="resolution")
+                                    
+                            feedback(media_item_id=state.previous_media_item_id)
 
                             # Evaluation display
 
@@ -739,6 +742,8 @@ def gemini_image_gen_page_content():
                                 if state.generated_resolution:
                                     with me.box(style=me.Style(margin=me.Margin(top=8))):
                                         pill(label=f"Resolution: {state.generated_resolution}", pill_type="resolution")
+
+                                feedback(media_item_id=state.previous_media_item_id)
 
                                 # Evaluation display
                                 with me.box(
