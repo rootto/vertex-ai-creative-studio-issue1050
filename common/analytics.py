@@ -23,9 +23,6 @@ from contextlib import contextmanager
 import mesop as me
 from google.cloud import logging as cloud_logging
 
-from state.state import AppState
-
-
 class JsonFormatter(logging.Formatter):
     """Formats log records as JSON."""
 
@@ -100,6 +97,7 @@ def log_model_call(
 ):
     """Logs a generative model call event."""
     try:
+        from state.state import AppState  # noqa: PLC0415
         state = me.state(AppState)
         page_name = state.current_page
         session_id = state.session_id
@@ -128,6 +126,7 @@ def track_click(element_id: str):
     def decorator(handler_function):
         @functools.wraps(handler_function)
         def wrapper(*args, **kwargs):
+            from state.state import AppState  # noqa: PLC0415
             state = me.state(AppState)
             log_ui_click(
                 element_id=element_id,
