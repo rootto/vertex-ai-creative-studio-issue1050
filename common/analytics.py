@@ -23,6 +23,7 @@ from contextlib import contextmanager
 import mesop as me
 from google.cloud import logging as cloud_logging
 
+
 class JsonFormatter(logging.Formatter):
     """Formats log records as JSON."""
 

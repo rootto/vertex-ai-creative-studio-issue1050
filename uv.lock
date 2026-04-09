@@ -644,6 +644,23 @@ wheels = [
 ]
 
 [[package]]
+name = "google-cloud-tasks"
+version = "2.22.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "grpc-google-iam-v1" },
+    { name = "grpcio" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cb/14/1280678c443bb418c97f6ea002a7cae6e27c33b77871fd8f74bc6bd239fe/google_cloud_tasks-2.22.0.tar.gz", hash = "sha256:bc97d847f1dfbf1b602b67b929b7baf570fea35dcedaadabb5adfdf816a67841", size = 353858, upload-time = "2026-03-26T22:17:55.741Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/bb/1c4d86b46678343c8b419203ef5c4b9c1d90fbd9ca97025517d04f9da0d0/google_cloud_tasks-2.22.0-py3-none-any.whl", hash = "sha256:10700bcf2d72bbc08dbfaddfd28b3de1a6c5dcb6bd05fa2e7bd258bdfeaa160a", size = 297204, upload-time = "2026-03-26T22:15:10.657Z" },
+]
+
+[[package]]
 name = "google-cloud-texttospeech"
 version = "2.33.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2081,6 +2098,7 @@ dependencies = [
     { name = "firebase-admin" },
     { name = "google-cloud-aiplatform" },
     { name = "google-cloud-logging" },
+    { name = "google-cloud-tasks" },
     { name = "google-cloud-texttospeech" },
     { name = "google-genai" },
     { name = "gunicorn" },
@@ -2110,6 +2128,7 @@ requires-dist = [
     { name = "firebase-admin", specifier = ">=6.6.0" },
     { name = "google-cloud-aiplatform", specifier = ">=1.79.0" },
     { name = "google-cloud-logging", specifier = ">=3.12.1" },
+    { name = "google-cloud-tasks", specifier = ">=2.16.0" },
     { name = "google-cloud-texttospeech", specifier = ">=2.27.0" },
     { name = "google-genai", specifier = ">=0.8.0" },
     { name = "gunicorn", specifier = ">=23.0.0" },

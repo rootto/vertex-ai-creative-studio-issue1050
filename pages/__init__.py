@@ -11,4 +11,36 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from . import (
+    about,
+    banana_studio,
+    brand_adherence,
+    character_consistency,
+    character_sheet,
+    chirp_3hd,
+    config,
+    edit_images,
+    gemini_image_generation,
+    gemini_tts,
+    gemini_writers_workshop,
+    guideline_analysis,
+    home,
+    imagen,
+    imagen_upscale,
+    interior_design_v2,
+    library_v2,
+    library_v3,
+    lyria,
+    object_rotation,
+    pixie_compositor,
+    portraits,
+    recontextualize,
+    selfie,
+    shop_the_look,
+    starter_pack,
+    storyboarder,
+    team_management,
+    veo,
+    vto,
+    welcome,
+)

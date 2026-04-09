@@ -38,7 +38,7 @@ from config.rewriters import VIDEO_REWRITER
 from config.veo_models import get_veo_model_config
 from models.gemini import rewriter
 from models.model_setup import VeoModelSetup
-from models.veo import APIReferenceImage, VideoGenerationRequest
+from models.requests import APIReferenceImage, VideoGenerationRequest
 from state.state import AppState
 from state.veo_state import PageState
 

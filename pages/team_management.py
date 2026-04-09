@@ -300,7 +300,7 @@ def team_management_content():
 # --- Event Handlers ---
 
 
-def on_new_team_name_blur(e: me.BlurEvent):
+def on_new_team_name_blur(e: me.InputBlurEvent):
     state = me.state(PageState)
     state.new_team_name = e.value
 
@@ -321,17 +321,17 @@ def on_create_team_click(e: me.ClickEvent):
     yield
 
 
-def on_select_team_change(e: me.SelectionChangeEvent):
+def on_select_team_change(e: me.SelectSelectionChangeEvent):
     state = me.state(PageState)
     state.selected_team_id = e.value
 
 
-def on_user_email_blur(e: me.BlurEvent):
+def on_user_email_blur(e: me.InputBlurEvent):
     state = me.state(PageState)
     state.user_email_to_assign = e.value
 
 
-def on_role_change(e: me.SelectionChangeEvent):
+def on_role_change(e: me.SelectSelectionChangeEvent):
     state = me.state(PageState)
     state.role_to_assign = e.value
 
@@ -360,12 +360,12 @@ def on_assign_user_click(e: me.ClickEvent):
     yield
 
 
-def on_guideline_type_change(e: me.SelectionChangeEvent):
+def on_guideline_type_change(e: me.SelectSelectionChangeEvent):
     state = me.state(PageState)
     state.guideline_type = e.value
 
 
-def on_guideline_text_blur(e: me.BlurEvent):
+def on_guideline_text_blur(e: me.InputBlurEvent):
     state = me.state(PageState)
     state.guideline_text = e.value
 
