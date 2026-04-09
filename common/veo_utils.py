@@ -27,7 +27,7 @@ config = Default()
 
 
 def start_async_veo_job(
-    request: VideoGenerationRequest, user_email: str, mode: str = "t2v"
+    request: VideoGenerationRequest, user_email: str, mode: str = "t2v",
 ) -> dict:
     """Initiates an asynchronous Veo generation job by calling the service directly.
 
@@ -38,6 +38,7 @@ def start_async_veo_job(
 
     Returns:
         A dictionary containing the job response: {'job_id': '...', 'status': '...'}.
+
     """
     # Determine model name for analytics
     model_config = get_veo_model_config(request.model_version_id)

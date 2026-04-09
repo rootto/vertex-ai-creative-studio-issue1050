@@ -14,8 +14,8 @@
 
 """Configuration page for the application."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 import mesop as me
 import pandas as pd
@@ -51,10 +51,10 @@ def _tab_group(tabs: list[Tab], on_tab_click: Callable, selected_tab_key: str):
             display="flex",
             border=me.Border(
                 bottom=me.BorderSide(
-                    width=1, style="solid", color=me.theme_var("outline-variant")
-                )
+                    width=1, style="solid", color=me.theme_var("outline-variant"),
+                ),
             ),
-        )
+        ),
     ):
         for tab in tabs:
             is_selected = tab.key == selected_tab_key
@@ -86,7 +86,7 @@ def _make_tab_style(selected: bool) -> me.Style:
     if selected:
         style.background = me.theme_var("surface-container")
         style.border = me.Border(
-            bottom=me.BorderSide(width=2, style="solid", color=me.theme_var("primary"))
+            bottom=me.BorderSide(width=2, style="solid", color=me.theme_var("primary")),
         )
         style.cursor = "default"
     return style
@@ -164,37 +164,36 @@ def page():
             None,
         )
 
-    with page_scaffold(page_name="config"):
-        with page_frame():
-            header("Configuration", icon="settings")
+    with page_scaffold(page_name="config"), page_frame():
+        header("Configuration", icon="settings")
 
-            tabs = [
-                Tab(key="details", label="Config Details", icon="list_alt"),
-                Tab(key="templates", label="Prompt Templates", icon="pattern"),
-            ]
-            _tab_group(
-                tabs=tabs,
-                on_tab_click=on_tab_change,
-                selected_tab_key=state.active_tab,
+        tabs = [
+            Tab(key="details", label="Config Details", icon="list_alt"),
+            Tab(key="templates", label="Prompt Templates", icon="pattern"),
+        ]
+        _tab_group(
+            tabs=tabs,
+            on_tab_click=on_tab_change,
+            selected_tab_key=state.active_tab,
+        )
+
+        if state.active_tab == "details":
+            _render_config_details_tab(app_state=app_state)
+        elif state.active_tab == "templates":
+            _render_prompt_templates_list(app_state=app_state)
+
+        # Conditionally render the dialog, passing the derived template dict
+        if state.show_template_dialog and selected_template:
+            is_editable = selected_template["attribution"] == app_state.user_email
+            prompt_template_form_dialog(
+                template=selected_template,
+                # Use the new mode parameter instead of is_editable
+                mode="edit" if is_editable else "view",
+                is_open=state.show_template_dialog,
+                on_close=on_close_dialog,
+                on_update=on_update_template,
+                on_save=None,  # Not used on this page
             )
-
-            if state.active_tab == "details":
-                _render_config_details_tab(app_state=app_state)
-            elif state.active_tab == "templates":
-                _render_prompt_templates_list(app_state=app_state)
-
-            # Conditionally render the dialog, passing the derived template dict
-            if state.show_template_dialog and selected_template:
-                is_editable = selected_template["attribution"] == app_state.user_email
-                prompt_template_form_dialog(
-                    template=selected_template,
-                    # Use the new mode parameter instead of is_editable
-                    mode="edit" if is_editable else "view",
-                    is_open=state.show_template_dialog,
-                    on_close=on_close_dialog,
-                    on_update=on_update_template,
-                    on_save=None,  # Not used on this page
-                )
 
 
 def get_config_table(app_state: AppState):
@@ -250,7 +249,7 @@ def get_config_table(app_state: AppState):
     if Default.BUILD_COMMIT:
         config_data["Config"].append("Git Commit")
         config_data["Value"].append(Default.BUILD_COMMIT)
-    
+
     if Default.BUILD_DATE:
         config_data["Config"].append("Build Date")
         config_data["Value"].append(Default.BUILD_DATE)
@@ -293,10 +292,10 @@ def _render_prompt_templates_list(app_state: AppState):
                     padding=me.Padding(bottom=8),
                     border=me.Border(
                         bottom=me.BorderSide(
-                            width=1, style="solid", color=me.theme_var("outline")
-                        )
+                            width=1, style="solid", color=me.theme_var("outline"),
+                        ),
                     ),
-                )
+                ),
             ):
                 me.text("Label", style=me.Style(font_weight="bold"))
                 me.text("Key", style=me.Style(font_weight="bold"))
@@ -320,7 +319,7 @@ def _render_prompt_templates_list(app_state: AppState):
                                 width=1,
                                 style="solid",
                                 color=me.theme_var("outline-variant"),
-                            )
+                            ),
                         ),
                         align_items="center",
                         cursor="pointer",

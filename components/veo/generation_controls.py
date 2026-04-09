@@ -14,9 +14,7 @@
 
 import mesop as me
 
-from common.analytics import log_ui_click
-from config.veo_models import get_veo_model_config, VEO_MODELS
-from state.state import AppState
+from config.veo_models import VEO_MODELS, get_veo_model_config
 from state.veo_state import PageState
 
 
@@ -153,7 +151,9 @@ def generation_controls(
             appearance="outline",
             options=[
                 me.SelectOption(label="Allow (All ages)", value="Allow (All ages)"),
-                me.SelectOption(label="Allow (Adults only)", value="Allow (Adults only)"),
+                me.SelectOption(
+                    label="Allow (Adults only)", value="Allow (Adults only)",
+                ),
                 me.SelectOption(label="Don't Allow", value="Don't Allow"),
             ],
             value=state.person_generation,

@@ -56,7 +56,9 @@ def run_thumbnail_job(job_id: str, video_uri: str) -> None:
 
 
 def process_veo_generation_task(
-    job_id: str, request_data: VideoGenerationRequest, user_email: str,
+    job_id: str,
+    request_data: VideoGenerationRequest,
+    user_email: str,
 ) -> None:
     """Processes Veo video generation.
 
@@ -80,9 +82,13 @@ def process_veo_generation_task(
                 # (which is just the extension amount)
                 # So we inspect the actual generated file to get the true total duration.
                 actual_duration = get_video_duration(video_uris[0])
-                logger.info(f"Corrected duration for extended video: {actual_duration}s")
+                logger.info(
+                    f"Corrected duration for extended video: {actual_duration}s",
+                )
             except Exception:
-                logger.warning(f"Could not verify duration of extended video for job {job_id}")
+                logger.warning(
+                    f"Could not verify duration of extended video for job {job_id}",
+                )
 
         _complete_job(job_id, video_uris, resolution, duration=actual_duration)
         logger.info(f"Background task for job {job_id} completed successfully.")
@@ -165,9 +171,7 @@ def _fail_job(job_id: str, error_message: str) -> None:
 def create_initial_job(request: VideoGenerationRequest, user_email: str) -> str:
     """Creates the initial 'pending' MediaItem in Firestore and returns its ID."""
     model_config = get_veo_model_config(request.model_version_id)
-    model_name = (
-        model_config.model_name if model_config else request.model_version_id
-    )
+    model_name = model_config.model_name if model_config else request.model_version_id
 
     # Infer mode
     mode = "t2v"

@@ -13,11 +13,10 @@
 # limitations under the License.
 
 import json
-import os
 import random
-from typing import Any, Optional
 
 from config.default import get_config_path
+
 
 class RetroGameConfig:
     _instance = None
@@ -26,25 +25,25 @@ class RetroGameConfig:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(RetroGameConfig, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             cls._instance._load_config()
         return cls._instance
 
     def _load_config(self):
         """Loads the configuration from the JSON file."""
         # Load Config
-        config_path = get_config_path('workflows/retro_games/config.json')
+        config_path = get_config_path("workflows/retro_games/config.json")
         try:
-            with open(config_path, 'r') as f:
+            with open(config_path) as f:
                 self._config_data = json.load(f)
         except Exception as e:
             print(f"Error loading config: {e}")
             self._config_data = {"themes": {}, "bumper_videos": []}
 
         # Load Prompts
-        prompts_path = get_config_path('workflows/retro_games/prompts.json')
+        prompts_path = get_config_path("workflows/retro_games/prompts.json")
         try:
-            with open(prompts_path, 'r') as f:
+            with open(prompts_path) as f:
                 self._prompts_data = json.load(f)
         except Exception as e:
             print(f"Error loading prompts: {e}")
@@ -58,26 +57,26 @@ class RetroGameConfig:
         """Returns a list of available theme names."""
         return list(self._config_data.get("themes", {}).keys())
 
-    def get_theme_config(self, theme_name: str) -> Optional[dict[str, str]]:
+    def get_theme_config(self, theme_name: str) -> dict[str, str] | None:
         """Returns the configuration for a specific theme."""
         return self._config_data.get("themes", {}).get(theme_name)
 
-    def get_theme_prompt(self, theme_name: str) -> Optional[str]:
+    def get_theme_prompt(self, theme_name: str) -> str | None:
         """Returns the prompt for a specific theme."""
         theme = self.get_theme_config(theme_name)
         return theme.get("prompt") if theme else None
 
-    def get_theme_logo(self, theme_name: str) -> Optional[str]:
+    def get_theme_logo(self, theme_name: str) -> str | None:
         """Returns the logo URI for a specific theme."""
         theme = self.get_theme_config(theme_name)
         return theme.get("logo_uri") if theme else None
 
-    def get_theme_8bit_logo(self, theme_name: str) -> Optional[str]:
+    def get_theme_8bit_logo(self, theme_name: str) -> str | None:
         """Returns the 8-bit logo URI for a specific theme."""
         theme = self.get_theme_config(theme_name)
         return theme.get("logo_8bit_uri") if theme else None
 
-    def get_random_bumper(self) -> Optional[str]:
+    def get_random_bumper(self) -> str | None:
         """Returns a random bumper video URI."""
         bumpers = self._config_data.get("bumper_videos", [])
         return random.choice(bumpers) if bumpers else None

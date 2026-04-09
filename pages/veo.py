@@ -13,21 +13,17 @@
 # limitations under the License.
 """Veo mesop UI page."""
 
-import datetime  # Required for timestamp
-import json
 import time
 
 import mesop as me
 
-from common.analytics import log_ui_click, track_click, track_model_call
-from common.error_handling import AsyncVeoPollingFailedError, GenerationError
+from common.analytics import log_ui_click, track_click
+from common.error_handling import AsyncVeoPollingFailedError
 from common.metadata import (
-    MediaItem,
-    add_media_item_to_firestore,
     get_media_item_by_id,
 )
 from common.storage import store_to_gcs
-from common.utils import create_display_url, get_image_dimensions_from_base64
+from common.utils import create_display_url
 from common.veo_utils import start_async_veo_job
 from components.dialog import dialog, dialog_actions
 from components.header import header
@@ -42,7 +38,7 @@ from config.rewriters import VIDEO_REWRITER
 from config.veo_models import get_veo_model_config
 from models.gemini import rewriter
 from models.model_setup import VeoModelSetup
-from models.veo import APIReferenceImage, VideoGenerationRequest, generate_video
+from models.veo import APIReferenceImage, VideoGenerationRequest
 from state.state import AppState
 from state.veo_state import PageState
 
@@ -266,7 +262,7 @@ def veo_content(app_state: me.state):
                         display="flex",
                         flex_direction="column",
                         gap=10,
-                    )
+                    ),
                 ):
                     prompt_inputs(
                         on_click_generate=on_click_veo,
@@ -342,15 +338,20 @@ def on_click_extend_video(e: me.ClickEvent):
         return
 
     # --- Video Selection Validation ---
-    video_to_extend_url = state.selected_video_url if state.selected_video_url else state.result_display_urls[0]
+    video_to_extend_url = (
+        state.selected_video_url
+        if state.selected_video_url
+        else state.result_display_urls[0]
+    )
     if not video_to_extend_url:
         state.error_message = "No video selected to extend."
         state.show_error_dialog = True
         yield
         return
-    
+
     # Convert display URL back to GCS URI
     from common.utils import https_url_to_gcs_uri
+
     video_input_gcs = https_url_to_gcs_uri(video_to_extend_url)
 
     # --- Reset State for New Generation ---
@@ -370,19 +371,19 @@ def on_click_extend_video(e: me.ClickEvent):
         model_version_id=state.veo_model,
         aspect_ratio=state.aspect_ratio,
         resolution=state.resolution,
-        duration_seconds=state.video_extend_length, # Use extension length
+        duration_seconds=state.video_extend_length,  # Use extension length
         video_count=state.video_count,
         enhance_prompt=state.auto_enhance_prompt,
         generate_audio=state.generate_audio,
         person_generation=state.person_generation,
         video_input_gcs=video_input_gcs,
-        video_input_mime_type="video/mp4", # Assumed MP4
+        video_input_mime_type="video/mp4",  # Assumed MP4
     )
 
     # --- 1. Initiate Async Job ---
     try:
         data = start_async_veo_job(request, app_state.user_email, mode="extension")
-            
+
         state.current_job_id = data["job_id"]
         state.job_status = data["status"]
         yield
@@ -395,24 +396,28 @@ def on_click_extend_video(e: me.ClickEvent):
 
     # --- 2. Poll for Completion ---
     while state.job_status in ["pending", "processing", "created"]:
-        time.sleep(2) 
+        time.sleep(2)
         try:
             item = get_media_item_by_id(state.current_job_id)
             if not item:
-                raise AsyncVeoPollingFailedError(f"Job {state.current_job_id} not found in Firestore.")
-            
+                raise AsyncVeoPollingFailedError(
+                    f"Job {state.current_job_id} not found in Firestore.",
+                )
+
             state.job_status = item.status
 
             if state.job_status == "complete":
                 # Success! Update state with results.
                 state.result_gcs_uris = item.gcs_uris or []
                 if not state.result_gcs_uris and item.gcsuri:
-                     state.result_gcs_uris = [item.gcsuri]
-                
-                state.result_display_urls = [create_display_url(uri) for uri in state.result_gcs_uris]
+                    state.result_gcs_uris = [item.gcsuri]
+
+                state.result_display_urls = [
+                    create_display_url(uri) for uri in state.result_gcs_uris
+                ]
                 if state.result_display_urls:
                     state.selected_video_url = state.result_display_urls[0]
-                
+
                 end_time = time.time()
                 execution_time = end_time - start_time
                 state.timing = f"Extension time: {round(execution_time)} seconds"
@@ -421,12 +426,14 @@ def on_click_extend_video(e: me.ClickEvent):
                 break
 
             elif state.job_status == "failed":
-                state.error_message = item.error_message or "Unknown error during extension."
+                state.error_message = (
+                    item.error_message or "Unknown error during extension."
+                )
                 state.show_error_dialog = True
                 state.is_loading = False
                 yield
                 break
-            
+
             yield
 
         except Exception as e:
@@ -546,7 +553,8 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
         generate_audio=state.generate_audio,
         person_generation=state.person_generation,
         reference_image_gcs=state.reference_image_gcs
-        if state.veo_mode in ["i2v", "r2v", "interpolation"] and state.reference_image_gcs
+        if state.veo_mode in ["i2v", "r2v", "interpolation"]
+        and state.reference_image_gcs
         else None,
         reference_image_mime_type=state.reference_image_mime_type,
         last_reference_image_gcs=state.last_reference_image_gcs
@@ -556,13 +564,13 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
         r2v_references=[
             APIReferenceImage(gcs_uri=uri, mime_type=mime)
             for uri, mime in zip(
-                state.r2v_reference_images, state.r2v_reference_mime_types
+                state.r2v_reference_images, state.r2v_reference_mime_types,
             )
         ]
         if state.veo_mode == "r2v" and state.r2v_reference_images
         else None,
         r2v_style_image=APIReferenceImage(
-            gcs_uri=state.r2v_style_image, mime_type=state.r2v_style_image_mime_type
+            gcs_uri=state.r2v_style_image, mime_type=state.r2v_style_image_mime_type,
         )
         if state.veo_mode == "r2v" and state.r2v_style_image
         else None,
@@ -571,7 +579,7 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
     # --- 1. Initiate Async Job ---
     try:
         data = start_async_veo_job(request, app_state.user_email, mode=state.veo_mode)
-            
+
         state.current_job_id = data["job_id"]
         state.job_status = data["status"]
         yield
@@ -587,12 +595,14 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
     # or WebSockets if available. For now, this simple loop with yields works
     # within Mesop's generator-based event handlers to keep the UI responsive.
     while state.job_status in ["pending", "processing", "created"]:
-        time.sleep(2) 
+        time.sleep(2)
         try:
             item = get_media_item_by_id(state.current_job_id)
             if not item:
-                raise AsyncVeoPollingFailedError(f"Job {state.current_job_id} not found in Firestore.")
-            
+                raise AsyncVeoPollingFailedError(
+                    f"Job {state.current_job_id} not found in Firestore.",
+                )
+
             state.job_status = item.status
 
             if state.job_status == "complete":
@@ -600,12 +610,14 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
                 state.result_gcs_uris = item.gcs_uris or []
                 # If only one URI is returned but we expected a list, handle it.
                 if not state.result_gcs_uris and item.gcsuri:
-                     state.result_gcs_uris = [item.gcsuri]
-                
-                state.result_display_urls = [create_display_url(uri) for uri in state.result_gcs_uris]
+                    state.result_gcs_uris = [item.gcsuri]
+
+                state.result_display_urls = [
+                    create_display_url(uri) for uri in state.result_gcs_uris
+                ]
                 if state.result_display_urls:
                     state.selected_video_url = state.result_display_urls[0]
-                
+
                 end_time = time.time()
                 execution_time = end_time - start_time
                 state.timing = f"Generation time: {round(execution_time)} seconds"
@@ -615,12 +627,14 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
 
             elif state.job_status == "failed":
                 # Failure. Show error.
-                state.error_message = item.error_message or "Unknown error during generation."
+                state.error_message = (
+                    item.error_message or "Unknown error during generation."
+                )
                 state.show_error_dialog = True
                 state.is_loading = False
                 yield
                 break
-            
+
             # Still polling...
             yield
 
@@ -674,7 +688,7 @@ def on_upload_image(e: me.UploadEvent):
     try:
         # Store the uploaded file to GCS
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue()
+            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
         )
         # Update the state with the new image details
         state.reference_image_gcs = gcs_path
@@ -693,7 +707,7 @@ def on_upload_last_image(e: me.UploadEvent):
     try:
         # Store the uploaded file to GCS
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue()
+            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
         )
         # Update the state with the new image details
         state.last_reference_image_gcs = gcs_path
@@ -716,7 +730,7 @@ def on_r2v_asset_add(e: me.UploadEvent):
 
     try:
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue()
+            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
         )
         state.r2v_reference_images.append(gcs_path)
         state.r2v_reference_mime_types.append(e.file.mime_type)
@@ -741,7 +755,7 @@ def on_r2v_style_add(e: me.UploadEvent):
     state = me.state(PageState)
     try:
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue()
+            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
         )
         state.r2v_style_image = gcs_path
         state.r2v_style_image_mime_type = e.file.mime_type
@@ -762,13 +776,16 @@ def on_r2v_style_remove(e: me.ClickEvent):
 def on_veo_image_from_library(e: LibrarySelectionChangeEvent):
     """VEO image from library handler."""
     state = me.state(PageState)
-    
+
     # Helper to infer mime type from extension
     def infer_mime(uri: str) -> str:
-        if uri.lower().endswith(".png"): return "image/png"
-        if uri.lower().endswith(".jpg") or uri.lower().endswith(".jpeg"): return "image/jpeg"
-        if uri.lower().endswith(".webp"): return "image/webp"
-        return "image/png" # Default fallback
+        if uri.lower().endswith(".png"):
+            return "image/png"
+        if uri.lower().endswith(".jpg") or uri.lower().endswith(".jpeg"):
+            return "image/jpeg"
+        if uri.lower().endswith(".webp"):
+            return "image/webp"
+        return "image/png"  # Default fallback
 
     if e.chooser_id.startswith("i2v") or e.chooser_id.startswith("first_frame"):
         state.reference_image_gcs = e.gcs_uri

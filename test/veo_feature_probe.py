@@ -14,11 +14,10 @@
 
 import os
 import time
-import json
-import traceback
+
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
@@ -35,32 +34,85 @@ MODELS = [
 ]
 
 SCENARIOS = [
-    {"name": "T2V 1080p", "config": {"aspect_ratio": "16:9", "resolution": "1080p"}, "type": "t2v"},
-    {"name": "T2V Audio: On", "config": {"aspect_ratio": "16:9", "resolution": "1080p", "generate_audio": True}, "type": "t2v"},
-    {"name": "T2V Audio: Off", "config": {"aspect_ratio": "16:9", "resolution": "1080p", "generate_audio": False}, "type": "t2v"},
-    {"name": "T2V 4K", "config": {"aspect_ratio": "16:9", "resolution": "4k"}, "type": "t2v"},
-    {"name": "T2V 9:16", "config": {"aspect_ratio": "9:16", "resolution": "1080p"}, "type": "t2v"},
-    {"name": "I2V 1080p", "config": {"aspect_ratio": "16:9", "resolution": "1080p"}, "type": "i2v"},
-    {"name": "I2V 4K", "config": {"aspect_ratio": "16:9", "resolution": "4k"}, "type": "i2v"},
-    {"name": "R2V Asset 16:9", "config": {"aspect_ratio": "16:9", "resolution": "1080p"}, "type": "r2v_asset"},
-    {"name": "R2V Style 16:9", "config": {"aspect_ratio": "16:9", "resolution": "1080p"}, "type": "r2v_style"},
-    {"name": "Interpolation", "config": {"aspect_ratio": "16:9", "resolution": "1080p"}, "type": "interpolation"},
-    {"name": "Video Extension", "config": {"aspect_ratio": "16:9", "resolution": "720p"}, "type": "extension"},
+    {
+        "name": "T2V 1080p",
+        "config": {"aspect_ratio": "16:9", "resolution": "1080p"},
+        "type": "t2v",
+    },
+    {
+        "name": "T2V Audio: On",
+        "config": {
+            "aspect_ratio": "16:9",
+            "resolution": "1080p",
+            "generate_audio": True,
+        },
+        "type": "t2v",
+    },
+    {
+        "name": "T2V Audio: Off",
+        "config": {
+            "aspect_ratio": "16:9",
+            "resolution": "1080p",
+            "generate_audio": False,
+        },
+        "type": "t2v",
+    },
+    {
+        "name": "T2V 4K",
+        "config": {"aspect_ratio": "16:9", "resolution": "4k"},
+        "type": "t2v",
+    },
+    {
+        "name": "T2V 9:16",
+        "config": {"aspect_ratio": "9:16", "resolution": "1080p"},
+        "type": "t2v",
+    },
+    {
+        "name": "I2V 1080p",
+        "config": {"aspect_ratio": "16:9", "resolution": "1080p"},
+        "type": "i2v",
+    },
+    {
+        "name": "I2V 4K",
+        "config": {"aspect_ratio": "16:9", "resolution": "4k"},
+        "type": "i2v",
+    },
+    {
+        "name": "R2V Asset 16:9",
+        "config": {"aspect_ratio": "16:9", "resolution": "1080p"},
+        "type": "r2v_asset",
+    },
+    {
+        "name": "R2V Style 16:9",
+        "config": {"aspect_ratio": "16:9", "resolution": "1080p"},
+        "type": "r2v_style",
+    },
+    {
+        "name": "Interpolation",
+        "config": {"aspect_ratio": "16:9", "resolution": "1080p"},
+        "type": "interpolation",
+    },
+    {
+        "name": "Video Extension",
+        "config": {"aspect_ratio": "16:9", "resolution": "720p"},
+        "type": "extension",
+    },
 ]
 
 client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
 
+
 def probe_capability(model_id, scenario):
     print(f"Probing {model_id} with {scenario['name']}...")
-    
+
     config_args = {
         "number_of_videos": 1,
-        "duration_seconds": 4, 
+        "duration_seconds": 4,
         "output_gcs_uri": f"gs://{OUTPUT_GCS}",
         "enhance_prompt": True,
-        **scenario['config']
+        **scenario["config"],
     }
-    
+
     # Handle generate_audio: Required for Veo 3, not supported by Veo 2
     if "3." in model_id:
         if "generate_audio" not in config_args:
@@ -74,48 +126,48 @@ def probe_capability(model_id, scenario):
 
     image_input = None
     video_input = None
-    
-    if scenario['type'] == 'i2v':
+
+    if scenario["type"] == "i2v":
         image_input = types.Image(
             gcs_uri="gs://cloud-samples-data/generative-ai/image/flowers.png",
-            mime_type="image/png"
+            mime_type="image/png",
         )
-    elif scenario['type'] == 'r2v_asset':
+    elif scenario["type"] == "r2v_asset":
         config_args["reference_images"] = [
             types.VideoGenerationReferenceImage(
                 image=types.Image(
                     gcs_uri="gs://cloud-samples-data/generative-ai/image/flowers.png",
-                    mime_type="image/png"
+                    mime_type="image/png",
                 ),
-                reference_type="asset"
-            )
+                reference_type="asset",
+            ),
         ]
-    elif scenario['type'] == 'r2v_style':
+    elif scenario["type"] == "r2v_style":
         config_args["reference_images"] = [
             types.VideoGenerationReferenceImage(
                 image=types.Image(
                     gcs_uri="gs://cloud-samples-data/generative-ai/image/flowers.png",
-                    mime_type="image/png"
+                    mime_type="image/png",
                 ),
-                reference_type="style"
-            )
+                reference_type="style",
+            ),
         ]
-    elif scenario['type'] == 'interpolation':
+    elif scenario["type"] == "interpolation":
         image_input = types.Image(
             gcs_uri="gs://cloud-samples-data/generative-ai/image/flowers.png",
-            mime_type="image/png"
+            mime_type="image/png",
         )
         config_args["last_frame"] = types.Image(
             gcs_uri="gs://cloud-samples-data/generative-ai/image/daisy.jpg",
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
-    elif scenario['type'] == 'extension':
+    elif scenario["type"] == "extension":
         video_input = types.Video(
             uri="gs://cloud-samples-data/generative-ai/video/animals.mp4",
-            mime_type="video/mp4"
+            mime_type="video/mp4",
         )
         # Extension usually has specific duration requirements, but for probe 4s might be okay or rejected
-        config_args["duration_seconds"] = 7 
+        config_args["duration_seconds"] = 7
 
     try:
         operation = client.models.generate_videos(
@@ -123,15 +175,18 @@ def probe_capability(model_id, scenario):
             prompt="a simple test video",
             config=types.GenerateVideosConfig(**config_args),
             image=image_input,
-            video=video_input
+            video=video_input,
         )
         return "✅ Success"
     except Exception as e:
         err_msg = str(e)
         if "allowlisted" in err_msg:
-            if "4k" in err_msg.lower(): return "🚫 4K Block"
-            if "reference to video" in err_msg.lower(): return "🚫 R2V Block"
-            if "video extension" in err_msg.lower(): return "🚫 Extend Block"
+            if "4k" in err_msg.lower():
+                return "🚫 4K Block"
+            if "reference to video" in err_msg.lower():
+                return "🚫 R2V Block"
+            if "video extension" in err_msg.lower():
+                return "🚫 Extend Block"
             return "🚫 Allowlist Block"
         if "not supported" in err_msg.lower():
             return "❌ Unsupported"
@@ -139,29 +194,31 @@ def probe_capability(model_id, scenario):
             return "❌ SDK Error (Audio)"
         return f"❌ Error: {err_msg[:30]}..."
 
+
 def main():
     results = {}
-    
+
     for model in MODELS:
         results[model] = {}
         for scenario in SCENARIOS:
             status = probe_capability(model, scenario)
-            results[model][scenario['name']] = status
+            results[model][scenario["name"]] = status
             time.sleep(1)
 
     # Generate Markdown Table
-    headers = ["Model"] + [scenario['name'] for scenario in SCENARIOS]
+    headers = ["Model"] + [scenario["name"] for scenario in SCENARIOS]
     print("\n### Final Veo Capability Matrix\n")
     header_row = "| " + " | ".join(headers) + " |"
     sep_row = "| " + " | ".join(["---"] * len(headers)) + " |"
     print(header_row)
     print(sep_row)
-    
+
     for model in MODELS:
         row = [model]
         for scenario in SCENARIOS:
-            row.append(results[model][scenario['name']])
+            row.append(results[model][scenario["name"]])
         print("| " + " | ".join(row) + " |")
+
 
 if __name__ == "__main__":
     main()

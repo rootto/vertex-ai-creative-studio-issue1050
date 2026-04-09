@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass
 
 
 @dataclass
 class ModeOverride:
     """Defines specific overrides for a particular mode."""
 
-    supported_durations: Optional[List[int]] = None
-    default_duration: Optional[int] = None
+    supported_durations: list[int] | None = None
+    default_duration: int | None = None
     supports_style_reference: bool = True
-    supported_aspect_ratios: Optional[List[str]] = None
+    supported_aspect_ratios: list[str] | None = None
 
 
 @dataclass
@@ -33,9 +32,9 @@ class VeoModelConfig:
     version_id: str
     model_name: str
     display_name: str
-    supported_modes: List[str]
-    supported_aspect_ratios: List[str]
-    resolutions: List[str]
+    supported_modes: list[str]
+    supported_aspect_ratios: list[str]
+    resolutions: list[str]
     min_duration: int
     max_duration: int
     default_duration: int
@@ -44,14 +43,14 @@ class VeoModelConfig:
     supports_prompt_enhancement: bool
     requires_prompt_enhancement: bool = False
     default_prompt_enhancement: bool = True
-    supported_durations: Optional[List[int]] = None
-    mode_overrides: Optional[Dict[str, ModeOverride]] = None
+    supported_durations: list[int] | None = None
+    mode_overrides: dict[str, ModeOverride] | None = None
     supports_video_extension: bool = False
-    supported_extension_durations: Optional[List[int]] = None
+    supported_extension_durations: list[int] | None = None
 
 
 # This list is the single source of truth for all VEO model configurations.
-VEO_MODELS: List[VeoModelConfig] = [
+VEO_MODELS: list[VeoModelConfig] = [
     VeoModelConfig(
         version_id="2.0",
         model_name="veo-2.0-generate-001",
@@ -84,7 +83,7 @@ VEO_MODELS: List[VeoModelConfig] = [
         supports_prompt_enhancement=False,
         default_prompt_enhancement=False,
         mode_overrides={
-            "r2v": ModeOverride(supported_durations=[8], default_duration=8)
+            "r2v": ModeOverride(supported_durations=[8], default_duration=8),
         },
     ),
     VeoModelConfig(
@@ -211,8 +210,9 @@ VEO_MODELS: List[VeoModelConfig] = [
     ),
 ]
 
+
 # Helper function to easily find a model's config by its version_id.
-def get_veo_model_config(version_id: str) -> Optional[VeoModelConfig]:
+def get_veo_model_config(version_id: str) -> VeoModelConfig | None:
     """Finds and returns the configuration for a given VEO model version_id."""
     for model in VEO_MODELS:
         if model.version_id == version_id:

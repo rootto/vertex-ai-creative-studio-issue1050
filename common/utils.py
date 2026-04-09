@@ -57,7 +57,8 @@ def extract_username(email_string: str | None) -> str:
     """
     if email_string:
         match = re.search(
-            r":([^@]+)@", email_string,
+            r":([^@]+)@",
+            email_string,
         )  # Matches anything between ":" and "@"
         if match:
             return match.group(1)

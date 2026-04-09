@@ -12,16 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable
+from collections.abc import Callable
+
 import mesop as me
 
+from common.utils import create_display_url, https_url_to_gcs_uri
+from config.veo_models import get_veo_model_config
+from models.video_processing import convert_mp4_to_gif
 from state.state import AppState
 from state.veo_state import PageState
+
 from ..video_thumbnail.video_thumbnail import video_thumbnail
-from ..pill import pill
-from models.video_processing import convert_mp4_to_gif
-from common.utils import https_url_to_gcs_uri, create_display_url
-from config.veo_models import get_veo_model_config
+
 
 @me.component
 def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
@@ -34,21 +36,37 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
             flex_direction="column",
             align_items="center",
             width="100%",
-        )
+        ),
     ):
         if state.is_loading:
-            with me.box(style=me.Style(display="flex", justify_content="center", margin=me.Margin(top=24))):
+            with me.box(
+                style=me.Style(
+                    display="flex", justify_content="center", margin=me.Margin(top=24),
+                ),
+            ):
                 me.progress_spinner()
-            me.text(state.timing if state.timing else "Generating video...", style=me.Style(margin=me.Margin(top=16)))
+            me.text(
+                state.timing if state.timing else "Generating video...",
+                style=me.Style(margin=me.Margin(top=16)),
+            )
             state.gif_url = ""
             return
 
         if not state.result_display_urls:
-            me.text("Your generated videos will appear here.", style=me.Style(padding=me.Padding.all(24), color=me.theme_var("on-surface-variant")))
+            me.text(
+                "Your generated videos will appear here.",
+                style=me.Style(
+                    padding=me.Padding.all(24), color=me.theme_var("on-surface-variant"),
+                ),
+            )
             return
 
         # Determine the main video to display
-        main_video_url = state.selected_video_url if state.selected_video_url else state.result_display_urls[0]
+        main_video_url = (
+            state.selected_video_url
+            if state.selected_video_url
+            else state.result_display_urls[0]
+        )
 
         # Parse aspect ratio string "w:h" into "w / h" for CSS
         aspect_ratio_css = state.aspect_ratio.replace(":", " / ")
@@ -61,8 +79,8 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
                 max_height="85vh",
                 margin=me.Margin(left="auto", right="auto"),
                 aspect_ratio=aspect_ratio_css,
-                position="relative", # Allow for absolute positioning of badge
-            )
+                position="relative",  # Allow for absolute positioning of badge
+            ),
         ):
             me.video(
                 key=main_video_url,
@@ -74,7 +92,7 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
                     display="block",
                 ),
             )
-            
+
             # 4K badge overlay (Hidden by default to avoid confusion with video content)
             # To enable, uncomment the block below.
             # if state.resolution == "4k":
@@ -93,7 +111,7 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
             selected_index = state.result_display_urls.index(main_video_url)
             gcs_uri_for_gif = state.result_gcs_uris[selected_index]
         except (ValueError, IndexError):
-            gcs_uri_for_gif = "" # Fallback in case of an issue
+            gcs_uri_for_gif = ""  # Fallback in case of an issue
 
         # Generation time and Extend functionality
         with me.box(
@@ -104,26 +122,32 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
                 align_items="center",
                 justify_content="center",
                 padding=me.Padding(top=10),
-            )
+            ),
         ):
             me.text(state.timing)
-            
+
             model_config = get_veo_model_config(state.veo_model)
             if model_config and model_config.supports_video_extension:
                 options = [me.SelectOption(label="None", value="0")]
-                
+
                 # Use configured durations if available, otherwise fallback to generic range
                 if model_config.supported_extension_durations:
                     for duration in model_config.supported_extension_durations:
-                        options.append(me.SelectOption(label=f"{duration} seconds", value=str(duration)))
+                        options.append(
+                            me.SelectOption(
+                                label=f"{duration} seconds", value=str(duration),
+                            ),
+                        )
                 else:
                     # Fallback for models that might support extension but don't have explicit duration config yet
-                    options.extend([
-                        me.SelectOption(label="4 seconds", value="4"),
-                        me.SelectOption(label="5 seconds", value="5"),
-                        me.SelectOption(label="6 seconds", value="6"),
-                        me.SelectOption(label="7 seconds", value="7"),
-                    ])
+                    options.extend(
+                        [
+                            me.SelectOption(label="4 seconds", value="4"),
+                            me.SelectOption(label="5 seconds", value="5"),
+                            me.SelectOption(label="6 seconds", value="6"),
+                            me.SelectOption(label="7 seconds", value="7"),
+                        ],
+                    )
 
                 me.select(
                     label="extend",
@@ -138,7 +162,12 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
                     disabled=True if state.video_extend_length == 0 else False,
                 )
 
-            me.button("Convert to GIF", key=gcs_uri_for_gif, on_click=on_convert_to_gif_click, disabled=state.is_converting_gif)
+            me.button(
+                "Convert to GIF",
+                key=gcs_uri_for_gif,
+                on_click=on_convert_to_gif_click,
+                disabled=state.is_converting_gif,
+            )
 
             if state.is_converting_gif:
                 with me.box(style=me.Style(display="flex", justify_content="center")):
@@ -154,7 +183,7 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
                     justify_content="center",
                     margin=me.Margin(top=16),
                     flex_wrap="wrap",
-                )
+                ),
             ):
                 for url in state.result_display_urls:
                     is_selected = url == main_video_url
@@ -173,7 +202,7 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
                     flex_direction="column",
                     align_items="center",
                     gap=10,
-                )
+                ),
             ):
                 me.text("Video as GIF:", type="headline-5")
                 me.image(
@@ -188,6 +217,7 @@ def on_selection_change_extend_length(e: me.SelectSelectionChangeEvent):
     state.video_extend_length = int(e.value)
     yield
 
+
 def on_convert_to_gif_click(e: me.ClickEvent):
     state = me.state(PageState)
     app_state = me.state(AppState)
@@ -197,7 +227,11 @@ def on_convert_to_gif_click(e: me.ClickEvent):
 
     try:
         # Get the display URL of the currently selected video.
-        video_to_convert = state.selected_video_url if state.selected_video_url else state.result_display_urls[0]
+        video_to_convert = (
+            state.selected_video_url
+            if state.selected_video_url
+            else state.result_display_urls[0]
+        )
         print(f"Converting {video_to_convert} to GIF ...")
 
         # Convert the display URL back to a GCS URI for the backend function.
