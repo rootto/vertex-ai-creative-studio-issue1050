@@ -38,6 +38,7 @@ from . import selfie
 from . import shop_the_look
 from . import starter_pack
 from . import storyboarder
+from . import team_assets
 from . import team_management
 from . import veo
 from . import vto

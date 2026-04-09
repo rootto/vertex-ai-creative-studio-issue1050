@@ -292,12 +292,19 @@ def team_management_content():
                                 style=me.Style(margin=me.Margin(top=8)),
                             )
                             me.text(f"Total Assets: {len(team.assets)}")
-                            me.text(
-                                "To add assets, use the Library page and assign them to this team (TBD).",
+                            me.button(
+                                "Manage Team Assets",
+                                on_click=on_manage_assets_click,
+                                type="stroked",
                             )
 
 
 # --- Event Handlers ---
+
+
+def on_manage_assets_click(e: me.ClickEvent) -> None:
+    """Navigate to team assets page."""
+    me.navigate("/team_assets")
 
 
 def on_new_team_name_blur(e: me.InputBlurEvent):
