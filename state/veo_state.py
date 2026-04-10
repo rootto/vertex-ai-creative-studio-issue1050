@@ -28,6 +28,9 @@ class PageState:
     veo_prompt_placeholder: str = ""
     veo_prompt_textarea_key: int = 0
 
+    available_brand_guidelines: list[dict] = field(default_factory=list)
+    selected_brand_guideline: str = ""
+
     veo_mode: str = "t2v"
 
     # The user's main prompt for video generation.

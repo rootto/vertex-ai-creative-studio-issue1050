@@ -46,6 +46,7 @@ from models.gemini import (
 )
 from models.upscale import get_image_resolution
 from services.c2pa_service import c2pa_service
+from services.team_service import get_teams_for_user
 from state.state import AppState
 
 CHIP_STYLE = me.Style(
@@ -114,6 +115,9 @@ class PageState:
     c2pa_manifests: dict[str, str] = field(
         default_factory=dict,
     )  # Store as dict of strings (url -> json_str)
+
+    available_brand_guidelines: list[dict] = field(default_factory=list)
+    selected_brand_guideline: str = ""
 
     info_dialog_open: bool = False
     initial_load_complete: bool = False
@@ -274,6 +278,22 @@ def gemini_image_gen_page_content():
                                 on_remove=on_remove_image,
                                 icon_size=18,
                             )
+                if state.available_brand_guidelines:
+                    me.select(
+                        label="Add Brand Guidelines",
+                        options=[
+                            me.SelectOption(label="None", value=""),
+                        ]
+                        + [
+                            me.SelectOption(
+                                label=g["team_name"], value=g["content"],
+                            )
+                            for g in state.available_brand_guidelines
+                        ],
+                        on_selection_change=on_brand_guideline_change,
+                        value=state.selected_brand_guideline,
+                        style=me.Style(width="100%", margin=me.Margin(bottom=16)),
+                    )
                 me.textarea(
                     label="Prompt",
                     rows=3,
@@ -810,6 +830,11 @@ def on_prompt_blur(e: me.InputEvent):
     me.state(PageState).prompt = e.value
 
 
+def on_brand_guideline_change(e: me.SelectSelectionChangeEvent):
+    """Updates the selected brand guideline in the page state."""
+    me.state(PageState).selected_brand_guideline = e.value
+
+
 def on_aspect_ratio_change(e: me.SelectSelectionChangeEvent):
     """Changes the aspect ratio on page state."""
     me.state(PageState).aspect_ratio = e.value
@@ -1024,7 +1049,8 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
     state.suggested_transformations = []
 
     final_prompt = _get_appended_prompt(base_prompt, state.num_images_to_generate)
-    # final_prompt = base_prompt
+    if state.selected_brand_guideline:
+        final_prompt = f"{final_prompt}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
 
     state.is_generating = True
     state.generation_complete = False
@@ -1176,6 +1202,16 @@ def on_load(e: me.LoadEvent):
                 state.uploaded_image_display_urls.append(
                     create_display_url(final_gcs_uri),
                 )
+        app_state = me.state(AppState)
+        teams = get_teams_for_user(app_state.user_email, role=app_state.user_role)
+        state.available_brand_guidelines = []
+        for team in teams:
+            content = team.extracted_text or team.branding_guideline.get("content")
+            if content:
+                state.available_brand_guidelines.append({
+                    "team_name": team.name,
+                    "content": content,
+                })
         state.initial_load_complete = True
     yield
 

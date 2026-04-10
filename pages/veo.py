@@ -18,6 +18,7 @@ import time
 import mesop as me
 
 from common.analytics import log_ui_click, track_click
+from services.team_service import get_teams_for_user
 from common.error_handling import AsyncVeoPollingFailedError
 from common.metadata import (
     get_media_item_by_id,
@@ -77,6 +78,16 @@ def on_veo_load(e: me.LoadEvent):
         # Provide a default prompt for a better user experience
         state.veo_prompt_input = "Animate this image with subtle motion."
 
+    app_state = me.state(AppState)
+    teams = get_teams_for_user(app_state.user_email, role=app_state.user_role)
+    state.available_brand_guidelines = []
+    for team in teams:
+        content = team.extracted_text or team.branding_guideline.get("content")
+        if content:
+            state.available_brand_guidelines.append({
+                "team_name": team.name,
+                "content": content,
+            })
     yield
 
 
@@ -264,6 +275,22 @@ def veo_content(app_state: me.state):
                         gap=10,
                     ),
                 ):
+                    if state.available_brand_guidelines:
+                        me.select(
+                            label="Add Brand Guidelines",
+                            options=[
+                                me.SelectOption(label="None", value=""),
+                            ]
+                            + [
+                                me.SelectOption(
+                                    label=g["team_name"], value=g["content"],
+                                )
+                                for g in state.available_brand_guidelines
+                            ],
+                            on_selection_change=on_brand_guideline_change,
+                            value=state.selected_brand_guideline,
+                            style=me.Style(width="100%", margin=me.Margin(bottom=10)),
+                        )
                     prompt_inputs(
                         on_click_generate=on_click_veo,
                         on_click_rewrite=on_click_custom_rewriter,
@@ -366,8 +393,12 @@ def on_click_extend_video(e: me.ClickEvent):
     yield
 
     # --- Prepare Request Data ---
+    prompt_to_send = state.veo_prompt_input
+    if state.selected_brand_guideline:
+        prompt_to_send = f"{prompt_to_send}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
+
     request = VideoGenerationRequest(
-        prompt=state.veo_prompt_input,
+        prompt=prompt_to_send,
         model_version_id=state.veo_model,
         aspect_ratio=state.aspect_ratio,
         resolution=state.resolution,
@@ -542,8 +573,12 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
 
     # --- Prepare Request Data ---
     # (Logic copied from original to maintain parity)
+    prompt_to_send = state.veo_prompt_input
+    if state.selected_brand_guideline:
+        prompt_to_send = f"{prompt_to_send}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
+
     request = VideoGenerationRequest(
-        prompt=state.veo_prompt_input,
+        prompt=prompt_to_send,
         model_version_id=state.veo_model,
         aspect_ratio=state.aspect_ratio,
         resolution=state.resolution,
@@ -645,6 +680,11 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
             state.is_loading = False
             yield
             break
+
+
+def on_brand_guideline_change(e: me.SelectSelectionChangeEvent):
+    """Updates the selected brand guideline in the page state."""
+    me.state(PageState).selected_brand_guideline = e.value
 
 
 def on_blur_veo_prompt(e: me.InputBlurEvent):
