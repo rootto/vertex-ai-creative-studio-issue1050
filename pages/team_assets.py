@@ -181,7 +181,7 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
                             value=page_state.guideline_text,
                             on_blur=on_guideline_text_blur,
                             style=me.Style(flex_grow=1),
-                            rows=3,
+                            rows=10,
                         )
                     else:
                         with me.box(
@@ -193,10 +193,10 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
                                 flex_grow=1,
                             ),
                         ):
-                            me.upload_button(
-                                "Upload PDF",
+                            me.uploader(
+                                label="Upload PDF",
+                                accepted_file_types=["application/pdf"],
                                 on_upload=on_upload_pdf,
-                                accept="application/pdf",
                                 type="stroked",
                             )
                             if page_state.pdf_filename:
@@ -238,6 +238,8 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
                             padding=me.Padding.all(8),
                             background=me.theme_var("secondary-container"),
                             border_radius=4,
+                            height="300px",
+                            overflow_y="auto",
                         ),
                     ):
                         me.text(
