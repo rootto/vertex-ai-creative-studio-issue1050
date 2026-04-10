@@ -28,3 +28,4 @@ class PageState:
     pdf_gcs_uri: str = ""
     pdf_filename: str = ""
     is_extracting: bool = False
+    initial_load_complete: bool = False

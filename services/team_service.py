@@ -135,13 +135,29 @@ def extract_branding_guidelines(pdf_gcs_uri: str) -> str:
         raise e
 
 
-def get_teams_for_user(email: str, role: str) -> list[Team]:
+def get_teams_for_user(email: str, role: str, assigned_only: bool = False) -> list[Team]:
     """Get teams for a user based on their role."""
     if not db:
         return []
     try:
         query = db.collection(config.TEAMS_COLLECTION_NAME)
-        if role == "administrator":
+
+        if assigned_only:
+            # Query for teams where user is member or manager
+            docs_members = query.where("members", "array_contains", email).stream()
+            docs_managers = query.where("managers", "array_contains", email).stream()
+
+            docs = []
+            seen_ids = set()
+            for doc in docs_members:
+                if doc.id not in seen_ids:
+                    docs.append(doc)
+                    seen_ids.add(doc.id)
+            for doc in docs_managers:
+                if doc.id not in seen_ids:
+                    docs.append(doc)
+                    seen_ids.add(doc.id)
+        elif role == "administrator":
             # Admins see all teams
             docs = query.stream()
         elif role == "manager":

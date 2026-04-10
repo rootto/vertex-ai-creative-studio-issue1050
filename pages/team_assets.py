@@ -46,6 +46,20 @@ def page() -> None:
         team_assets_content()
 
 
+def _load_team_guidelines(page_state: PageState, team: Team) -> None:
+    """Load team guidelines into state."""
+    if team.branding_guideline:
+        page_state.guideline_type = team.branding_guideline.get("type", "text")
+        page_state.guideline_text = team.branding_guideline.get("content", "")
+        page_state.pdf_filename = team.branding_guideline.get("filename", "")
+        page_state.pdf_gcs_uri = team.branding_guideline.get("gcs_uri", "")
+    else:
+        page_state.guideline_type = "text"
+        page_state.guideline_text = ""
+        page_state.pdf_filename = ""
+        page_state.pdf_gcs_uri = ""
+
+
 def team_assets_content() -> None:
     """Provide main content for team assets page."""
     app_state = me.state(AppState)
@@ -74,6 +88,10 @@ def team_assets_content() -> None:
 
     # Refresh team data to get latest assets
     selected_team = get_team(page_state.selected_team_id)
+
+    if not page_state.initial_load_complete and selected_team:
+        _load_team_guidelines(page_state, selected_team)
+        page_state.initial_load_complete = True
 
     with me.box(
         style=me.Style(
@@ -283,6 +301,9 @@ def on_select_team_change(e: me.SelectSelectionChangeEvent) -> None:
     """Handle team selection change."""
     state = me.state(PageState)
     state.selected_team_id = e.value
+    team = get_team(e.value)
+    if team:
+        _load_team_guidelines(state, team)
 
 
 def on_upload_assets(e: me.UploadEvent):  # noqa: ANN201

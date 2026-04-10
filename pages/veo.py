@@ -79,7 +79,7 @@ def on_veo_load(e: me.LoadEvent):
         state.veo_prompt_input = "Animate this image with subtle motion."
 
     app_state = me.state(AppState)
-    teams = get_teams_for_user(app_state.user_email, role=app_state.user_role)
+    teams = get_teams_for_user(app_state.user_email, role=app_state.user_role, assigned_only=True)
     state.available_brand_guidelines = []
     for team in teams:
         content = team.extracted_text or team.branding_guideline.get("content")
