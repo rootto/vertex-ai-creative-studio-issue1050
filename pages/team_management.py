@@ -16,7 +16,6 @@
 
 import mesop as me
 
-from common.storage import store_to_gcs
 from components.header import header
 from components.page_scaffold import page_frame, page_scaffold
 from components.snackbar import snackbar
@@ -24,9 +23,7 @@ from services.team_service import (
     add_manager_to_team,
     add_member_to_team,
     create_team,
-    extract_branding_guidelines,
     get_teams_for_user,
-    set_branding_guideline,
 )
 from services.user_service import get_user_role, set_user_role
 from state.state import AppState
@@ -37,13 +34,15 @@ from state.team_management_state import PageState
     path="/team_management",
     title="Team Management - GenMedia Creative Studio",
 )
-def page():
+def page() -> None:
+    """Render the team management page."""
     with page_scaffold(page_name="team_management"), page_frame():
         header("Team Management", "group")
         team_management_content()
 
 
-def team_management_content():
+def team_management_content() -> None:
+    """Render the content for team management."""
     app_state = me.state(AppState)
     page_state = me.state(PageState)
 
@@ -180,110 +179,15 @@ def team_management_content():
                 me.text("You are not managing any teams.")
             else:
                 for team in teams:
-                    with me.expansion_panel(title=team.name, icon="group"):
-                        with me.box(
-                            style=me.Style(
-                                display="flex",
-                                flex_direction="column",
-                                gap=16,
-                                padding=me.Padding.all(16),
-                            ),
-                        ):
-                            # Branding Guidelines Section
-                            me.text("Branding Guidelines", type="headline-6")
+                    with me.expansion_panel(title=team.name, icon="group"), me.box(
+                        style=me.Style(
+                            display="flex",
+                            flex_direction="column",
+                            gap=16,
+                            padding=me.Padding.all(16),
+                        ),
+                    ):
 
-                            with me.box(
-                                style=me.Style(
-                                    display="flex",
-                                    flex_direction="row",
-                                    gap=16,
-                                    align_items="center",
-                                ),
-                            ):
-                                type_options = [
-                                    me.SelectOption(label="Free Text", value="text"),
-                                    me.SelectOption(label="PDF Upload", value="pdf"),
-                                ]
-                                me.select(
-                                    label="Type",
-                                    options=type_options,
-                                    on_selection_change=on_guideline_type_change,
-                                    value=page_state.guideline_type,
-                                    style=me.Style(width="150px"),
-                                )
-
-                                if page_state.guideline_type == "text":
-                                    me.textarea(
-                                        label="Enter Guidelines",
-                                        value=page_state.guideline_text,
-                                        on_blur=on_guideline_text_blur,
-                                        style=me.Style(flex_grow=1),
-                                        rows=3,
-                                    )
-                                else:
-                                    with me.box(
-                                        style=me.Style(
-                                            display="flex",
-                                            flex_direction="row",
-                                            gap=8,
-                                            align_items="center",
-                                            flex_grow=1,
-                                        ),
-                                    ):
-                                        me.upload_button(
-                                            "Upload PDF",
-                                            on_upload=on_upload_pdf,
-                                            accept="application/pdf",
-                                            type="stroked",
-                                        )
-                                        if page_state.pdf_filename:
-                                            me.text(f"File: {page_state.pdf_filename}")
-                                            me.button(
-                                                "Clear",
-                                                on_click=on_clear_pdf,
-                                                type="icon",
-                                                icon="clear",
-                                            )
-
-                                            if (
-                                                not team.extracted_text
-                                                and not page_state.is_extracting
-                                            ):
-                                                me.button(
-                                                    "Extract Text",
-                                                    on_click=lambda e, t_id=team.id: (
-                                                        on_extract_click(e, t_id)
-                                                    ),
-                                                    type="raised",
-                                                )
-
-                                            if page_state.is_extracting:
-                                                me.progress_spinner(diameter=24)
-
-                                me.button(
-                                    "Save",
-                                    on_click=lambda e, t_id=team.id: (
-                                        on_save_guidelines_click(e, t_id)
-                                    ),
-                                    type="raised",
-                                )
-
-                            if team.extracted_text:
-                                with me.box(
-                                    style=me.Style(
-                                        margin=me.Margin(top=8),
-                                        padding=me.Padding.all(8),
-                                        background=me.theme_var("secondary-container"),
-                                        border_radius=4,
-                                    ),
-                                ):
-                                    me.text(
-                                        "Extracted Guidelines Summary:",
-                                        type="subtitle-2",
-                                    )
-                                    me.text(team.extracted_text)
-
-                            me.divider()
 
                             # Assets Section
                             me.text(
@@ -302,17 +206,19 @@ def team_management_content():
 # --- Event Handlers ---
 
 
-def on_manage_assets_click(e: me.ClickEvent) -> None:
+def on_manage_assets_click(_: me.ClickEvent) -> None:
     """Navigate to team assets page."""
     me.navigate("/team_assets")
 
 
-def on_new_team_name_blur(e: me.InputBlurEvent):
+def on_new_team_name_blur(e: me.InputBlurEvent) -> None:
+    """Handle new team name blur."""
     state = me.state(PageState)
     state.new_team_name = e.value
 
 
-def on_create_team_click(e: me.ClickEvent):
+def on_create_team_click(_: me.ClickEvent):  # noqa: ANN201
+    """Handle create team click."""
     app_state = me.state(AppState)
     page_state = me.state(PageState)
     try:
@@ -322,28 +228,32 @@ def on_create_team_click(e: me.ClickEvent):
             f"Team '{page_state.new_team_name}' created successfully."
         )
         page_state.new_team_name = ""
-    except Exception as e:
+    except Exception as ex:  # noqa: BLE001
         page_state.show_snackbar = True
-        page_state.snackbar_message = f"Error creating team: {e}"
+        page_state.snackbar_message = f"Error creating team: {ex}"
     yield
 
 
-def on_select_team_change(e: me.SelectSelectionChangeEvent):
+def on_select_team_change(e: me.SelectSelectionChangeEvent) -> None:
+    """Handle team selection change."""
     state = me.state(PageState)
     state.selected_team_id = e.value
 
 
-def on_user_email_blur(e: me.InputBlurEvent):
+def on_user_email_blur(e: me.InputBlurEvent) -> None:
+    """Handle user email blur."""
     state = me.state(PageState)
     state.user_email_to_assign = e.value
 
 
-def on_role_change(e: me.SelectSelectionChangeEvent):
+def on_role_change(e: me.SelectSelectionChangeEvent) -> None:
+    """Handle role change."""
     state = me.state(PageState)
     state.role_to_assign = e.value
 
 
-def on_assign_user_click(e: me.ClickEvent):
+def on_assign_user_click(_: me.ClickEvent):  # noqa: ANN201
+    """Handle assign user click."""
     page_state = me.state(PageState)
     try:
         if page_state.role_to_assign == "manager":
@@ -361,68 +271,10 @@ def on_assign_user_click(e: me.ClickEvent):
         page_state.show_snackbar = True
         page_state.snackbar_message = f"Assigned {page_state.user_email_to_assign} as {page_state.role_to_assign} successfully."
         page_state.user_email_to_assign = ""
-    except Exception as e:
+    except Exception as ex:  # noqa: BLE001
         page_state.show_snackbar = True
-        page_state.snackbar_message = f"Error assigning user: {e}"
+        page_state.snackbar_message = f"Error assigning user: {ex}"
     yield
 
 
-def on_guideline_type_change(e: me.SelectSelectionChangeEvent):
-    state = me.state(PageState)
-    state.guideline_type = e.value
 
-
-def on_guideline_text_blur(e: me.InputBlurEvent):
-    state = me.state(PageState)
-    state.guideline_text = e.value
-
-
-def on_upload_pdf(e: me.UploadEvent):
-    state = me.state(PageState)
-    file = e.files[0]
-    gcs_uri = store_to_gcs(
-        "brand_guidelines", file.name, file.mime_type, file.getvalue(),
-    )
-    state.pdf_gcs_uri = gcs_uri
-    state.pdf_filename = file.name
-    yield
-
-
-def on_clear_pdf(e: me.ClickEvent):
-    state = me.state(PageState)
-    state.pdf_gcs_uri = ""
-    state.pdf_filename = ""
-    state.guideline_text = ""
-    yield
-
-
-def on_extract_click(e: me.ClickEvent, team_id: str):
-    state = me.state(PageState)
-    state.is_extracting = True
-    yield
-    try:
-        extracted_text = extract_branding_guidelines(state.pdf_gcs_uri)
-        set_branding_guideline(team_id, "pdf", state.pdf_gcs_uri, extracted_text)
-        state.show_snackbar = True
-        state.snackbar_message = "Guidelines extracted and saved successfully."
-    except Exception as e:
-        state.show_snackbar = True
-        state.snackbar_message = f"Error extracting guidelines: {e}"
-    finally:
-        state.is_extracting = False
-    yield
-
-
-def on_save_guidelines_click(e: me.ClickEvent, team_id: str):
-    state = me.state(PageState)
-    try:
-        if state.guideline_type == "text":
-            set_branding_guideline(team_id, "text", state.guideline_text)
-        else:
-            set_branding_guideline(team_id, "pdf", state.pdf_gcs_uri)
-        state.show_snackbar = True
-        state.snackbar_message = "Guidelines saved successfully."
-    except Exception as e:
-        state.show_snackbar = True
-        state.snackbar_message = f"Error saving guidelines: {e}"
-    yield
