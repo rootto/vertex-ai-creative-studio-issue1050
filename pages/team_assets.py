@@ -135,8 +135,6 @@ def upload_assets_section(page_state: PageState) -> None:
                 label="Select Images",
                 accepted_file_types=["image/jpeg", "image/png"],
                 on_upload=on_upload_assets,
-                type="flat",
-                color="primary",
             )
 
         if page_state.is_uploading:
@@ -197,7 +195,6 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
                                 label="Upload PDF",
                                 accepted_file_types=["application/pdf"],
                                 on_upload=on_upload_pdf,
-                                type="stroked",
                             )
                             if page_state.pdf_filename:
                                 me.text(f"File: {page_state.pdf_filename}")
