@@ -278,22 +278,21 @@ def gemini_image_gen_page_content():
                                 on_remove=on_remove_image,
                                 icon_size=18,
                             )
-                if state.available_brand_guidelines:
-                    me.select(
-                        label="Add Brand Guidelines",
-                        options=[
-                            me.SelectOption(label="None", value=""),
-                        ]
-                        + [
-                            me.SelectOption(
-                                label=g["team_name"], value=g["content"],
-                            )
-                            for g in state.available_brand_guidelines
-                        ],
-                        on_selection_change=on_brand_guideline_change,
-                        value=state.selected_brand_guideline,
-                        style=me.Style(width="100%", margin=me.Margin(bottom=16)),
-                    )
+                me.select(
+                    label="Add Brand Guidelines",
+                    options=[
+                        me.SelectOption(label="None", value=""),
+                    ]
+                    + [
+                        me.SelectOption(
+                            label=g["team_name"], value=g["content"],
+                        )
+                        for g in state.available_brand_guidelines
+                    ],
+                    on_selection_change=on_brand_guideline_change,
+                    value=state.selected_brand_guideline,
+                    style=me.Style(width="100%", margin=me.Margin(bottom=16)),
+                )
                 me.textarea(
                     label="Prompt",
                     rows=3,

@@ -275,22 +275,21 @@ def veo_content(app_state: me.state):
                         gap=10,
                     ),
                 ):
-                    if state.available_brand_guidelines:
-                        me.select(
-                            label="Add Brand Guidelines",
-                            options=[
-                                me.SelectOption(label="None", value=""),
-                            ]
-                            + [
-                                me.SelectOption(
-                                    label=g["team_name"], value=g["content"],
-                                )
-                                for g in state.available_brand_guidelines
-                            ],
-                            on_selection_change=on_brand_guideline_change,
-                            value=state.selected_brand_guideline,
-                            style=me.Style(width="100%", margin=me.Margin(bottom=10)),
-                        )
+                    me.select(
+                        label="Add Brand Guidelines",
+                        options=[
+                            me.SelectOption(label="None", value=""),
+                        ]
+                        + [
+                            me.SelectOption(
+                                label=g["team_name"], value=g["content"],
+                            )
+                            for g in state.available_brand_guidelines
+                        ],
+                        on_selection_change=on_brand_guideline_change,
+                        value=state.selected_brand_guideline,
+                        style=me.Style(width="100%", margin=me.Margin(bottom=10)),
+                    )
                     prompt_inputs(
                         on_click_generate=on_click_veo,
                         on_click_rewrite=on_click_custom_rewriter,
