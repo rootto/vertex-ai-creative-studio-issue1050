@@ -65,7 +65,7 @@ class Default:
     SERVICE_ACCOUNT_EMAIL: str = os.environ.get("SERVICE_ACCOUNT_EMAIL")
     # Gemini
     PROJECT_ID: str = os.environ.get("PROJECT_ID")
-    LOCATION: str = os.environ.get("LOCATION", "us-central1")
+    LOCATION: str = os.environ.get("LOCATION", "global")
     GA_MEASUREMENT_ID: str = os.environ.get("GA_MEASUREMENT_ID")
     MODEL_ID: str = os.environ.get("MODEL_ID", "gemini-2.5-flash")
     INIT_VERTEX: bool = True
