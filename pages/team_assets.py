@@ -135,6 +135,7 @@ def upload_assets_section(page_state: PageState) -> None:
                 label="Select Images",
                 accepted_file_types=["image/jpeg", "image/png"],
                 on_upload=on_upload_assets,
+                multiple=True,
             )
 
         if page_state.is_uploading:
@@ -368,7 +369,7 @@ def on_guideline_text_blur(e: me.InputBlurEvent) -> None:
 def on_upload_pdf(e: me.UploadEvent):  # noqa: ANN201
     """Handle PDF upload for branding guidelines."""
     state = me.state(PageState)
-    file = e.files[0]
+    file = e.file
     gcs_uri = store_to_gcs(
         "brand_guidelines", file.name, file.mime_type, file.getvalue(),
     )
