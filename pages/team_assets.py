@@ -210,7 +210,7 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
                                     and not page_state.is_extracting
                                 ):
                                     me.button(
-                                        "Extract Text",
+                                        "Extract guidelines",
                                         on_click=lambda e, t_id=selected_team.id: (
                                             on_extract_click(e, t_id)
                                         ),
