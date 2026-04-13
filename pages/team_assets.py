@@ -199,12 +199,11 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
                             )
                             if page_state.pdf_filename:
                                 me.text(f"File: {page_state.pdf_filename}")
-                                me.button(
-                                    "Clear",
+                                with me.content_button(
                                     on_click=on_clear_pdf,
-                                    type="icon",
-                                    icon="clear",
-                                )
+                                    type="stroked",
+                                ):
+                                    me.icon("clear")
 
                                 if (
                                     not selected_team.extracted_text
