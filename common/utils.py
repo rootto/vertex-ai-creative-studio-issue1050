@@ -16,12 +16,16 @@
 from __future__ import annotations
 
 import base64
+import datetime
 import io
 import json
 import re
 from typing import Any
 
+import google.auth
 from absl import logging
+from google.auth import impersonated_credentials
+from google.cloud import storage
 from PIL import Image
 
 from config.default import Default as cfg
@@ -29,20 +33,51 @@ from config.default import Default as cfg
 GCS_PUBLIC_URL_PREFIX = "https://storage.cloud.google.com/"
 
 
-def create_display_url(gcs_uri: str) -> str:
-    """Creates a cacheable display URL for a GCS asset.
+_signed_url_cache = {}
 
-    Switches between a direct GCS link and the app proxy based on config.
+def create_display_url(gcs_uri: str) -> str:
+    """Create a cacheable display URL for a GCS asset.
+
+    Generate a signed URL valid for 15 minutes and cache it.
     """
     if not gcs_uri or not gcs_uri.startswith("gs://"):
         return ""
 
-    if cfg().USE_MEDIA_PROXY:
-        # Use the fast, simple proxy URL
+    # Check cache
+    now = datetime.datetime.now(datetime.UTC)
+    if gcs_uri in _signed_url_cache:
+        url, expiry = _signed_url_cache[gcs_uri]
+        if now < expiry - datetime.timedelta(minutes=2): # 2 min buffer
+            return url
+
+    try:
+        credentials, _ = google.auth.default()
+        signing_credentials = impersonated_credentials.Credentials(
+            source_credentials=credentials,
+            target_principal=cfg().SERVICE_ACCOUNT_EMAIL,
+            target_scopes="https://www.googleapis.com/auth/devstorage.read_only",
+        )
+
+        storage_client = storage.Client()
+        bucket_name, blob_name = gcs_uri.replace("gs://", "").split("/", 1)
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+
+        expiration = datetime.timedelta(minutes=15)
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=expiration,
+            method="GET",
+            credentials=signing_credentials,
+        )
+
+        _signed_url_cache[gcs_uri] = (signed_url, now + expiration)
+        return signed_url
+    except Exception as e:
+        logging.error(f"Error generating signed URL for {gcs_uri}: {e}")
+        # Fallback to proxy if signing fails (e.g. in local dev without impersonation)
         proxy_path = gcs_uri.replace("gs://", "")
         return f"/media/{proxy_path}"
-    # Use the direct GCS URL
-    return gcs_uri.replace("gs://", GCS_PUBLIC_URL_PREFIX)
 
 
 def extract_username(email_string: str | None) -> str:

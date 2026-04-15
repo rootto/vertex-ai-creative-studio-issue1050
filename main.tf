@@ -63,6 +63,7 @@ module "project-services" {
     "cloudtasks.googleapis.com",
     "serviceusage.googleapis.com",
     "cloudresourcemanager.googleapis.com",
+    "identitytoolkit.googleapis.com",
   ]
 }
 

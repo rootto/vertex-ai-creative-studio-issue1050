@@ -125,9 +125,9 @@ def extract_branding_guidelines(pdf_gcs_uri: str) -> str:
     """Extract branding guidelines from a PDF using Gemini."""
     prompt = "Analyze this brand guidelines PDF. Extract the following visual identity elements: Color Palette (hex codes if available), Visual Style (e.g., minimalist, vibrant), Key Imagery Rules (Do's and Don'ts). Summarize this into a concise paragraph for an image generation prompt."
     try:
-        # Using gemini-3.1-pro as requested by user
+        # Using gemini-3.1-pro-preview as corrected by user
         text, _ = generate_text(
-            prompt=prompt, images=[pdf_gcs_uri], model_name="gemini-3.1-pro",
+            prompt=prompt, images=[pdf_gcs_uri], model_name="gemini-3.1-pro-preview",
         )
         return text
     except Exception as e:
