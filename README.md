@@ -121,9 +121,16 @@ You have two deployment options for this application:
 
 ### Prerequisites
 
-You'll need the following
+You'll need the following:
 
 - An existing Google Cloud Project
+- **OAuth 2.0 Client ID (Prerequisite for Identity Platform)**: You must create an OAuth Web Client ID in the Google Cloud Console before running Terraform.
+    1. In the Google Cloud Console, navigate to **APIs & Services** > **Credentials**.
+    2. If prompted, configure the **OAuth Consent Screen** first (you can use 'Internal' or 'External' with testing users).
+    3. Click **Create Credentials** > **OAuth client ID**.
+    4. Select **Web application** as the application type.
+    5. Add your authorized origins and redirect URIs if known (e.g., your Cloud Run URL or local development URL).
+    6. Click **Create** and take note of the **Client ID** and **Client Secret**. You will need to pass these to Terraform.
 - If you want to use a custom domain, you need the ability to create a DNS A record for your target domain that resolves to the provisioned load balancer
 
 ### 1. Download the source code for this project

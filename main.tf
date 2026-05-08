@@ -471,3 +471,15 @@ resource "google_cloud_run_service_iam_member" "build_service" {
   role     = "roles/run.developer"
   member   = google_service_account.cloudbuild.member
 }
+
+resource "google_identity_platform_config" "default" {
+  project = var.project_id
+  depends_on = [module.project-services]
+}
+
+resource "google_identity_platform_default_supported_idp_config" "google" {
+  project       = var.project_id
+  idp_id        = "google.com"
+  client_id     = "356909977560-rm29g6coq1jim1l9cehkplvheriog962.apps.googleusercontent.com"
+  depends_on = [google_identity_platform_config.default]
+}
