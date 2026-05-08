@@ -55,7 +55,7 @@ async def set_user_identity_and_session(request: Request, call_next):
 
     # Set session ID cookie on the response
     response.set_cookie(
-        key="session_id", value=session_id, httponly=True, samesite="Lax",
+        key="session_id", value=session_id, httponly=True, samesite="Lax", secure=True, path="/"
     )
 
     return response
