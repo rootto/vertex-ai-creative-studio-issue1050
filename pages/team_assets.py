@@ -60,6 +60,17 @@ def _load_team_guidelines(page_state: PageState, team: Team) -> None:
         page_state.pdf_gcs_uri = ""
 
 
+def _get_role_label(team: Team, email: str, global_role: str) -> str:
+    """Get the role label for a user in a team."""
+    if global_role == "administrator":
+        return "Administrator"
+    if email in team.managers:
+        return "Manager"
+    if email in team.members:
+        return "Contributor"
+    return "None"
+
+
 def team_assets_content() -> None:
     """Provide main content for team assets page."""
     app_state = me.state(AppState)
@@ -113,7 +124,13 @@ def team_assets_content() -> None:
             me.text("Select Team:", type="subtitle-1")
             me.select(
                 label="Team",
-                options=[me.SelectOption(label=t.name, value=t.id) for t in teams],
+                options=[
+                    me.SelectOption(
+                        label=f"{t.name} ({_get_role_label(t, app_state.user_email, app_state.user_role)})",
+                        value=t.id,
+                    )
+                    for t in teams
+                ],
                 value=page_state.selected_team_id,
                 on_selection_change=on_select_team_change,
             )
