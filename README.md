@@ -231,7 +231,7 @@ Since Terraform cannot fully configure Identity Platform due to environment quot
 3.  Configure the **OAuth Consent Screen** if not already done.
 4.  Click **Create Credentials** > **OAuth client ID**.
 5.  Select **Web application**.
-6.  **CRITICAL**: Add the Cloud Run URL you obtained from Terraform output (e.g., `https://creative-studio-863507536998.us-central1.run.app`) to the **Authorized JavaScript origins**.
+6.  **CRITICAL**: Add the Cloud Run URL you obtained from Terraform output (e.g., `https://creative-studio-863507536998.us-central1.run.app`) to the **Authorized JavaScript origins**. *Note: Ensure you use the exact origin, usually without a trailing slash for JavaScript origins.*
 7.  Click **Create** and note the **Client ID** and **Client Secret**.
 8.  Navigate to **Identity Platform** > **Providers**.
 9.  Enable it if prompted, and add **Google** as a provider using the Client ID you just created.
