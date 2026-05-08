@@ -11,6 +11,7 @@ class PageState:
 
 
 def on_login(e: me.WebEvent):
+    print(f"DEBUG: on_login entered. Event value: {e.value}")
     state = me.state(AppState)
     id_token_str = e.value["value"]
 

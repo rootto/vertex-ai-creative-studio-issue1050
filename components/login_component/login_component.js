@@ -1,9 +1,16 @@
 import { LitElement, html } from 'https://esm.sh/lit@3.1.2';
 
 export class LoginComponent extends LitElement {
+  static get properties() {
+    return {
+      login: { type: String },
+    };
+  }
+
   constructor() {
     super();
     this.clientId = "356909977560-rm29g6coq1jim1l9cehkplvheriog962.apps.googleusercontent.com";
+    this.login = "";
   }
 
   connectedCallback() {
@@ -32,13 +39,18 @@ export class LoginComponent extends LitElement {
       );
     } else {
       console.error("Google Identity Services script not loaded properly.");
-      // Retry after a short delay if needed
       setTimeout(() => this.initializeGis(), 1000);
     }
   }
 
   handleCredentialResponse(response) {
-    this.dispatchEvent(new CustomEvent('login', { detail: { value: response.credential } }));
+    console.log("DEBUG: handleCredentialResponse called in JS", response);
+    console.log("DEBUG: this.login value is:", this.login);
+    if (this.login) {
+      this.dispatchEvent(new MesopEvent(this.login, { value: response.credential }));
+    } else {
+      console.error("Login event handler property not set.");
+    }
   }
 
   render() {
