@@ -25,6 +25,7 @@ logger = get_logger(__name__)
 
 def get_user_role(email: str) -> str:
     """Retrieve the role of a user by email."""
+    logger.info(f"DEBUG: get_user_role called for {email}. DB ID={config.GENMEDIA_FIREBASE_DB}")
     if not db:
         logger.warning("Firestore client is not initialized.")
         return "contributor"
