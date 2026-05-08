@@ -24,6 +24,7 @@ from common.utils import create_display_url
 from components.header import header
 from components.page_scaffold import page_frame, page_scaffold
 from components.snackbar import snackbar
+from components.feedback.feedback import feedback
 from models.gemini import generate_image_from_prompt_and_images
 from state.character_sheet_state import PageState
 from state.state import AppState

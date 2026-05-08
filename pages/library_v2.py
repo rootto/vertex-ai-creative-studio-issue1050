@@ -23,6 +23,7 @@ from common.analytics import log_ui_click
 from common.metadata import MediaItem, get_media_for_page, get_media_item_by_id
 from common.utils import create_display_url, https_url_to_gcs_uri
 from components.header import header
+from components.feedback.feedback import feedback
 from components.interior_design.storyboard_video_tile import storyboard_video_tile
 from components.library.image_details import CarouselState
 from components.lightbox_dialog.lightbox_dialog import lightbox_dialog

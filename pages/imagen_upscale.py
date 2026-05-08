@@ -26,6 +26,7 @@ from components.library.library_chooser_button import library_chooser_button
 from components.page_scaffold import page_frame, page_scaffold
 from components.pill import pill
 from components.snackbar import snackbar
+from components.feedback.feedback import feedback
 from models.upscale import UPSCALE_MODEL, get_image_resolution, upscale_image
 from state.state import AppState
 

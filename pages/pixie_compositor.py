@@ -31,6 +31,7 @@ from components.library.events import LibrarySelectionChangeEvent
 from components.library.library_chooser_button import library_chooser_button
 from components.page_scaffold import page_frame, page_scaffold
 from components.snackbar import snackbar
+from components.feedback.feedback import feedback
 from models.video_processing import (
     convert_mp4_to_gif,
     layer_audio_on_video,
@@ -576,16 +577,14 @@ def on_layer_audio_click(e: me.ClickEvent):
         state.concatenated_video_display_url = create_display_url(processed_uri)
 
         # Log to Firestore
-        add_media_item_to_firestore(
-            MediaItem(
-                gcsuri=processed_uri,
-                user_email=app_state.user_email,
-                timestamp=datetime.datetime.now(datetime.UTC),
-                mime_type="video/mp4",
-                source_uris=[state.selected_video_for_audio, state.selected_audio],
-                comment="Produced by Pixie Compositor: Video + Audio",
-                model="pixie-compositor-v1-audio-layer",
-            ),
+        media_item = MediaItem(
+            gcsuri=processed_uri,
+            user_email=app_state.user_email,
+            timestamp=datetime.datetime.now(datetime.UTC),
+            mime_type="video/mp4",
+            source_uris=[state.selected_video_for_audio, state.selected_audio],
+            comment="Produced by Pixie Compositor: Video + Audio",
+            model="pixie-compositor-v1-audio-layer",
         )
         add_media_item_to_firestore(media_item)
         state.current_media_item_id = media_item.id
@@ -673,16 +672,14 @@ def on_process_click(e: me.ClickEvent):
         state.concatenated_video_display_url = create_display_url(processed_uri)
 
         # Log to Firestore
-        add_media_item_to_firestore(
-            MediaItem(
-                gcsuri=processed_uri,
-                user_email=app_state.user_email,
-                timestamp=datetime.datetime.now(datetime.UTC),
-                mime_type="video/mp4",
-                source_uris=video_uris_to_process,
-                comment=f"Produced by Pixie Compositor with {state.selected_transition} transition",
-                model="pixie-compositor-v1",
-            ),
+        media_item = MediaItem(
+            gcsuri=processed_uri,
+            user_email=app_state.user_email,
+            timestamp=datetime.datetime.now(datetime.UTC),
+            mime_type="video/mp4",
+            source_uris=video_uris_to_process,
+            comment=f"Produced by Pixie Compositor with {state.selected_transition} transition",
+            model="pixie-compositor-v1",
         )
         add_media_item_to_firestore(media_item)
         state.current_media_item_id = media_item.id
