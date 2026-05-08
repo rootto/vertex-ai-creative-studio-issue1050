@@ -480,6 +480,7 @@ resource "google_identity_platform_config" "default" {
 resource "google_identity_platform_default_supported_idp_config" "google" {
   project       = var.project_id
   idp_id        = "google.com"
-  client_id     = "356909977560-rm29g6coq1jim1l9cehkplvheriog962.apps.googleusercontent.com"
+  client_id     = var.google_client_id
+  client_secret = var.google_client_secret
   depends_on = [google_identity_platform_config.default]
 }

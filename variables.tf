@@ -102,3 +102,15 @@ variable "sleep_time" {
   type        = number
   default     = 45
 }
+
+variable "google_client_id" {
+  description = "Google OAuth Client ID for Identity Platform"
+  type        = string
+  default     = ""
+}
+
+variable "google_client_secret" {
+  description = "Google OAuth Client Secret for Identity Platform"
+  type        = string
+  default     = ""
+}
