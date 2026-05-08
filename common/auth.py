@@ -15,8 +15,18 @@
 import uuid
 
 from fastapi import Request
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 from common.storage import get_or_create_session
+
+CLIENT_ID = "356909977560-rm29g6coq1jim1l9cehkplvheriog962.apps.googleusercontent.com"
+
+def verify_google_id_token(id_token_str: str) -> dict:
+    """Verifies a Google ID Token and returns the token payload.
+    Raises ValueError if the token is invalid.
+    """
+    return id_token.verify_oauth2_token(id_token_str, requests.Request(), CLIENT_ID)
 
 
 async def set_user_identity_and_session(request: Request, call_next):

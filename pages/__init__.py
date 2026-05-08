@@ -29,6 +29,8 @@ from . import imagen_upscale
 from . import interior_design_v2
 from . import library_v2
 from . import library_v3
+from . import library_v4
+from . import login
 from . import lyria
 from . import object_rotation
 from . import pixie_compositor

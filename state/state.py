@@ -35,6 +35,7 @@ class AppState:
 
     def __init__(self):
         """Initializes the AppState, reading user info from the request context."""
+        self.managed_teams = [] # Initialize to avoid AttributeError
         if "HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL" in request.environ:
             user_email = request.environ["HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL"]
             if user_email.startswith("accounts.google.com:"):

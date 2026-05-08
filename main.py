@@ -18,6 +18,9 @@ import inspect
 import os
 import uuid
 
+from common.storage import get_or_create_session
+from pages import login # Import login page to register it
+from routers import asset_handler # Import asset handler
 import google.auth
 import mesop as me
 from fastapi import APIRouter, HTTPException, Request
@@ -125,7 +128,7 @@ async def add_global_csp(request: Request, call_next):
     response = await call_next(request)
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://esm.sh https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://esm.sh https://cdn.jsdelivr.net https://accounts.google.com; "
         "connect-src 'self' https://esm.sh https://cdn.jsdelivr.net https://storage.cloud.google.com https://storage.googleapis.com https://*.googleusercontent.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com http://fonts.googleapis.com/; "
         "font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com http://fonts.googleapis.com;"
@@ -138,15 +141,13 @@ async def add_global_csp(request: Request, call_next):
 
 @app.middleware("http")
 async def set_request_context(request: Request, call_next):
-    user_email = request.headers.get("X-Goog-Authenticated-User-Email")
-    if not user_email:
-        user_email = "anonymous@google.com"
-    if user_email.startswith("accounts.google.com:"):
-        user_email = user_email.split(":")[-1]
-
     session_id = request.cookies.get("session_id")
     if not session_id:
         session_id = str(uuid.uuid4())
+        user_email = "anonymous@google.com"
+    else:
+        session = get_or_create_session(session_id, "anonymous@google.com")
+        user_email = session.user_email
 
     request.scope["MESOP_USER_EMAIL"] = user_email
     request.scope["MESOP_SESSION_ID"] = session_id
@@ -259,6 +260,7 @@ app.mount(
 )
 
 app.include_router(veo_router.router)
+app.include_router(asset_handler.router)
 
 
 app.mount(

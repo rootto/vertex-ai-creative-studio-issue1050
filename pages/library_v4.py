@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""A test library page using the new media_tile component."""
+"""Library page v4 with Identity Token secured assets."""
 
 import datetime
 import json
@@ -64,14 +64,10 @@ def on_load(e: me.LoadEvent):
     media_id = me.query_params.get("media_id")
 
     # If it's a permalink, skip the initial load and just open the dialog.
-    # The dialog has its own logic to fetch the specific item.
     if media_id and not pagestate.show_details_dialog:
         pagestate.selected_media_item_id = media_id
         pagestate.show_details_dialog = True
     else:
-        # Otherwise, perform the initial load for the main library view.
-        # This will also run every time the user navigates back to the page,
-        # ensuring the view is fresh.
         yield from _load_media(pagestate, is_filter_change=True)
 
     yield
@@ -113,7 +109,7 @@ def _load_media(pagestate: PageState, is_filter_change: bool = False):
 
 
 def on_load_more(e: me.WebEvent):
-    """Event handler for infinite scroll, fetches the next page of items."""
+    """Event handler for infinite scroll."""
     pagestate = me.state(PageState)
     if pagestate.is_loading or pagestate.all_items_loaded:
         return
@@ -150,22 +146,22 @@ def on_error_filter_change(e: me.ButtonToggleChangeEvent):
 
 
 @me.page(
-    path="/library_v3",
-    title="GenMedia Creative Studio - Library v3",
+    path="/library_v4",
+    title="GenMedia Creative Studio - Library v4",
     on_load=on_load,
 )
 def page():
     """Main Page."""
-    with page_scaffold(page_name="library"):  # pylint: disable=E1129:not-context-manager
-        library_content()  # pylint: disable=E1129:not-context-manager
+    with page_scaffold(page_name="library_v4"):  # pylint: disable=not-context-manager
+        library_content()
 
 
 def library_content():
     """The main content of the library page."""
     pagestate = me.state(PageState)
 
-    with page_frame():  # pylint: disable=E1129:not-context-manager
-        header("Library", "perm_media")
+    with page_frame():  # pylint: disable=not-context-manager
+        header("Library v4", "perm_media")
 
         with me.box(
             style=me.Style(
@@ -225,13 +221,15 @@ def library_content():
                         else (item.gcs_uris[0] if item.gcs_uris else None)
                     )
                     # Construct the display URL on the fly.
+                    # TODO: Option A implies verifying identity here.
+                    # Since this is server-side rendering, we assume the user is authorized
+                    # because we filtered by user_email in Firestore query.
                     https_url = create_display_url(gcs_uri) if gcs_uri else ""
 
                     thumbnail_url = ""
                     if getattr(item, "thumbnail_uri", None):
                         thumbnail_url = create_display_url(item.thumbnail_uri)
 
-                    # Determine the render type consistently
                     render_type = get_media_type(
                         mime_type=item.mime_type, url=https_url,
                     )
@@ -272,52 +270,35 @@ def on_extend_click(e: me.WebEvent):
     """Handles 'Extend' click from media viewer."""
     state = me.state(PageState)
     proxy_url = e.value["url"]
-    print(f"DEBUG: on_extend_click triggered. Proxy URL: {proxy_url}")
     if proxy_url:
-        # Use common utility to handle various URL formats
         gcs_path = https_url_to_gcs_uri(proxy_url)
-        print(f"DEBUG: Extracted GCS Path: {gcs_path}")
-
-        # Open the extend dialog
         state.extend_dialog_state.is_open = True
         state.extend_dialog_state.input_video_uri = gcs_path
-        print(
-            f"DEBUG: Set extend_dialog_state.is_open = {state.extend_dialog_state.is_open}",
-        )
-        print(
-            f"DEBUG: Set extend_dialog_state.input_video_uri = {state.extend_dialog_state.input_video_uri}",
-        )
     yield
 
 
 def on_close_extend_dialog(e: me.ClickEvent):
     """Closes the extend dialog and resets state."""
     state = me.state(PageState)
-    # Check if we should refresh the library (if generation succeeded)
     if state.extend_dialog_state.generated_video_uri:
         yield from _load_media(state, is_filter_change=True)
 
-    # Reset dialog state
     state.extend_dialog_state = VeoExtendDialogState()
     yield
 
 
 @me.component
 def library_dialog(pagestate: PageState):
-    """Renders the details dialog. Fetches the item on-demand to avoid state issues."""
-    # The dialog is always in the DOM, just hidden/shown via is_open.
-    # We only fetch and render the content if an item is selected.
+    """Renders the details dialog."""
     if pagestate.show_details_dialog and pagestate.selected_media_item_id:
-        # FETCH ON DEMAND
         item_to_display = get_media_item_by_id(pagestate.selected_media_item_id)
 
-        with lightbox_dialog(is_open=True, on_close=on_close_details_dialog):  # pylint: disable=E1129:not-context-manager
+        with lightbox_dialog(is_open=True, on_close=on_close_details_dialog):  # pylint: disable=not-context-manager
             if not item_to_display:
                 with me.box(style=me.Style(padding=me.Padding.all(16))):
                     me.text("Error: Could not load media item details.")
                 return
 
-            # If the item has a storyboard_id, fetch the data and render the tour dialog.
             if item_to_display.storyboard_id:
                 from config.firebase_config import FirebaseClient
 
@@ -327,20 +308,16 @@ def library_dialog(pagestate: PageState):
                 )
                 doc = doc_ref.get()
                 if doc.exists:
-                    # Pass the fetched storyboard dict as a parameter
                     render_tour_detail_dialog(storyboard=doc.to_dict())
                 else:
                     me.text(
                         f"Error: Could not find storyboard with ID: {item_to_display.storyboard_id}",
                     )
             else:
-                # Pass the freshly fetched item as a parameter
                 render_default_detail_dialog(item=item_to_display)
     else:
-        # Render an empty, closed dialog if nothing is selected.
-        # This is important so the dialog can be opened by changing the state.
-        with lightbox_dialog(is_open=False, on_close=on_close_details_dialog):  # pylint: disable=E1129:not-context-manager
-            pass  # Render nothing inside the closed dialog
+        with lightbox_dialog(is_open=False, on_close=on_close_details_dialog):  # pylint: disable=not-context-manager
+            pass
 
 
 def on_close_details_dialog(e: me.ClickEvent):
@@ -364,19 +341,16 @@ def handle_edit_click(e: me.WebEvent):
 
 
 def on_veo_click(e: me.WebEvent):
-    """Event handler for when the VEO button is clicked in the detail viewer."""
-    proxy_url = e.value[
-        "url"
-    ]  # This is now the proxy URL, e.g., /media/bucket/object.png
+    """Event handler for when the VEO button is clicked."""
+    proxy_url = e.value["url"]
     if proxy_url:
-        # Convert the proxy URL back to just the GCS path (bucket/object.png)
         gcs_path = proxy_url.replace("/media/", "", 1)
         me.navigate(url="/veo", query_params={"image_path": gcs_path})
     yield
 
 
 def json_default_serializer(o):
-    """A default serializer for json.dumps to handle datetimes."""
+    """A default serializer for json.dumps."""
     if isinstance(o, (datetime.datetime, datetime.date)):
         return o.isoformat()
     raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
@@ -401,7 +375,7 @@ def render_tour_detail_dialog(storyboard: dict):
     if not storyboard:
         return
 
-    with lightbox_dialog(is_open=True, on_close=on_close_details_dialog):  # pylint: disable=E1129:not-context-manager
+    with lightbox_dialog(is_open=True, on_close=on_close_details_dialog):  # pylint: disable=not-context-manager
         me.text("Interior Design Tour", type="headline-5")
 
         with me.box(
@@ -540,23 +514,20 @@ def render_tour_detail_dialog(storyboard: dict):
             me.button(
                 "Continue Styling",
                 on_click=on_continue_styling_click,
-                key=storyboard.get("id"),
+                key=storyboard.get('id'),
                 type="raised",
             )
 
 
 @me.component
 def render_default_detail_dialog(item: MediaItem):
-    """Renders the default detail view for standard media items."""
+    """Renders the default detail view."""
     primary_urls = []
-    # If there are multiple URIs in gcs_uris, create a display URL for each.
     if item.gcs_uris:
         primary_urls = [create_display_url(uri) for uri in item.gcs_uris]
-    # Fallback for single gcsuri for backward compatibility.
     elif item.gcsuri:
         primary_urls = [create_display_url(item.gcsuri)]
 
-    # Handle case where timestamp might be a string from Firestore
     timestamp_display = "N/A"
     if isinstance(item.timestamp, datetime.datetime):
         timestamp_display = item.timestamp.isoformat()
@@ -570,17 +541,15 @@ def render_default_detail_dialog(item: MediaItem):
         "Generation Time (s)": item.generation_time,
     }
 
-    # Determine the render type consistently
     render_type = get_media_type(
         mime_type=item.mime_type,
         url=primary_urls[0] if primary_urls else "",
     )
 
-    # The main detail viewer now only shows the primary asset and metadata
     media_detail_viewer(
         media_type=render_type,
         primary_urls_json=json.dumps(primary_urls),
-        source_urls_json="[]",  # Pass empty list as sources are rendered below
+        source_urls_json="[]",
         metadata_json=json.dumps(metadata),
         id=item.id,
         raw_metadata_json=json.dumps(
@@ -593,7 +562,6 @@ def render_default_detail_dialog(item: MediaItem):
         on_extend_click=on_extend_click,
     )
 
-    # Add a button to link back to the object rotation page if applicable
     if item.object_rotation_project_id:
         with me.box(style=me.Style(margin=me.Margin(top=16))):
             me.button(
@@ -603,28 +571,21 @@ def render_default_detail_dialog(item: MediaItem):
                 type="stroked",
             )
 
-    # --- Categorized Source Asset Sections ---
-
-    # R2V Style
     if item.r2v_style_image:
         _render_source_section("Style Reference", [item.r2v_style_image])
 
-    # R2V Assets
     if item.r2v_reference_images:
         _render_source_section("Asset References", item.r2v_reference_images)
 
-    # I2V / Interpolation Frames
     i2v_frames = []
     if item.reference_image:
         i2v_frames.append(item.reference_image)
     if item.last_reference_image:
         i2v_frames.append(item.last_reference_image)
     if i2v_frames:
-        # Use a more specific title if it's interpolation
         title = "Interpolation Frames" if item.last_reference_image else "Source Frame"
         _render_source_section(title, i2v_frames)
 
-    # Virtual Try-On
     vto_assets = []
     if item.person_image_gcs:
         vto_assets.append(item.person_image_gcs)
@@ -633,7 +594,6 @@ def render_default_detail_dialog(item: MediaItem):
     if vto_assets:
         _render_source_section("Virtual Try-On Sources", vto_assets)
 
-    # Generic / Legacy Sources
     generic_sources = []
     if item.source_uris:
         generic_sources.extend(item.source_uris)
@@ -660,15 +620,8 @@ def _render_source_section(title: str, uris: list[str]):
             ),
         ):
             for source_uri in uris:
-                # Construct the display URL
                 https_url = create_display_url(source_uri)
-
-                # Determine media type consistently
                 render_type = get_media_type(url=https_url)
-
-                # Create a dummy MediaItem for pill generation if needed,
-                # though for source assets pills might be overkill.
-                # We keep it for consistency with the previous implementation.
                 source_item = MediaItem(gcsuri=source_uri, media_type=render_type)
 
                 media_tile(
@@ -676,13 +629,12 @@ def _render_source_section(title: str, uris: list[str]):
                     media_type=render_type,
                     https_url=https_url,
                     pills_json=get_pills_for_item(source_item, https_url),
-                    # Not clickable for now
                     on_click=None,
                 )
 
 
 def on_continue_styling_click(e: me.ClickEvent):
-    """Navigates the user to the interior design page to continue styling."""
+    """Navigates the user to the interior design page."""
     storyboard_id = e.key
     if storyboard_id:
         me.navigate(
@@ -691,12 +643,11 @@ def on_continue_styling_click(e: me.ClickEvent):
                 "storyboard_id": f"{storyboard_id}",
             },
         )
-
     yield
 
 
 def on_view_rotation_project_click(e: me.ClickEvent):
-    """Navigates the user to the object rotation page to view a project."""
+    """Navigates the user to the object rotation page."""
     project_id = e.key
     if project_id:
         me.navigate(
