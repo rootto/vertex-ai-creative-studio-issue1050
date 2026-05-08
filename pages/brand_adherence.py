@@ -334,6 +334,7 @@ def on_generate_image_click(e: me.ClickEvent):
     state.is_generating = True
     state.generated_image_display_url = ""
     state.evaluation_results = {}
+    state.current_media_item_id = None
     yield
 
     try:

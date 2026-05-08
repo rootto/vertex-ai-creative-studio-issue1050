@@ -26,6 +26,7 @@ from common.metadata import MediaItem, add_media_item_to_firestore, save_storybo
 from common.storage import store_to_gcs
 from common.utils import create_display_url
 from components.dialog import dialog
+from components.feedback.feedback import feedback
 from components.header import header
 from components.info_dialog.info_dialog import info_dialog
 from components.interior_design.design_studio import design_studio
@@ -297,6 +298,7 @@ def page_content():
                         style=me.Style(
                             margin=me.Margin(top=24),
                             display="flex",
+                            flex_direction="column",
                             justify_content="center",
                         ),
                     ):
@@ -306,6 +308,9 @@ def page_content():
                                 width="100%", max_width="720px", border_radius=8,
                             ),
                         )
+                        lib_media_id = state.storyboard.get("library_media_item_id")
+                        if lib_media_id:
+                            feedback(media_item_id=lib_media_id)
 
 
 def show_snackbar(state: PageState, message: str):

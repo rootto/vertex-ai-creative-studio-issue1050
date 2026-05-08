@@ -584,6 +584,14 @@ def render_default_detail_dialog(item: MediaItem):
         on_extend_click=on_extend_click,
     )
 
+    if item.id:
+        with me.box(
+            style=me.Style(
+                margin=me.Margin(top=24), display="flex", justify_content="center",
+            ),
+        ):
+            feedback(media_item_id=item.id)
+
     # Add a button to link back to the object rotation page if applicable
     if item.object_rotation_project_id:
         with me.box(style=me.Style(margin=me.Margin(top=16))):

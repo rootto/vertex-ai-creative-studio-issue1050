@@ -62,6 +62,7 @@ class PageState:
     selected_video_for_audio_display_url: str = ""
     selected_audio: str = ""
     selected_audio_display_url: str = ""
+    current_media_item_id: str | None = None
 
 
 VIDEO_PLACEHOLDER_STYLE = me.Style(
@@ -320,6 +321,17 @@ def render_video_video_tab():
                     src=state.concatenated_video_display_url,
                     style=me.Style(width="100%", max_width="720px", border_radius=8),
                 )
+
+                if state.current_media_item_id:
+                    with me.box(
+                        style=me.Style(
+                            display="flex",
+                            justify_content="center",
+                            margin=me.Margin(top=16),
+                        ),
+                    ):
+                        feedback(media_item_id=state.current_media_item_id)
+
                 me.button(
                     "Convert to GIF",
                     on_click=on_convert_to_gif_click,
@@ -476,6 +488,16 @@ def render_video_audio_tab():
                     style=me.Style(width="100%", max_width="720px", border_radius=8),
                 )
 
+                if state.current_media_item_id:
+                    with me.box(
+                        style=me.Style(
+                            display="flex",
+                            justify_content="center",
+                            margin=me.Margin(top=16),
+                        ),
+                    ):
+                        feedback(media_item_id=state.current_media_item_id)
+
 
 def on_upload_video_for_audio(e: me.UploadEvent):
     """Upload video handler for the audio tab."""
@@ -520,6 +542,7 @@ def on_layer_audio_click(e: me.ClickEvent):
     state.concatenated_video_url = ""
     state.gif_url = ""
     state.error_message = ""
+    state.current_media_item_id = None
     yield
 
     try:
@@ -541,6 +564,8 @@ def on_layer_audio_click(e: me.ClickEvent):
                 model="pixie-compositor-v1-audio-layer",
             ),
         )
+        add_media_item_to_firestore(media_item)
+        state.current_media_item_id = media_item.id
 
     except Exception as ex:
         state.error_message = f"An error occurred: {ex}"
@@ -605,6 +630,7 @@ def on_process_click(e: me.ClickEvent):
     state.concatenated_video_url = ""
     state.gif_url = ""
     state.error_message = ""
+    state.current_media_item_id = None
     yield
 
     try:
@@ -629,6 +655,8 @@ def on_process_click(e: me.ClickEvent):
                 model="pixie-compositor-v1",
             ),
         )
+        add_media_item_to_firestore(media_item)
+        state.current_media_item_id = media_item.id
     except ValueError as ex:
         # Catch the specific resolution error and show a dialog
         state.dialog_title = "Resolution Mismatch"

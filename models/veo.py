@@ -200,13 +200,14 @@ def generate_video(request: VideoGenerationRequest) -> tuple[str, str]:
         if operation.error:
             error_details = str(operation.error)
             logger.info(f"Video generation failed with error: {error_details}")
-            
+
             # Check for specific safety reasons
             from common.error_handling import get_safety_reason
+
             safety_reason = get_safety_reason(error_details)
             if safety_reason:
                 raise GenerationError(safety_reason)
-                
+
             raise GenerationError(f"API Error: {error_details}")
 
         if operation.response:

@@ -158,6 +158,7 @@ def print_keys(obj, prefix=""):
             print_keys(item, prefix + f"  [{i}] ")  # indicate list index in prefix
 
 
+
 def _get_gcs_public_https_url(gcs_uri: str | None) -> str:
     """Converts a GCS URI to a publicly accessible URL.
 

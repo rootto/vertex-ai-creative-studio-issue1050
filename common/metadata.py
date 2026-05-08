@@ -381,6 +381,8 @@ def _create_media_item_from_dict(doc_id: str, raw_item_data: dict) -> MediaItem:
         original_resolution=raw_item_data.get("original_resolution"),
         upscale_factor=raw_item_data.get("upscale_factor"),
         image_size=raw_item_data.get("image_size"),
+        feedback_vote=raw_item_data.get("feedback_vote"),
+        feedback_comment=raw_item_data.get("feedback_comment"),
         raw_data=raw_item_data,
     )
     return media_item
@@ -401,6 +403,25 @@ def get_media_item_by_id(
     except Exception as e:
         logger.error(f"Error fetching media item by ID {item_id}: {e}")
         return None
+
+
+def update_media_feedback(item_id: str, vote: str, comment: str | None = None):
+    """Updates the feedback fields for a specific media item."""
+    if not db:
+        logger.warning(
+            "Firestore client (db) is not initialized. Cannot update media feedback.",
+        )
+        return
+
+    try:
+        doc_ref = db.collection(config.GENMEDIA_COLLECTION_NAME).document(item_id)
+        update_data = {"feedback_vote": vote}
+        if comment:
+            update_data["feedback_comment"] = comment
+        doc_ref.update(update_data)
+        logger.info(f"Successfully updated feedback for MediaItem with ID: {item_id}")
+    except Exception as e:
+        logger.error(f"Failed to update feedback for MediaItem {item_id}. Error: {e}")
 
 
 def add_media_item(user_email: str, **kwargs):
@@ -748,6 +769,8 @@ def get_media_for_page_optimized(
                 ),
                 original_resolution=raw_item_data.get("original_resolution"),
                 upscale_factor=raw_item_data.get("upscale_factor"),
+                feedback_vote=raw_item_data.get("feedback_vote"),
+                feedback_comment=raw_item_data.get("feedback_comment"),
                 raw_data=raw_item_data,
             )
             media_items.append(media_item)

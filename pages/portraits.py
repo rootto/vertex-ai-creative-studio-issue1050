@@ -34,6 +34,7 @@ from common.metadata import MediaItem, add_media_item_to_firestore
 from common.storage import store_to_gcs
 from common.utils import create_display_url
 from components.dialog import dialog
+from components.feedback.feedback import feedback
 from components.header import header
 from components.library.events import LibrarySelectionChangeEvent
 from components.library.library_chooser_button import library_chooser_button
@@ -104,6 +105,7 @@ class PageState:
 
     info_dialog_open: bool = False
     show_selfie_dialog: bool = False
+    current_media_item_id: str | None = None
 
 
 from config.portrait_styles import PORTRAIT_STYLES
@@ -565,6 +567,7 @@ def on_click_clear_reference_image(e: me.ClickEvent):
     state.error_message = ""
     state.gif_gcs_uri = ""
     state.gif_display_url = ""
+    state.current_media_item_id = None
     yield
 
 
@@ -873,6 +876,8 @@ Do not describe the frame. There should be no lip movement like speaking, but th
                     mime_type="video/mp4",
                 ),
             )
+            add_media_item_to_firestore(media_item)
+            state.current_media_item_id = media_item.id
         except Exception as meta_err:
             print(f"CRITICAL: Failed to store metadata: {meta_err}")
             additional_meta_error = f" (Metadata storage failed: {meta_err})"

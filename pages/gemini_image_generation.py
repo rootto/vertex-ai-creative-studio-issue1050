@@ -195,6 +195,9 @@ def _render_grounding_info(grounding_info_str: str, theme_mode: str):
         me.text(grounding_info_str)
 
 
+from components.feedback.feedback import feedback
+
+
 def gemini_image_gen_page_content():
     """Renders the main UI for the Gemini Image Generation page."""
     state = me.state(PageState)

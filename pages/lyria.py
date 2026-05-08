@@ -23,6 +23,7 @@ import mesop as me
 from common.metadata import MediaItem, add_media_item_to_firestore  # Updated import
 from common.utils import create_display_url
 from components.dialog import dialog, dialog_actions
+from components.feedback.feedback import feedback
 from components.header import header
 from components.page_scaffold import (
     page_frame,
@@ -87,6 +88,7 @@ class PageState:
 
     audio_metrics: AudioMetricsState = field(default_factory=AudioMetricsState)
     has_audio_metrics: bool = False
+    current_media_item_id: str | None = None
 
 
 # Original box style
@@ -597,6 +599,7 @@ def on_click_lyria(e: me.ClickEvent):
             # duration might be available if analysis_dict_for_metadata contains it, or if Lyria API provides it
         )
         add_media_item_to_firestore(item)
+        state.current_media_item_id = item.id
     except Exception as meta_err:
         print(f"CRITICAL: Failed to store metadata: {meta_err}")
 
@@ -627,6 +630,7 @@ def clear_music(e: me.ClickEvent):
     state.audio_metrics.hnr_db = 0.0
     state.audio_metrics.estimated_tempo_bpm = 0.0
     state.audio_metrics.duration_sec = 0.0
+    state.current_media_item_id = None
     yield
 
 

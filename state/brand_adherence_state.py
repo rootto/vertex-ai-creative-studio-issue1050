@@ -45,3 +45,4 @@ class PageState:
     show_snackbar: bool = False
     snackbar_message: str = ""
     info_dialog_open: bool = False
+    current_media_item_id: str | None = None

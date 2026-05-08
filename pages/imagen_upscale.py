@@ -61,6 +61,7 @@ class PageState:
 
     snackbar_message: str = ""
     show_snackbar: bool = False
+    current_media_item_id: str | None = None
 
 
 def on_upload(e: me.UploadEvent):
@@ -102,6 +103,7 @@ def on_upscale(e: me.ClickEvent):
     state.output_image_gcs = ""
     state.output_image_url = ""
     state.output_resolution = ""
+    state.current_media_item_id = None
     yield
 
     try:
@@ -138,6 +140,7 @@ def on_upscale(e: me.ClickEvent):
             comment="Upscaled image",
         )
         add_media_item_to_firestore(item)
+        state.current_media_item_id = item.id
         yield from show_snackbar("Image upscaled and saved to library.")
 
     except Exception as ex:
@@ -156,6 +159,7 @@ def on_clear(e: me.ClickEvent):
     state.output_image_gcs = ""
     state.output_image_url = ""
     state.output_resolution = ""
+    state.current_media_item_id = None
     yield
 
 
@@ -301,5 +305,15 @@ def page():
                             label=f"Resolution: {state.output_resolution}",
                             pill_type="resolution",
                         )
+
+                    if state.current_media_item_id:
+                        with me.box(
+                            style=me.Style(
+                                margin=me.Margin(top=16),
+                                display="flex",
+                                justify_content="center",
+                            ),
+                        ):
+                            feedback(media_item_id=state.current_media_item_id)
 
             snackbar(is_visible=state.show_snackbar, label=state.snackbar_message)

@@ -146,6 +146,7 @@ resource "google_compute_region_network_endpoint_group" "cloudrun_neg" {
 
 resource "google_service_account" "creative_studio" {
   account_id = "service-creative-studio"
+  project    = var.project_id
 }
 
 resource "google_cloud_tasks_queue" "thumbnail_queue" {
@@ -302,6 +303,7 @@ resource "google_project_iam_member" "creative_studio_sa_token_creator" {
 }
 
 resource "google_firestore_database" "create_studio_asset_metadata" {
+  project                           = var.project_id
   name                              = "create-studio-asset-metadata"
   location_id                       = var.region
   type                              = "FIRESTORE_NATIVE"
@@ -406,6 +408,7 @@ resource "google_project_iam_member" "creative_studio_vertex_access" {
 
 resource "google_service_account" "cloudbuild" {
   account_id = "builds-creative-studio"
+  project    = var.project_id
 }
 
 resource "google_service_account_iam_member" "build_act_as_creative_studio" {
@@ -443,6 +446,7 @@ module "source_bucket" {
 }
 
 resource "google_artifact_registry_repository" "creative_studio" {
+  project       = var.project_id
   repository_id = "creative-studio"
   description   = "Docker repository for GenMedia Creative Studio related images"
   format        = "DOCKER"

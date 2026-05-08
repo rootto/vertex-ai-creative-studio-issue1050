@@ -26,6 +26,7 @@ from common.analytics import log_ui_click, track_click
 from common.metadata import MediaItem, add_media_item_to_firestore
 from common.utils import create_display_url
 from components.dialog import dialog, dialog_actions
+from components.feedback.feedback import feedback
 from components.header import header
 from components.page_scaffold import page_frame, page_scaffold
 from config.chirp_3hd import (
@@ -66,6 +67,7 @@ class Chirp3hdState:
     current_phrase_input: str = ""
     current_pronunciation_input: str = ""
     selected_encoding: str = "PHONETIC_ENCODING_X_SAMPA"
+    current_media_item_id: str | None = None
 
 
 @me.page(
@@ -304,6 +306,15 @@ def page():
                         me.text("Generating audio...")
                     elif state.audio_display_url:
                         me.audio(src=state.audio_display_url)
+                        if state.current_media_item_id:
+                            with me.box(
+                                style=me.Style(
+                                    margin=me.Margin(top=24),
+                                    display="flex",
+                                    justify_content="center",
+                                ),
+                            ):
+                                feedback(media_item_id=state.current_media_item_id)
                     else:
                         me.text("Generated audio will appear here.")
 
@@ -438,6 +449,7 @@ def on_click_generate(e: me.ClickEvent):
     state.audio_url = ""
     state.error_message = ""
     state.show_error_dialog = False
+    state.current_media_item_id = None
     gcs_url = ""
     yield
 
@@ -514,6 +526,7 @@ def on_click_generate(e: me.ClickEvent):
                 language_code=state.selected_language,
             )
             add_media_item_to_firestore(item)
+            state.current_media_item_id = item.id
             me.state(AppState).snackbar_message = "Audio saved to library"
         except Exception as ex:
             print(f"CRITICAL: Failed to store metadata: {ex}")
@@ -536,6 +549,7 @@ def on_click_clear(e: me.ClickEvent):
     state.current_phrase_input = ""
     state.current_pronunciation_input = ""
     state.selected_encoding = "PHONETIC_ENCODING_X_SAMPA"
+    state.current_media_item_id = None
     state.audio_gcs_uri = ""
     state.audio_display_url = ""
     state.error_message = ""

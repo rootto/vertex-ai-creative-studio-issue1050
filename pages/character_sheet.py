@@ -148,6 +148,14 @@ def character_sheet_content():
                         style=me.Style(width="100%", border_radius=8),
                     )
 
+        if state.current_media_item_id:
+            with me.box(
+                style=me.Style(
+                    margin=me.Margin(top=24), display="flex", justify_content="center",
+                ),
+            ):
+                feedback(media_item_id=state.current_media_item_id)
+
 
 # --- Event Handlers ---
 
@@ -167,6 +175,7 @@ def on_clear_original(e: me.ClickEvent):
     state = me.state(PageState)
     state.original_image_gcs_uri = ""
     state.original_image_display_url = ""
+    state.current_media_item_id = None
     yield
 
 
@@ -180,6 +189,7 @@ def on_generate_sheet_click(e: me.ClickEvent):
     app_state = me.state(AppState)
     state.is_generating_sheet = True
     state.asset_sheet_display_url = ""
+    state.current_media_item_id = None
     yield
 
     try:
@@ -210,6 +220,7 @@ def on_generate_sheet_click(e: me.ClickEvent):
                 comment="Generated Character Asset Sheet",
             )
             add_media_item_to_firestore(media_item)
+            state.current_media_item_id = media_item.id
             state.snackbar_message = "Asset sheet saved to library."
             state.show_snackbar = True
 
@@ -230,6 +241,7 @@ def on_generate_scenario_click(e: me.ClickEvent):
     app_state = me.state(AppState)
     state.is_generating_scenario = True
     state.scenario_image_display_url = ""
+    state.current_media_item_id = None
     yield
 
     try:
@@ -266,6 +278,7 @@ def on_generate_scenario_click(e: me.ClickEvent):
                 comment="Generated Character Scenario",
             )
             add_media_item_to_firestore(media_item)
+            state.current_media_item_id = media_item.id
             state.snackbar_message = "Scenario image saved to library."
             state.show_snackbar = True
 

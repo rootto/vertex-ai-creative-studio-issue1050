@@ -154,6 +154,10 @@ def storyboarder_content():
                     style=me.Style(width="100%", max_width="800px", border_radius=12),
                 )
 
+                if state.current_media_item_id:
+                    with me.box(style=me.Style(margin=me.Margin(top=16))):
+                        feedback(media_item_id=state.current_media_item_id)
+
 
 # --- Event Handlers ---
 
@@ -217,6 +221,7 @@ def on_generate_video_click(e: me.ClickEvent):
     state.is_generating_video = True
     state.video_generation_status = "Initializing..."
     state.generated_video_clips = []
+    state.current_media_item_id = None
     yield
 
     try:

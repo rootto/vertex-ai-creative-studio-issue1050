@@ -23,6 +23,7 @@ import mesop as me
 
 from common.storage import store_to_gcs
 from common.utils import create_display_url
+from components.feedback.feedback import feedback
 from components.header import header
 from components.image_thumbnail import image_thumbnail
 from components.library.events import LibrarySelectionChangeEvent
@@ -606,6 +607,16 @@ def step3_content():
                     border_radius=8,
                 ),
             )
+            media_item_id = state.rotation_project.get("library_media_item_id")
+            if media_item_id:
+                with me.box(
+                    style=me.Style(
+                        display="flex",
+                        justify_content="center",
+                        margin=me.Margin(top=16),
+                    ),
+                ):
+                    feedback(media_item_id=media_item_id)
 
 
 # Event Handlers for Step 3

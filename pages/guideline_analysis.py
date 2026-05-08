@@ -31,6 +31,7 @@ from common.metadata import (
 from common.storage import store_to_gcs
 from common.utils import create_display_url
 from components.dialog import dialog
+from components.feedback.feedback import feedback
 from components.header import header
 from components.media_tile.media_tile import media_tile
 from components.page_scaffold import page_frame, page_scaffold
@@ -217,6 +218,15 @@ def page_content():
                                 me.video(src=display_url, style=me.Style(width="100%"))
                             else:
                                 me.image(src=display_url, style=me.Style(width="100%"))
+
+                            with me.box(
+                                style=me.Style(
+                                    margin=me.Margin(top=16),
+                                    display="flex",
+                                    justify_content="center",
+                                ),
+                            ):
+                                feedback(media_item_id=state.selected_media_item_id)
                         else:
                             me.text("No media preview")
 
