@@ -41,7 +41,9 @@ class AppState:
         # Try to get identity from session cookie (Custom Auth)
         session_id = request.cookies.get("session_id")
         if session_id:
+            print(f"DEBUG: AppState.__init__ found session_id: {session_id}", flush=True)
             session = get_or_create_session(session_id, "anonymous@google.com")
+            print(f"DEBUG: AppState.__init__ loaded session user: {session.user_email}", flush=True)
             self.user_email = session.user_email
             self.session_id = session_id
         
