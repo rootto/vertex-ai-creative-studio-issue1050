@@ -16,7 +16,10 @@
 
 import mesop as me
 
+from common.analytics import get_logger
 from components.header import header
+
+logger = get_logger(__name__)
 from components.page_scaffold import page_frame, page_scaffold
 from components.snackbar import snackbar
 from services.team_service import (
@@ -45,7 +48,7 @@ def team_management_content() -> None:
     """Render the content for team management."""
     app_state = me.state(AppState)
     page_state = me.state(PageState)
-    print(f"DEBUG: team_management_content entered. user_role={app_state.user_role}, email={app_state.user_email}", flush=True)
+    logger.info(f"DEBUG: team_management_content entered. user_role={app_state.user_role}, email={app_state.user_email}")
 
     if app_state.user_role not in ["administrator", "manager"]:
         with me.box(style=me.Style(padding=me.Padding.all(24))):

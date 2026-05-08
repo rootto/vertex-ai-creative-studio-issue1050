@@ -20,6 +20,9 @@ from flask import request
 from services.team_service import get_teams_for_user
 from services.user_service import bootstrap_first_user, get_user_role
 from common.storage import get_or_create_session
+from common.analytics import get_logger
+
+logger = get_logger(__name__)
 
 
 @me.stateclass
@@ -41,9 +44,9 @@ class AppState:
         # Try to get identity from session cookie (Custom Auth)
         session_id = request.cookies.get("session_id")
         if session_id:
-            print(f"DEBUG: AppState.__init__ found session_id: {session_id}", flush=True)
+            logger.info(f"DEBUG: AppState.__init__ found session_id: {session_id}")
             session = get_or_create_session(session_id, "anonymous@google.com")
-            print(f"DEBUG: AppState.__init__ loaded session user: {session.user_email}", flush=True)
+            logger.info(f"DEBUG: AppState.__init__ loaded session user: {session.user_email}")
             self.user_email = session.user_email
             self.session_id = session_id
         

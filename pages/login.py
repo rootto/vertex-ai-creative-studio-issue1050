@@ -3,6 +3,9 @@ import mesop as me
 from components.login_component.login_component import login_component
 from state.state import AppState, update_user_and_session_info
 from common.auth import verify_google_id_token
+from common.analytics import get_logger
+
+logger = get_logger(__name__)
 from config.default import Default
 
 
@@ -12,14 +15,14 @@ class PageState:
 
 
 def on_login(e: me.WebEvent):
-    print(f"DEBUG: on_login entered. Event value: {e.value}")
+    logger.info(f"DEBUG: on_login entered. Event value: {e.value}")
     state = me.state(AppState)
     id_token_str = e.value["value"]
 
     try:
         id_info = verify_google_id_token(id_token_str)
         email = id_info["email"]
-        print(f"User logged in: {email}")
+        logger.info(f"User logged in: {email}")
 
         # Update state with user email
         yield from update_user_and_session_info(email, state.session_id)
@@ -27,7 +30,7 @@ def on_login(e: me.WebEvent):
         # Navigate to welcome page
         me.navigate("/welcome")
     except Exception as ex:
-        print(f"Login failed: {ex}")
+        logger.error(f"Login failed: {ex}")
     yield
 
 
