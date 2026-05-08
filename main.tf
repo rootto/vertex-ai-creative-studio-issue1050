@@ -472,15 +472,17 @@ resource "google_cloud_run_service_iam_member" "build_service" {
   member   = google_service_account.cloudbuild.member
 }
 
-resource "google_identity_platform_config" "default" {
-  project = var.project_id
-  depends_on = [module.project-services]
+resource "google_firestore_document" "initial_user" {
+  project     = var.project_id
+  database    = "create-studio-asset-metadata"
+  collection  = "users"
+  document_id = var.initial_user
+  fields      = <<EOF
+{
+  "email": { "stringValue": "${var.initial_user}" },
+  "role": { "stringValue": "administrator" }
 }
+EOF
 
-resource "google_identity_platform_default_supported_idp_config" "google" {
-  project       = var.project_id
-  idp_id        = "google.com"
-  client_id     = var.google_client_id
-  client_secret = var.google_client_secret
-  depends_on = [google_identity_platform_config.default]
+  depends_on = [google_firestore_database.create_studio_asset_metadata]
 }
