@@ -29,6 +29,10 @@ def on_login(e: me.WebEvent):
     yield
 
 
+def navigate_to_login(e: me.ClickEvent):
+    me.navigate("/login")
+
+
 @me.page(path="/login", title="Login - GenMedia Creative Studio")
 def page():
     with me.box(style=me.Style(display="flex", flex_direction="column", align_items="center", justify_content="center", height="100vh")):
