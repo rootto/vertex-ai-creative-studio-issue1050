@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from dataclasses import asdict, field
+from typing import Generator
 
 import mesop as me
 from flask import request
@@ -172,11 +173,17 @@ def get_user_and_session_info() -> tuple[str, str]:
     return app_state.user_email, app_state.session_id
 
 
-def update_user_and_session_info(user_email: str, session_id: str):
-    """Updates the user's email and session ID in the application state."""
+def update_user_and_session_info(user_email: str, session_id: str) -> Generator:
+    """Update the user's email and session ID in the application state."""
     app_state = me.state(AppState)
     app_state.user_email = user_email
     app_state.session_id = session_id
+
+    if user_email != "anonymous@google.com":
+        bootstrap_first_user(user_email)
+        app_state.user_role = get_user_role(user_email)
+        teams = get_teams_for_user(user_email, app_state.user_role)
+        app_state.managed_teams = [asdict(t) for t in teams]
     yield
 
 
