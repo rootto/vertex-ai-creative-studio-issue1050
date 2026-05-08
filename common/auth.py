@@ -31,25 +31,25 @@ def verify_google_id_token(id_token_str: str) -> dict:
 
 
 async def set_user_identity_and_session(request: Request, call_next):
-    """FastAPI middleware to set user identity and session information.
-    """
-    # Get user email from header - assuming IAP
-    user_email = request.headers.get("X-Goog-Authenticated-User-Email")
-    if not user_email:
-        # Fallback for local development or unauthenticated access
-        user_email = "anonymous@google.com"
-
+    """FastAPI middleware to set user identity and session information."""
     # Get or create session ID from cookie
     session_id = request.cookies.get("session_id")
     if not session_id:
         session_id = str(uuid.uuid4())
 
+    # Lookup session in Firestore to find user email
+    session = get_or_create_session(session_id, "anonymous@google.com")
+    user_email = session.user_email
+
+    # Fallback to IAP header if session doesn't have email
+    if user_email == "anonymous@google.com":
+        iap_email = request.headers.get("X-Goog-Authenticated-User-Email")
+        if iap_email:
+            user_email = iap_email
+
     # Attach user and session info to the request state
     request.state.user_email = user_email
     request.state.session_id = session_id
-
-    # Ensure session exists in Firestore
-    get_or_create_session(session_id, user_email)
 
     response = await call_next(request)
 

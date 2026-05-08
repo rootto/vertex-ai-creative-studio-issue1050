@@ -19,6 +19,7 @@ from flask import request
 
 from services.team_service import get_teams_for_user
 from services.user_service import bootstrap_first_user, get_user_role
+from common.storage import get_or_create_session
 
 
 @me.stateclass
@@ -36,7 +37,16 @@ class AppState:
     def __init__(self):
         """Initializes the AppState, reading user info from the request context."""
         self.managed_teams = [] # Initialize to avoid AttributeError
-        if "HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL" in request.environ:
+        
+        # Try to get identity from session cookie (Custom Auth)
+        session_id = request.cookies.get("session_id")
+        if session_id:
+            session = get_or_create_session(session_id, "anonymous@google.com")
+            self.user_email = session.user_email
+            self.session_id = session_id
+        
+        # Fallback to IAP headers if not found via custom session
+        elif "HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL" in request.environ:
             user_email = request.environ["HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL"]
             if user_email.startswith("accounts.google.com:"):
                 user_email = user_email.split(":")[-1]
