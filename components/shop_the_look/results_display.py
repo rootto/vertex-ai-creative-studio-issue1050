@@ -142,10 +142,13 @@ def results_display():
                         and not state.generate_video
                         and not state.is_loading
                     ):
-                        with me.content_button(
-                            type="icon",
-                            on_click=on_click_veo,
-                        ), me.box(style=icon_style):
+                        with (
+                            me.content_button(
+                                type="icon",
+                                on_click=on_click_veo,
+                            ),
+                            me.box(style=icon_style),
+                        ):
                             me.icon("cinematic_blur")
                             me.text("Create Video")
                     if (
@@ -154,17 +157,23 @@ def results_display():
                         and not state.result_image_gcs_uri
                         and not state.is_loading
                     ):
-                        with me.content_button(
-                            type="icon",
-                            on_click=on_click_vto_look,
-                            key="primary",
-                        ), me.box(style=icon_style):
+                        with (
+                            me.content_button(
+                                type="icon",
+                                on_click=on_click_vto_look,
+                                key="primary",
+                            ),
+                            me.box(style=icon_style),
+                        ):
                             me.icon("play_arrow")
                             me.text("Try On")
-                    with me.content_button(
-                        type="icon",
-                        on_click=on_click_clear_reference_image,
-                    ), me.box(style=icon_style):
+                    with (
+                        me.content_button(
+                            type="icon",
+                            on_click=on_click_clear_reference_image,
+                        ),
+                        me.box(style=icon_style),
+                    ):
                         me.icon("clear")
                         me.text("Clear")
 
@@ -198,22 +207,25 @@ def results_display():
 
             for item in state.articles:
                 if item.selected:
-                    with me.box(
-                        style=me.Style(
-                            display="flex",
-                            flex_direction="row",
-                            gap=0,
-                            align_items="center",
-                            margin=me.Margin(top=5),
-                        ),
-                    ), me.box(
-                        style=me.Style(
-                            display="flex",
-                            flex_direction=(
-                                "row" if item.ai_description else "column"
+                    with (
+                        me.box(
+                            style=me.Style(
+                                display="flex",
+                                flex_direction="row",
+                                gap=0,
+                                align_items="center",
+                                margin=me.Margin(top=5),
                             ),
-                            align_items="center",
-                            width="100%",
+                        ),
+                        me.box(
+                            style=me.Style(
+                                display="flex",
+                                flex_direction=(
+                                    "row" if item.ai_description else "column"
+                                ),
+                                align_items="center",
+                                width="100%",
+                            ),
                         ),
                     ):
                         img = create_display_url(item.clothing_image)
@@ -268,15 +280,18 @@ def results_display():
                     ),
                 ):
                     if state.final_critic:
-                        with me.box(
-                            style=me.Style(
-                                display="flex",
-                                flex_direction="column",
-                                position="relative",
-                                height="100%",
+                        with (
+                            me.box(
+                                style=me.Style(
+                                    display="flex",
+                                    flex_direction="column",
+                                    position="relative",
+                                    height="100%",
+                                ),
                             ),
-                        ), me.tooltip(
-                            message=str(state.final_critic.reasoning),
+                            me.tooltip(
+                                message=str(state.final_critic.reasoning),
+                            ),
                         ):
                             if state.final_accuracy:
                                 me.icon(
@@ -310,10 +325,13 @@ def results_display():
                                     ),
                                 )
                                 if not state.is_loading:
-                                    with me.tooltip(
-                                        message="Retry",
-                                    ), me.box(
-                                        on_click=on_click_manual_retry,
+                                    with (
+                                        me.tooltip(
+                                            message="Retry",
+                                        ),
+                                        me.box(
+                                            on_click=on_click_manual_retry,
+                                        ),
                                     ):
                                         me.icon(
                                             "refresh",
@@ -415,11 +433,14 @@ def results_display():
             ),
         ):
             for p in state.progression_images:
-                with me.box(), me.box(
-                    style=me.Style(
-                        height="100%",
-                        display="flex",
-                        flex_direction="row",
+                with (
+                    me.box(),
+                    me.box(
+                        style=me.Style(
+                            height="100%",
+                            display="flex",
+                            flex_direction="row",
+                        ),
                     ),
                 ):
                     for img in p.progression_images:
@@ -515,11 +536,14 @@ def results_display():
             ),
         ):
             for p in state.retry_progression_images:
-                with me.box(), me.box(
-                    style=me.Style(
-                        height="100%",
-                        display="flex",
-                        flex_direction="row",
+                with (
+                    me.box(),
+                    me.box(
+                        style=me.Style(
+                            height="100%",
+                            display="flex",
+                            flex_direction="row",
+                        ),
                     ),
                 ):
                     for img in p.progression_images:

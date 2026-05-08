@@ -19,7 +19,10 @@ import mesop as me
 
 @me.component
 def image_thumbnail(
-    image_uri: str, index: int, on_remove: Callable, icon_size: int = 18,
+    image_uri: str,
+    index: int,
+    on_remove: Callable,
+    icon_size: int = 18,
 ):
     # Calculate the container dimension based on the icon size.
     # This creates a consistent 4px "padding" on all sides.
@@ -29,7 +32,10 @@ def image_thumbnail(
         me.image(
             src=image_uri,
             style=me.Style(
-                width="100%", height="100%", border_radius=8, object_fit="cover",
+                width="100%",
+                height="100%",
+                border_radius=8,
+                object_fit="cover",
             ),
         )
         with me.box(

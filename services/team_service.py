@@ -104,7 +104,10 @@ def add_asset_to_team(team_id: str, media_item: MediaItem):
 
 
 def set_branding_guideline(
-    team_id: str, guideline_type: str, content: str, extracted_text: str = None,
+    team_id: str,
+    guideline_type: str,
+    content: str,
+    extracted_text: str = None,
 ):
     """Set branding guidelines for a team."""
     try:
@@ -127,7 +130,9 @@ def extract_branding_guidelines(pdf_gcs_uri: str) -> str:
     try:
         # Using gemini-3.1-pro-preview as corrected by user
         text, _ = generate_text(
-            prompt=prompt, images=[pdf_gcs_uri], model_name="gemini-3.1-pro-preview",
+            prompt=prompt,
+            images=[pdf_gcs_uri],
+            model_name="gemini-3.1-pro-preview",
         )
         return text
     except Exception as e:
@@ -135,7 +140,9 @@ def extract_branding_guidelines(pdf_gcs_uri: str) -> str:
         raise e
 
 
-def get_teams_for_user(email: str, role: str, assigned_only: bool = False) -> list[Team]:
+def get_teams_for_user(
+    email: str, role: str, assigned_only: bool = False,
+) -> list[Team]:
     """Get teams for a user based on their role."""
     if not db:
         return []

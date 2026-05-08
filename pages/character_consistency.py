@@ -105,7 +105,10 @@ def character_consistency_page_content():
         if state.uploaded_image_display_urls:
             with me.box(
                 style=me.Style(
-                    display="flex", flex_wrap="wrap", gap=10, justify_content="center",
+                    display="flex",
+                    flex_wrap="wrap",
+                    gap=10,
+                    justify_content="center",
                 ),
             ):
                 for uri in state.uploaded_image_display_urls:
@@ -129,7 +132,10 @@ def character_consistency_page_content():
 
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="row", gap=16, justify_content="center",
+                display="flex",
+                flex_direction="row",
+                gap=16,
+                justify_content="center",
             ),
         ):
             me.button(
@@ -176,7 +182,10 @@ def character_consistency_page_content():
 
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="row", gap=16, justify_content="center",
+                display="flex",
+                flex_direction="row",
+                gap=16,
+                justify_content="center",
             ),
         ):
             if state.best_image_display_url:
@@ -223,7 +232,10 @@ def character_consistency_page_content():
 
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="row", gap=16, justify_content="center",
+                display="flex",
+                flex_direction="row",
+                gap=16,
+                justify_content="center",
             ),
         ):
             if state.final_video_display_url:

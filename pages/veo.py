@@ -18,7 +18,6 @@ import time
 import mesop as me
 
 from common.analytics import log_ui_click, track_click
-from services.team_service import get_teams_for_user
 from common.error_handling import AsyncVeoPollingFailedError
 from common.metadata import (
     get_media_item_by_id,
@@ -40,6 +39,7 @@ from config.veo_models import get_veo_model_config
 from models.gemini import rewriter
 from models.model_setup import VeoModelSetup
 from models.requests import APIReferenceImage, VideoGenerationRequest
+from services.team_service import get_teams_for_user
 from state.state import AppState
 from state.veo_state import PageState
 
@@ -79,15 +79,19 @@ def on_veo_load(e: me.LoadEvent):
         state.veo_prompt_input = "Animate this image with subtle motion."
 
     app_state = me.state(AppState)
-    teams = get_teams_for_user(app_state.user_email, role=app_state.user_role, assigned_only=True)
+    teams = get_teams_for_user(
+        app_state.user_email, role=app_state.user_role, assigned_only=True,
+    )
     state.available_brand_guidelines = []
     for team in teams:
         content = team.extracted_text or team.branding_guideline.get("content")
         if content:
-            state.available_brand_guidelines.append({
-                "team_name": team.name,
-                "content": content,
-            })
+            state.available_brand_guidelines.append(
+                {
+                    "team_name": team.name,
+                    "content": content,
+                },
+            )
     yield
 
 
@@ -282,7 +286,8 @@ def veo_content(app_state: me.state):
                         ]
                         + [
                             me.SelectOption(
-                                label=g["team_name"], value=g["content"],
+                                label=g["team_name"],
+                                value=g["content"],
                             )
                             for g in state.available_brand_guidelines
                         ],
@@ -394,7 +399,9 @@ def on_click_extend_video(e: me.ClickEvent):
     # --- Prepare Request Data ---
     prompt_to_send = state.veo_prompt_input
     if state.selected_brand_guideline:
-        prompt_to_send = f"{prompt_to_send}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
+        prompt_to_send = (
+            f"{prompt_to_send}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
+        )
 
     request = VideoGenerationRequest(
         prompt=prompt_to_send,
@@ -574,7 +581,9 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
     # (Logic copied from original to maintain parity)
     prompt_to_send = state.veo_prompt_input
     if state.selected_brand_guideline:
-        prompt_to_send = f"{prompt_to_send}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
+        prompt_to_send = (
+            f"{prompt_to_send}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
+        )
 
     request = VideoGenerationRequest(
         prompt=prompt_to_send,
@@ -598,13 +607,15 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
         r2v_references=[
             APIReferenceImage(gcs_uri=uri, mime_type=mime)
             for uri, mime in zip(
-                state.r2v_reference_images, state.r2v_reference_mime_types,
+                state.r2v_reference_images,
+                state.r2v_reference_mime_types,
             )
         ]
         if state.veo_mode == "r2v" and state.r2v_reference_images
         else None,
         r2v_style_image=APIReferenceImage(
-            gcs_uri=state.r2v_style_image, mime_type=state.r2v_style_image_mime_type,
+            gcs_uri=state.r2v_style_image,
+            mime_type=state.r2v_style_image_mime_type,
         )
         if state.veo_mode == "r2v" and state.r2v_style_image
         else None,
@@ -727,7 +738,10 @@ def on_upload_image(e: me.UploadEvent):
     try:
         # Store the uploaded file to GCS
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
+            "uploads",
+            e.file.name,
+            e.file.mime_type,
+            e.file.getvalue(),
         )
         # Update the state with the new image details
         state.reference_image_gcs = gcs_path
@@ -746,7 +760,10 @@ def on_upload_last_image(e: me.UploadEvent):
     try:
         # Store the uploaded file to GCS
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
+            "uploads",
+            e.file.name,
+            e.file.mime_type,
+            e.file.getvalue(),
         )
         # Update the state with the new image details
         state.last_reference_image_gcs = gcs_path
@@ -769,7 +786,10 @@ def on_r2v_asset_add(e: me.UploadEvent):
 
     try:
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
+            "uploads",
+            e.file.name,
+            e.file.mime_type,
+            e.file.getvalue(),
         )
         state.r2v_reference_images.append(gcs_path)
         state.r2v_reference_mime_types.append(e.file.mime_type)
@@ -794,7 +814,10 @@ def on_r2v_style_add(e: me.UploadEvent):
     state = me.state(PageState)
     try:
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
+            "uploads",
+            e.file.name,
+            e.file.mime_type,
+            e.file.getvalue(),
         )
         state.r2v_style_image = gcs_path
         state.r2v_style_image_mime_type = e.file.mime_type

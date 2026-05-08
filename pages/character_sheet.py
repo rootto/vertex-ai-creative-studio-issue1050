@@ -47,13 +47,19 @@ def character_sheet_content():
 
     with me.box(
         style=me.Style(
-            display="flex", flex_direction="column", gap=24, padding=me.Padding.all(24),
+            display="flex",
+            flex_direction="column",
+            gap=24,
+            padding=me.Padding.all(24),
         ),
     ):
         # --- Input Section ---
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="row", gap=24, flex_wrap="wrap",
+                display="flex",
+                flex_direction="row",
+                gap=24,
+                flex_wrap="wrap",
             ),
         ):
             # Left: Original Image Upload
@@ -63,7 +69,9 @@ def character_sheet_content():
                     me.image(
                         src=state.original_image_display_url,
                         style=me.Style(
-                            width="100%", border_radius=8, margin=me.Margin(bottom=16),
+                            width="100%",
+                            border_radius=8,
+                            margin=me.Margin(bottom=16),
                         ),
                     )
                     me.button("Clear", on_click=on_clear_original, type="stroked")
@@ -151,7 +159,9 @@ def character_sheet_content():
         if state.current_media_item_id:
             with me.box(
                 style=me.Style(
-                    margin=me.Margin(top=24), display="flex", justify_content="center",
+                    margin=me.Margin(top=24),
+                    display="flex",
+                    justify_content="center",
                 ),
             ):
                 feedback(media_item_id=state.current_media_item_id)
@@ -164,7 +174,10 @@ def on_upload_original(e: me.UploadEvent):
     state = me.state(PageState)
     file = e.files[0]
     gcs_uri = store_to_gcs(
-        "character_sheet_uploads", file.name, file.mime_type, file.getvalue(),
+        "character_sheet_uploads",
+        file.name,
+        file.mime_type,
+        file.getvalue(),
     )
     state.original_image_gcs_uri = gcs_uri
     state.original_image_display_url = create_display_url(gcs_uri)

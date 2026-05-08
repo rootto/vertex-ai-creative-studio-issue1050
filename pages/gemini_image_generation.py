@@ -66,7 +66,8 @@ def get_all_image_presets():
     try:
         # Load dynamic templates of type 'image'
         dynamic_templates = prompt_template_service.load_templates(
-            config_path="config/image_prompt_templates.json", template_type="image",
+            config_path="config/image_prompt_templates.json",
+            template_type="image",
         )
 
         for template in dynamic_templates:
@@ -195,7 +196,6 @@ def _render_grounding_info(grounding_info_str: str, theme_mode: str):
         me.text(grounding_info_str)
 
 
-from components.feedback.feedback import feedback
 
 
 def gemini_image_gen_page_content():
@@ -288,7 +288,8 @@ def gemini_image_gen_page_content():
                     ]
                     + [
                         me.SelectOption(
-                            label=g["team_name"], value=g["content"],
+                            label=g["team_name"],
+                            value=g["content"],
                         )
                         for g in state.available_brand_guidelines
                     ],
@@ -537,17 +538,20 @@ def gemini_image_gen_page_content():
                             ),
                         ):
                             for transformation in state.suggested_transformations:
-                                with me.content_button(
-                                    on_click=on_transformation_click,
-                                    key=json.dumps(transformation),
-                                    type="stroked",
-                                    style=CHIP_STYLE,
-                                ), me.box(
-                                    style=me.Style(
-                                        display="flex",
-                                        flex_direction="row",
-                                        align_items="center",
-                                        gap=8,
+                                with (
+                                    me.content_button(
+                                        on_click=on_transformation_click,
+                                        key=json.dumps(transformation),
+                                        type="stroked",
+                                        style=CHIP_STYLE,
+                                    ),
+                                    me.box(
+                                        style=me.Style(
+                                            display="flex",
+                                            flex_direction="row",
+                                            align_items="center",
+                                            gap=8,
+                                        ),
                                     ),
                                 ):
                                     svg_icon(icon_name="image_edit_auto")
@@ -606,7 +610,9 @@ def gemini_image_gen_page_content():
                                 # Content Credentials (C2PA) Viewer
                                 with me.box(
                                     style=me.Style(
-                                        position="absolute", top=16, right=16,
+                                        position="absolute",
+                                        top=16,
+                                        right=16,
                                     ),
                                 ):
                                     manifest_json = state.c2pa_manifests.get(
@@ -627,18 +633,22 @@ def gemini_image_gen_page_content():
                             if state.grounding_info:
                                 with me.box(
                                     style=me.Style(
-                                        margin=me.Margin(top=16), width="100%",
+                                        margin=me.Margin(top=16),
+                                        width="100%",
                                     ),
                                 ):
                                     _render_grounding_info(
-                                        state.grounding_info, app_state.theme_mode,
+                                        state.grounding_info,
+                                        app_state.theme_mode,
                                     )
 
                         else:
                             # Display multiple images in a gallery view
                             with me.box(
                                 style=me.Style(
-                                    display="flex", flex_direction="column", gap=16,
+                                    display="flex",
+                                    flex_direction="column",
+                                    gap=16,
                                 ),
                             ):
                                 # Main image
@@ -678,7 +688,9 @@ def gemini_image_gen_page_content():
                                     # Content Credentials (C2PA) Viewer
                                     with me.box(
                                         style=me.Style(
-                                            position="absolute", top=16, right=16,
+                                            position="absolute",
+                                            top=16,
+                                            right=16,
                                         ),
                                     ):
                                         manifest_json = state.c2pa_manifests.get(
@@ -746,11 +758,13 @@ def gemini_image_gen_page_content():
                                 if state.grounding_info:
                                     with me.box(
                                         style=me.Style(
-                                            margin=me.Margin(top=16), width="100%",
+                                            margin=me.Margin(top=16),
+                                            width="100%",
                                         ),
                                     ):
                                         _render_grounding_info(
-                                            state.grounding_info, app_state.theme_mode,
+                                            state.grounding_info,
+                                            app_state.theme_mode,
                                         )
                 else:
                     # Placeholder
@@ -779,7 +793,8 @@ def on_upload(e: me.UploadEvent):
 
     if not files_to_upload:
         yield from show_snackbar(
-            state, f"You can upload a maximum of {max_input_images} images.",
+            state,
+            f"You can upload a maximum of {max_input_images} images.",
         )
         return
 
@@ -810,7 +825,8 @@ def on_library_select(e: LibrarySelectionChangeEvent):
 
     if len(state.uploaded_image_gcs_uris) >= max_input_images:
         yield from show_snackbar(
-            state, f"You can upload a maximum of {max_input_images} images.",
+            state,
+            f"You can upload a maximum of {max_input_images} images.",
         )
         return
 
@@ -916,7 +932,8 @@ def on_suggest_transformations_click(e: me.ClickEvent):
 
     if not state.generated_image_urls:
         yield from show_snackbar(
-            state, "No image available to suggest transformations for.",
+            state,
+            "No image available to suggest transformations for.",
         )
         return
 
@@ -989,7 +1006,8 @@ def on_image_action_click(e: me.ClickEvent):
 
     # The action now uses the combined list of images
     yield from _generate_and_save(
-        base_prompt=preset["prompt"], input_gcs_uris=input_gcs_uris,
+        base_prompt=preset["prompt"],
+        input_gcs_uris=input_gcs_uris,
     )
 
 
@@ -1052,7 +1070,9 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
 
     final_prompt = _get_appended_prompt(base_prompt, state.num_images_to_generate)
     if state.selected_brand_guideline:
-        final_prompt = f"{final_prompt}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
+        final_prompt = (
+            f"{final_prompt}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
+        )
 
     state.is_generating = True
     state.generation_complete = False
@@ -1205,15 +1225,19 @@ def on_load(e: me.LoadEvent):
                     create_display_url(final_gcs_uri),
                 )
         app_state = me.state(AppState)
-        teams = get_teams_for_user(app_state.user_email, role=app_state.user_role, assigned_only=True)
+        teams = get_teams_for_user(
+            app_state.user_email, role=app_state.user_role, assigned_only=True,
+        )
         state.available_brand_guidelines = []
         for team in teams:
             content = team.extracted_text or team.branding_guideline.get("content")
             if content:
-                state.available_brand_guidelines.append({
-                    "team_name": team.name,
-                    "content": content,
-                })
+                state.available_brand_guidelines.append(
+                    {
+                        "team_name": team.name,
+                        "content": content,
+                    },
+                )
         state.initial_load_complete = True
     yield
 

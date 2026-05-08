@@ -39,7 +39,8 @@ config = Default()
 with open("config/about_content.json") as f:
     about_content = json.load(f)
     RECONTEXT_INFO = next(
-        (s for s in about_content["sections"] if s.get("id") == "recontextualize"), None,
+        (s for s in about_content["sections"] if s.get("id") == "recontextualize"),
+        None,
     )
 
 
@@ -154,7 +155,8 @@ def recontextualize():
                     ):
                         with me.box(
                             style=me.Style(
-                                display="flex", justify_content="space-between",
+                                display="flex",
+                                justify_content="space-between",
                             ),
                         ):
                             me.text(f"Number of images: {state.recontext_sample_count}")
@@ -193,7 +195,9 @@ def recontextualize():
                         for gcs_uri in state.result_gcs_uris:
                             with me.box(
                                 style=me.Style(
-                                    display="flex", flex_direction="column", gap=8,
+                                    display="flex",
+                                    flex_direction="column",
+                                    gap=8,
                                 ),
                             ):
                                 me.image(

@@ -153,7 +153,10 @@ def on_scene_count_change(e: me.SelectSelectionChangeEvent):
 
 
 def _run_video_generation_steps(
-    state: PageState, wf_state: RetroGameWorkflowState, app_state: AppState, theme: str,
+    state: PageState,
+    wf_state: RetroGameWorkflowState,
+    app_state: AppState,
+    theme: str,
 ):
     """Executes Step 3 (Video) and Step 4 (Bumper) and handles persistence."""
     # Step 3
@@ -460,7 +463,9 @@ def retro_games_content():
         with dialog(is_open=state.show_selfie_dialog):  # pylint: disable=E1129:not-context-manager
             with me.box(
                 style=me.Style(
-                    padding=me.Padding.all(16), width="500px", height="600px",
+                    padding=me.Padding.all(16),
+                    width="500px",
+                    height="600px",
                 ),
             ):  # Added fixed size for dialog content
                 me.text("Take a Selfie", type="headline-6")
@@ -553,7 +558,8 @@ def retro_games_content():
                                     key="retro_lib_p1",
                                 )
                                 with me.content_button(
-                                    type="icon", on_click=on_open_selfie_dialog_p1,
+                                    type="icon",
+                                    on_click=on_open_selfie_dialog_p1,
                                 ):
                                     me.icon("camera_alt")
 
@@ -629,7 +635,8 @@ def retro_games_content():
                                     key="retro_lib_p2",
                                 )
                                 with me.content_button(
-                                    type="icon", on_click=on_open_selfie_dialog_p2,
+                                    type="icon",
+                                    on_click=on_open_selfie_dialog_p2,
                                 ):
                                     me.icon("camera_alt")
                                 if state.player2_image_uri:
@@ -841,7 +848,9 @@ def retro_games_content():
 
                     if state.is_running:
                         with me.box(
-                            style=me.Style(display="flex", align_items="center", gap=16),
+                            style=me.Style(
+                                display="flex", align_items="center", gap=16,
+                            ),
                         ):
                             me.progress_spinner()
                             me.text(state.current_step, type="headline-6")
@@ -1042,7 +1051,8 @@ def retro_games_content():
                     ),
                 ):
                     me.text(
-                        "Final Retro Game Video", type="headline-4",
+                        "Final Retro Game Video",
+                        type="headline-4",
                     )  # Larger headline
                     me.video(
                         src=state.final_video_display_url,

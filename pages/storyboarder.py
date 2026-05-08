@@ -47,7 +47,10 @@ def storyboarder_content():
 
     with me.box(
         style=me.Style(
-            display="flex", flex_direction="column", gap=24, padding=me.Padding.all(24),
+            display="flex",
+            flex_direction="column",
+            gap=24,
+            padding=me.Padding.all(24),
         ),
     ):
         # --- Input Section ---
@@ -100,7 +103,10 @@ def storyboarder_content():
 
             with me.box(
                 style=me.Style(
-                    display="flex", flex_wrap="wrap", gap=16, justify_content="center",
+                    display="flex",
+                    flex_wrap="wrap",
+                    gap=16,
+                    justify_content="center",
                 ),
             ):
                 for url in state.generated_image_urls:

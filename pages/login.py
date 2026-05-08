@@ -1,9 +1,10 @@
 import mesop as me
 
+from common.analytics import get_logger
+from common.auth import verify_google_id_token
+from common.storage import create_session
 from components.login_component.login_component import login_component
 from state.state import AppState, update_user_and_session_info
-from common.auth import verify_google_id_token
-from common.analytics import get_logger
 
 logger = get_logger(__name__)
 from config.default import Default
@@ -24,6 +25,9 @@ def on_login(e: me.WebEvent):
         email = id_info["email"]
         logger.info(f"User logged in: {email}")
 
+        # Persist session to Firestore
+        create_session(state.session_id, email)
+
         # Update state with user email
         yield from update_user_and_session_info(email, state.session_id)
 
@@ -40,7 +44,15 @@ def navigate_to_login(e: me.ClickEvent):
 
 @me.page(path="/login", title="Login - GenMedia Creative Studio")
 def page():
-    with me.box(style=me.Style(display="flex", flex_direction="column", align_items="center", justify_content="center", height="100vh")):
+    with me.box(
+        style=me.Style(
+            display="flex",
+            flex_direction="column",
+            align_items="center",
+            justify_content="center",
+            height="100vh",
+        ),
+    ):
         me.text("Welcome to GenMedia Creative Studio", type="headline-4")
         me.text("Please sign in to access the application.")
         cfg = Default()

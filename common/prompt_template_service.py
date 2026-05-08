@@ -67,7 +67,9 @@ class PromptTemplateService:
         return templates
 
     def load_templates(
-        self, config_path: str, template_type: str,
+        self,
+        config_path: str,
+        template_type: str,
     ) -> list[PromptTemplate]:
         """Loads default templates from a JSON file and combines them with user-created templates from Firestore."""
         default_templates = self._load_from_json(config_path, template_type)
@@ -78,7 +80,9 @@ class PromptTemplateService:
             try:
                 # Simplified query to avoid needing a composite index
                 query = db.collection("prompt_templates").where(
-                    "template_type", "==", template_type,
+                    "template_type",
+                    "==",
+                    template_type,
                 )
                 for doc in query.stream():
                     try:
@@ -101,7 +105,8 @@ class PromptTemplateService:
 
         # Sort the final list in Python
         final_list = sorted(
-            all_templates_map.values(), key=lambda t: (t.category, t.label),
+            all_templates_map.values(),
+            key=lambda t: (t.category, t.label),
         )
 
         return final_list
@@ -149,13 +154,13 @@ class PromptTemplateService:
 
         # Sort the final list in Python
         final_list = sorted(
-            all_templates_map.values(), key=lambda t: (t.category, t.label),
+            all_templates_map.values(),
+            key=lambda t: (t.category, t.label),
         )
         return final_list
 
     def add_template(self, template: PromptTemplate) -> PromptTemplate:
-        """Adds a new template to the Firestore collection.
-        """
+        """Adds a new template to the Firestore collection."""
         if not db:
             raise ConnectionError("Firestore client is not initialized.")
 

@@ -23,7 +23,6 @@ import mesop as me
 from common.metadata import MediaItem, add_media_item_to_firestore  # Updated import
 from common.utils import create_display_url
 from components.dialog import dialog, dialog_actions
-from components.feedback.feedback import feedback
 from components.header import header
 from components.page_scaffold import (
     page_frame,
@@ -140,7 +139,10 @@ def lyria_content(app_state: me.state):
 
     with page_frame():  # pylint: disable=not-context-manager
         header(
-            "Lyria", "music_note", show_info_button=True, on_info_click=open_info_dialog,
+            "Lyria",
+            "music_note",
+            show_info_button=True,
+            on_info_click=open_info_dialog,
         )
 
         with me.box(style=_BOX_STYLE):
@@ -254,7 +256,8 @@ def lyria_content(app_state: me.state):
                                 ),
                             ):
                                 me.text(
-                                    "Description", style=me.Style(font_weight="bold"),
+                                    "Description",
+                                    style=me.Style(font_weight="bold"),
                                 )
                                 me.markdown(analysis["audio-analysis"])
 
@@ -278,7 +281,8 @@ def lyria_content(app_state: me.state):
                         "Audio Analysis Failed",
                         type="headline-6",
                         style=me.Style(
-                            color=me.theme_var("error"), margin=me.Margin(bottom=12),
+                            color=me.theme_var("error"),
+                            margin=me.Margin(bottom=12),
                         ),
                     )
                     me.text("Error: Could not display analysis data (invalid format).")
@@ -294,7 +298,8 @@ def lyria_content(app_state: me.state):
                     "Audio Analysis Failed",
                     type="headline-6",
                     style=me.Style(
-                        color=me.theme_var("error"), margin=me.Margin(bottom=12),
+                        color=me.theme_var("error"),
+                        margin=me.Margin(bottom=12),
                     ),
                 )
                 me.text(pagestate.analysis_error_message)
@@ -305,8 +310,12 @@ def lyria_content(app_state: me.state):
             and not pagestate.is_analyzing
             and not pagestate.is_loading
         ):
-            with me.box(style=_ANALYSIS_BOX_STYLE), me.expansion_panel(
-                title="Technical Audio Metrics", icon="graphic_eq",
+            with (
+                me.box(style=_ANALYSIS_BOX_STYLE),
+                me.expansion_panel(
+                    title="Technical Audio Metrics",
+                    icon="graphic_eq",
+                ),
             ):
                 metrics = pagestate.audio_metrics
                 with me.box(
@@ -387,27 +396,36 @@ def subtle_lyria_input():
                 padding=me.Padding(left=16, right=16, bottom=16),
             ),
         ):
-            with me.content_button(
-                type="icon",
-                on_click=on_click_lyria,
-                disabled=pagestate.is_loading or pagestate.is_analyzing,
-            ), me.box(style=icon_style):
+            with (
+                me.content_button(
+                    type="icon",
+                    on_click=on_click_lyria,
+                    disabled=pagestate.is_loading or pagestate.is_analyzing,
+                ),
+                me.box(style=icon_style),
+            ):
                 me.icon("music_note")
                 me.text("Generate Audio")
             me.box(style=me.Style(height=5))
-            with me.content_button(
-                type="icon",
-                on_click=on_click_lyria_rewriter,
-                disabled=pagestate.is_loading or pagestate.is_analyzing,
-            ), me.box(style=icon_style):
+            with (
+                me.content_button(
+                    type="icon",
+                    on_click=on_click_lyria_rewriter,
+                    disabled=pagestate.is_loading or pagestate.is_analyzing,
+                ),
+                me.box(style=icon_style),
+            ):
                 me.icon("auto_awesome")
                 me.text("Rewrite")
             me.box(style=me.Style(height=5))
-            with me.content_button(
-                type="icon",
-                on_click=clear_music,
-                disabled=pagestate.is_loading or pagestate.is_analyzing,
-            ), me.box(style=icon_style):
+            with (
+                me.content_button(
+                    type="icon",
+                    on_click=clear_music,
+                    disabled=pagestate.is_loading or pagestate.is_analyzing,
+                ),
+                me.box(style=icon_style),
+            ):
                 me.icon("clear")
                 me.text("Clear")
 

@@ -95,13 +95,19 @@ def team_assets_content() -> None:
 
     with me.box(
         style=me.Style(
-            display="flex", flex_direction="column", gap=24, padding=me.Padding.all(24),
+            display="flex",
+            flex_direction="column",
+            gap=24,
+            padding=me.Padding.all(24),
         ),
     ):
         # Team Selector
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="row", gap=16, align_items="center",
+                display="flex",
+                flex_direction="row",
+                gap=16,
+                align_items="center",
             ),
         ):
             me.text("Select Team:", type="subtitle-1")
@@ -150,100 +156,100 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
             padding=me.Padding.all(16),
             border_radius=8,
             margin=me.Margin(top=16),
-                ),
-            ):
-                me.text("Branding Guidelines", type="headline-6")
+        ),
+    ):
+        me.text("Branding Guidelines", type="headline-6")
 
+        with me.box(
+            style=me.Style(
+                display="flex",
+                flex_direction="row",
+                gap=16,
+                align_items="center",
+            ),
+        ):
+            type_options = [
+                me.SelectOption(label="Free Text", value="text"),
+                me.SelectOption(label="PDF Upload", value="pdf"),
+            ]
+            me.select(
+                label="Type",
+                options=type_options,
+                on_selection_change=on_guideline_type_change,
+                value=page_state.guideline_type,
+                style=me.Style(width="150px"),
+            )
+
+            if page_state.guideline_type == "text":
+                me.textarea(
+                    label="Enter Guidelines",
+                    value=page_state.guideline_text,
+                    on_blur=on_guideline_text_blur,
+                    style=me.Style(flex_grow=1),
+                    rows=10,
+                )
+            else:
                 with me.box(
                     style=me.Style(
                         display="flex",
                         flex_direction="row",
-                        gap=16,
+                        gap=8,
                         align_items="center",
+                        flex_grow=1,
                     ),
                 ):
-                    type_options = [
-                        me.SelectOption(label="Free Text", value="text"),
-                        me.SelectOption(label="PDF Upload", value="pdf"),
-                    ]
-                    me.select(
-                        label="Type",
-                        options=type_options,
-                        on_selection_change=on_guideline_type_change,
-                        value=page_state.guideline_type,
-                        style=me.Style(width="150px"),
+                    me.uploader(
+                        label="Upload PDF",
+                        accepted_file_types=["application/pdf"],
+                        on_upload=on_upload_pdf,
                     )
-
-                    if page_state.guideline_type == "text":
-                        me.textarea(
-                            label="Enter Guidelines",
-                            value=page_state.guideline_text,
-                            on_blur=on_guideline_text_blur,
-                            style=me.Style(flex_grow=1),
-                            rows=10,
-                        )
-                    else:
-                        with me.box(
-                            style=me.Style(
-                                display="flex",
-                                flex_direction="row",
-                                gap=8,
-                                align_items="center",
-                                flex_grow=1,
-                            ),
+                    if page_state.pdf_filename:
+                        me.text(f"File: {page_state.pdf_filename}")
+                        with me.content_button(
+                            on_click=on_clear_pdf,
+                            type="stroked",
                         ):
-                            me.uploader(
-                                label="Upload PDF",
-                                accepted_file_types=["application/pdf"],
-                                on_upload=on_upload_pdf,
+                            me.icon("clear")
+
+                        if (
+                            not selected_team.extracted_text
+                            and not page_state.is_extracting
+                        ):
+                            me.button(
+                                "Extract guidelines",
+                                on_click=lambda e, t_id=selected_team.id: (
+                                    on_extract_click(e, t_id)
+                                ),
+                                type="raised",
                             )
-                            if page_state.pdf_filename:
-                                me.text(f"File: {page_state.pdf_filename}")
-                                with me.content_button(
-                                    on_click=on_clear_pdf,
-                                    type="stroked",
-                                ):
-                                    me.icon("clear")
 
-                                if (
-                                    not selected_team.extracted_text
-                                    and not page_state.is_extracting
-                                ):
-                                    me.button(
-                                        "Extract guidelines",
-                                        on_click=lambda e, t_id=selected_team.id: (
-                                            on_extract_click(e, t_id)
-                                        ),
-                                        type="raised",
-                                    )
+                        if page_state.is_extracting:
+                            me.progress_spinner(diameter=24)
 
-                                if page_state.is_extracting:
-                                    me.progress_spinner(diameter=24)
+            me.button(
+                "Save",
+                on_click=lambda e, t_id=selected_team.id: on_save_guidelines_click(
+                    e, t_id,
+                ),
+                type="raised",
+            )
 
-                    me.button(
-                        "Save",
-                        on_click=lambda e, t_id=selected_team.id: (
-                            on_save_guidelines_click(e, t_id)
-                        ),
-                        type="raised",
-                    )
-
-                if selected_team.extracted_text:
-                    with me.box(
-                        style=me.Style(
-                            margin=me.Margin(top=8),
-                            padding=me.Padding.all(8),
-                            background=me.theme_var("secondary-container"),
-                            border_radius=4,
-                            height="300px",
-                            overflow_y="auto",
-                        ),
-                    ):
-                        me.text(
-                            "Extracted Guidelines Summary:",
-                            type="subtitle-2",
-                        )
-                        me.text(selected_team.extracted_text)
+        if selected_team.extracted_text:
+            with me.box(
+                style=me.Style(
+                    margin=me.Margin(top=8),
+                    padding=me.Padding.all(8),
+                    background=me.theme_var("secondary-container"),
+                    border_radius=4,
+                    height="300px",
+                    overflow_y="auto",
+                ),
+            ):
+                me.text(
+                    "Extracted Guidelines Summary:",
+                    type="subtitle-2",
+                )
+                me.text(selected_team.extracted_text)
 
 
 def assets_display_section(selected_team: Team) -> None:
@@ -321,7 +327,10 @@ def on_upload_assets(e: me.UploadEvent):  # noqa: ANN201
 
             # Store to GCS
             gcs_uri = store_to_gcs(
-                "team_assets", filename, mime_type, contents,
+                "team_assets",
+                filename,
+                mime_type,
+                contents,
             )
 
             # Create MediaItem
@@ -370,7 +379,10 @@ def on_upload_pdf(e: me.UploadEvent):  # noqa: ANN201
     state = me.state(PageState)
     file = e.file
     gcs_uri = store_to_gcs(
-        "brand_guidelines", file.name, file.mime_type, file.getvalue(),
+        "brand_guidelines",
+        file.name,
+        file.mime_type,
+        file.getvalue(),
     )
     state.pdf_gcs_uri = gcs_uri
     state.pdf_filename = file.name

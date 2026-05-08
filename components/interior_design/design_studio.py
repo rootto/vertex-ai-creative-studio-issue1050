@@ -1,5 +1,4 @@
-"""Component for the Design Studio.
-"""
+"""Component for the Design Studio."""
 
 from collections.abc import Callable
 
@@ -20,8 +19,7 @@ def design_studio(
     on_clear_design: Callable,
     on_design_click: Callable,
 ):
-    """Component for the Design Studio.
-    """
+    """Component for the Design Studio."""
     with me.box(
         style=me.Style(display="flex", flex_direction="column", gap=16, width=300),
     ):

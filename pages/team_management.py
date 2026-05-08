@@ -48,7 +48,9 @@ def team_management_content() -> None:
     """Render the content for team management."""
     app_state = me.state(AppState)
     page_state = me.state(PageState)
-    logger.info(f"DEBUG: team_management_content entered. user_role={app_state.user_role}, email={app_state.user_email}")
+    logger.info(
+        f"DEBUG: team_management_content entered. user_role={app_state.user_role}, email={app_state.user_email}",
+    )
 
     if app_state.user_role not in ["administrator", "manager"]:
         with me.box(style=me.Style(padding=me.Padding.all(24))):
@@ -63,7 +65,10 @@ def team_management_content() -> None:
 
     with me.box(
         style=me.Style(
-            display="flex", flex_direction="column", gap=24, padding=me.Padding.all(24),
+            display="flex",
+            flex_direction="column",
+            gap=24,
+            padding=me.Padding.all(24),
         ),
     ):
         # --- Admin Section ---
@@ -122,7 +127,8 @@ def team_management_content() -> None:
                 ):
                     # Fetch all teams for dropdown
                     teams = get_teams_for_user(
-                        app_state.user_email, app_state.user_role,
+                        app_state.user_email,
+                        app_state.user_role,
                     )
                     team_options = [
                         me.SelectOption(label=t.name, value=t.id) for t in teams
@@ -183,28 +189,29 @@ def team_management_content() -> None:
                 me.text("You are not managing any teams.")
             else:
                 for team in teams:
-                    with me.expansion_panel(title=team.name, icon="group"), me.box(
-                        style=me.Style(
-                            display="flex",
-                            flex_direction="column",
-                            gap=16,
-                            padding=me.Padding.all(16),
+                    with (
+                        me.expansion_panel(title=team.name, icon="group"),
+                        me.box(
+                            style=me.Style(
+                                display="flex",
+                                flex_direction="column",
+                                gap=16,
+                                padding=me.Padding.all(16),
+                            ),
                         ),
                     ):
-
-
-                            # Assets Section
-                            me.text(
-                                "Team Assets",
-                                type="headline-6",
-                                style=me.Style(margin=me.Margin(top=8)),
-                            )
-                            me.text(f"Total Assets: {len(team.assets)}")
-                            me.button(
-                                "Manage Team Assets",
-                                on_click=on_manage_assets_click,
-                                type="stroked",
-                            )
+                        # Assets Section
+                        me.text(
+                            "Team Assets",
+                            type="headline-6",
+                            style=me.Style(margin=me.Margin(top=8)),
+                        )
+                        me.text(f"Total Assets: {len(team.assets)}")
+                        me.button(
+                            "Manage Team Assets",
+                            on_click=on_manage_assets_click,
+                            type="stroked",
+                        )
 
 
 # --- Event Handlers ---
@@ -262,14 +269,16 @@ def on_assign_user_click(_: me.ClickEvent):  # noqa: ANN201
     try:
         if page_state.role_to_assign == "manager":
             add_manager_to_team(
-                page_state.selected_team_id, page_state.user_email_to_assign,
+                page_state.selected_team_id,
+                page_state.user_email_to_assign,
             )
             current_role = get_user_role(page_state.user_email_to_assign)
             if current_role == "contributor":
                 set_user_role(page_state.user_email_to_assign, "manager")
         else:
             add_member_to_team(
-                page_state.selected_team_id, page_state.user_email_to_assign,
+                page_state.selected_team_id,
+                page_state.user_email_to_assign,
             )
 
         page_state.show_snackbar = True
@@ -279,6 +288,3 @@ def on_assign_user_click(_: me.ClickEvent):  # noqa: ANN201
         page_state.show_snackbar = True
         page_state.snackbar_message = f"Error assigning user: {ex}"
     yield
-
-
-

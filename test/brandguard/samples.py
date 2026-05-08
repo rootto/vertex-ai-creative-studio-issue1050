@@ -34,7 +34,8 @@ class EvaluationResponse(BaseModel, frozen=True):
     rating: float = Field(..., description="The rating of the asset")
     rationale: str = Field(..., description="The rationale for the rating")
     verdicts: list[GuidelineVerdict] = Field(
-        ..., description="The verdicts for all guidelines",
+        ...,
+        description="The verdicts for all guidelines",
     )
 
     from pydantic import BaseModel, Field

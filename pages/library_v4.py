@@ -231,7 +231,8 @@ def library_content():
                         thumbnail_url = create_display_url(item.thumbnail_uri)
 
                     render_type = get_media_type(
-                        mime_type=item.mime_type, url=https_url,
+                        mime_type=item.mime_type,
+                        url=https_url,
                     )
 
                     display_url = https_url
@@ -359,13 +360,16 @@ def json_default_serializer(o):
 def dummy_handler(e: me.WebEvent):
     pass
 
+
 def set_active_tab_details(e: me.ClickEvent):
     pagestate = me.state(PageState)
     pagestate.tour_dialog_active_tab = "details"
 
+
 def set_active_tab_raw(e: me.ClickEvent):
     pagestate = me.state(PageState)
     pagestate.tour_dialog_active_tab = "raw"
+
 
 @me.component
 def render_tour_detail_dialog(storyboard: dict):
@@ -514,7 +518,7 @@ def render_tour_detail_dialog(storyboard: dict):
             me.button(
                 "Continue Styling",
                 on_click=on_continue_styling_click,
-                key=storyboard.get('id'),
+                key=storyboard.get("id"),
                 type="raised",
             )
 

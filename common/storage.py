@@ -37,8 +37,7 @@ class Session:
 
 
 def get_or_create_session(session_id: str, user_email: str) -> Session:
-    """Retrieves a session from Firestore or creates a new one if it doesn't exist.
-    """
+    """Retrieve a session from Firestore or create a new one if it doesn't exist."""
     session_ref = db.collection(cfg.SESSIONS_COLLECTION_NAME).document(session_id)
     session_doc = session_ref.get()
 
@@ -48,6 +47,28 @@ def get_or_create_session(session_id: str, user_email: str) -> Session:
         session.last_accessed_at = datetime.utcnow()
         session_ref.update({"last_accessed_at": session.last_accessed_at})
         return session
+    session = Session(id=session_id, user_email=user_email)
+    session_ref.set(asdict(session))
+    return session
+
+
+def get_session(session_id: str) -> Session | None:
+    """Retrieve a session from Firestore without creating it."""
+    session_ref = db.collection(cfg.SESSIONS_COLLECTION_NAME).document(session_id)
+    session_doc = session_ref.get()
+
+    if session_doc.exists:
+        session = Session(**session_doc.to_dict())
+        # Update last accessed time
+        session.last_accessed_at = datetime.utcnow()
+        session_ref.update({"last_accessed_at": session.last_accessed_at})
+        return session
+    return None
+
+
+def create_session(session_id: str, user_email: str) -> Session:
+    """Create a new session in Firestore."""
+    session_ref = db.collection(cfg.SESSIONS_COLLECTION_NAME).document(session_id)
     session = Session(id=session_id, user_email=user_email)
     session_ref.set(asdict(session))
     return session

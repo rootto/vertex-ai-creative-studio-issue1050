@@ -17,10 +17,10 @@ from dataclasses import asdict, field
 import mesop as me
 from flask import request
 
+from common.analytics import get_logger
+from common.storage import get_session
 from services.team_service import get_teams_for_user
 from services.user_service import bootstrap_first_user, get_user_role
-from common.storage import get_or_create_session
-from common.analytics import get_logger
 
 logger = get_logger(__name__)
 
@@ -39,17 +39,26 @@ class AppState:
 
     def __init__(self):
         """Initializes the AppState, reading user info from the request context."""
-        self.managed_teams = [] # Initialize to avoid AttributeError
-        
+        self.managed_teams = []  # Initialize to avoid AttributeError
+
         # Try to get identity from session cookie (Custom Auth)
         session_id = request.cookies.get("session_id")
         if session_id:
             logger.debug(f"DEBUG: AppState.__init__ found session_id: {session_id}")
-            session = get_or_create_session(session_id, "anonymous@google.com")
-            logger.debug(f"DEBUG: AppState.__init__ loaded session user: {session.user_email}")
-            self.user_email = session.user_email
-            self.session_id = session_id
-        
+            session = get_session(session_id)
+            if session:
+                logger.debug(
+                    f"DEBUG: AppState.__init__ loaded session user: {session.user_email}",
+                )
+                self.user_email = session.user_email
+                self.session_id = session_id
+            else:
+                logger.debug(
+                    f"DEBUG: AppState.__init__ session not found in Firestore: {session_id}",
+                )
+                self.user_email = "anonymous@google.com"
+                self.session_id = session_id
+
         # Fallback to IAP headers if not found via custom session
         elif "HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL" in request.environ:
             user_email = request.environ["HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL"]
@@ -121,59 +130,50 @@ def get_app_state() -> AppState:
 
 
 def get_user_email() -> str:
-    """Returns the current user's email.
-    """
+    """Returns the current user's email."""
     return me.state(AppState).user_email
 
 
 def get_session_id() -> str:
-    """Returns the current session ID.
-    """
+    """Returns the current session ID."""
     return me.state(AppState).session_id
 
 
 def is_sidenav_open() -> bool:
-    """Returns whether the sidenav is open.
-    """
+    """Returns whether the sidenav is open."""
     return me.state(AppState).sidenav_open
 
 
 def set_sidenav_open(is_open: bool):
-    """Sets the sidenav open state.
-    """
+    """Sets the sidenav open state."""
     me.state(AppState).sidenav_open = is_open
 
 
 def toggle_sidenav():
-    """Toggles the sidenav open state.
-    """
+    """Toggles the sidenav open state."""
     me.state(AppState).sidenav_open = not me.state(AppState).sidenav_open
     yield
 
 
 def get_theme_mode() -> str:
-    """Returns the current theme mode.
-    """
+    """Returns the current theme mode."""
     return me.state(AppState).theme_mode
 
 
 def set_theme_mode(mode: str):
-    """Sets the theme mode.
-    """
+    """Sets the theme mode."""
     me.state(AppState).theme_mode = mode
     yield
 
 
 def get_user_and_session_info() -> tuple[str, str]:
-    """Returns the current user's email and session ID.
-    """
+    """Returns the current user's email and session ID."""
     app_state = me.state(AppState)
     return app_state.user_email, app_state.session_id
 
 
 def update_user_and_session_info(user_email: str, session_id: str):
-    """Updates the user's email and session ID in the application state.
-    """
+    """Updates the user's email and session ID in the application state."""
     app_state = me.state(AppState)
     app_state.user_email = user_email
     app_state.session_id = session_id
@@ -181,40 +181,34 @@ def update_user_and_session_info(user_email: str, session_id: str):
 
 
 def is_logged_in() -> bool:
-    """Returns whether the user is logged in.
-    """
+    """Returns whether the user is logged in."""
     return me.state(AppState).user_email != "anonymous@google.com"
 
 
 def get_current_user_id() -> str:
-    """Returns the current user's ID.
-    """
+    """Returns the current user's ID."""
     return me.state(AppState).user_email
 
 
 def get_current_session_id() -> str:
-    """Returns the current session ID.
-    """
+    """Returns the current session ID."""
     return me.state(AppState).session_id
 
 
 def set_current_user_id(user_id: str):
-    """Sets the current user's ID.
-    """
+    """Sets the current user's ID."""
     me.state(AppState).user_email = user_id
     yield
 
 
 def set_current_session_id(session_id: str):
-    """Sets the current session ID.
-    """
+    """Sets the current session ID."""
     me.state(AppState).session_id = session_id
     yield
 
 
 def reset_app_state():
-    """Resets the application state.
-    """
+    """Resets the application state."""
     app_state = me.state(AppState)
     app_state.sidenav_open = False
     app_state.theme_mode = "light"
@@ -224,21 +218,18 @@ def reset_app_state():
 
 
 def initialize_app_state():
-    """Initializes the application state.
-    """
+    """Initializes the application state."""
     reset_app_state()
     yield
 
 
 def get_state():
-    """Returns the current application state.
-    """
+    """Returns the current application state."""
     return me.state(AppState)
 
 
 def update_state(new_state: AppState):
-    """Updates the application state.
-    """
+    """Updates the application state."""
     app_state = me.state(AppState)
     app_state.sidenav_open = new_state.sidenav_open
     app_state.theme_mode = new_state.theme_mode

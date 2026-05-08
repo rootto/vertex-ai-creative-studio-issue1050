@@ -74,7 +74,9 @@ def page():
                                 style=me.Style(
                                     border=me.Border.all(
                                         me.BorderSide(
-                                            width=1, style="solid", color="#ccc",
+                                            width=1,
+                                            style="solid",
+                                            color="#ccc",
                                         ),
                                     ),
                                     border_radius=8,
@@ -130,7 +132,9 @@ def page():
                                 style=me.Style(
                                     border=me.Border.all(
                                         me.BorderSide(
-                                            width=1, style="solid", color="#ccc",
+                                            width=1,
+                                            style="solid",
+                                            color="#ccc",
                                         ),
                                     ),
                                     border_radius=8,
@@ -284,7 +288,9 @@ def starter_pack_to_look_content():
         if me.state(StarterPackState).is_generating_virtual_model:
             with me.box(
                 style=me.Style(
-                    display="flex", justify_content="center", margin=me.Margin(top=16),
+                    display="flex",
+                    justify_content="center",
+                    margin=me.Margin(top=16),
                 ),
             ):
                 me.progress_spinner()

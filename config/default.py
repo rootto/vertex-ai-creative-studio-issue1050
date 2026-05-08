@@ -59,11 +59,15 @@ class Default:
 
     APP_ENV: str = os.environ.get("APP_ENV", "")
     API_BASE_URL: str = os.environ.get(
-        "API_BASE_URL", f"http://localhost:{os.environ.get('PORT', '8080')}",
+        "API_BASE_URL",
+        f"http://localhost:{os.environ.get('PORT', '8080')}",
     )
 
     SERVICE_ACCOUNT_EMAIL: str = os.environ.get("SERVICE_ACCOUNT_EMAIL")
-    GOOGLE_CLIENT_ID: str = os.environ.get("GOOGLE_CLIENT_ID", "863507536998-6rs80d2dae5bcalq3cj2oto7tnikt7b6.apps.googleusercontent.com")
+    GOOGLE_CLIENT_ID: str = os.environ.get(
+        "GOOGLE_CLIENT_ID",
+        "863507536998-6rs80d2dae5bcalq3cj2oto7tnikt7b6.apps.googleusercontent.com",
+    )
     # Gemini
     PROJECT_ID: str = os.environ.get("PROJECT_ID")
     LOCATION: str = os.environ.get("LOCATION", "global")
@@ -87,7 +91,8 @@ class Default:
         "gemini-2.5-flash",
     )
     GEMINI_WRITERS_WORKSHOP_MODEL_ID: str = os.environ.get(
-        "GEMINI_WRITERS_WORKSHOP_MODEL_ID", MODEL_ID,
+        "GEMINI_WRITERS_WORKSHOP_MODEL_ID",
+        MODEL_ID,
     )
 
     # Collections
@@ -123,7 +128,8 @@ class Default:
     VEO_PROJECT_ID: str = os.environ.get("VEO_PROJECT_ID", PROJECT_ID)
 
     VEO_EXP_MODEL_ID: str = os.environ.get(
-        "VEO_EXP_MODEL_ID", "veo-3.1-generate-preview",
+        "VEO_EXP_MODEL_ID",
+        "veo-3.1-generate-preview",
     )
     VEO_EXP_FAST_MODEL_ID: str = os.environ.get(
         "VEO_EXP_FAST_MODEL_ID",
@@ -156,10 +162,12 @@ class Default:
     # Character Consistency
     CHARACTER_CONSISTENCY_IMAGEN_MODEL: str = "imagen-3.0-capability-001"
     CHARACTER_CONSISTENCY_VEO_MODEL: str = os.environ.get(
-        "CHARACTER_CONSISTENCY_VEO_MODEL", "veo-3.0-fast-generate-001",
+        "CHARACTER_CONSISTENCY_VEO_MODEL",
+        "veo-3.0-fast-generate-001",
     )
     CHARACTER_CONSISTENCY_GEMINI_MODEL: str = os.environ.get(
-        "CHARACTER_CONSISTENCY_GEMINI_MODEL", MODEL_ID,
+        "CHARACTER_CONSISTENCY_GEMINI_MODEL",
+        MODEL_ID,
     )
 
     # Lyria
@@ -183,10 +191,12 @@ class Default:
     )
 
     IMAGEN_GENERATED_SUBFOLDER: str = os.environ.get(
-        "IMAGEN_GENERATED_SUBFOLDER", "generated_images",
+        "IMAGEN_GENERATED_SUBFOLDER",
+        "generated_images",
     )
     IMAGEN_EDITED_SUBFOLDER: str = os.environ.get(
-        "IMAGEN_EDITED_SUBFOLDER", "edited_images",
+        "IMAGEN_EDITED_SUBFOLDER",
+        "edited_images",
     )
 
     IMAGEN_PROMPTS_JSON = "prompts/imagen_prompts.json"

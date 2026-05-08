@@ -11,37 +11,39 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from . import about
-from . import banana_studio
-from . import brand_adherence
-from . import character_consistency
-from . import character_sheet
-from . import chirp_3hd
-from . import config
-from . import edit_images
-from . import gemini_image_generation
-from . import gemini_tts
-from . import gemini_writers_workshop
-from . import guideline_analysis
-from . import home
-from . import imagen
-from . import imagen_upscale
-from . import interior_design_v2
-from . import library_v2
-from . import library_v3
-from . import library_v4
-from . import login
-from . import lyria
-from . import object_rotation
-from . import pixie_compositor
-from . import portraits
-from . import recontextualize
-from . import selfie
-from . import shop_the_look
-from . import starter_pack
-from . import storyboarder
-from . import team_assets
-from . import team_management
-from . import veo
-from . import vto
-from . import welcome
+from . import (
+    about,
+    banana_studio,
+    brand_adherence,
+    character_consistency,
+    character_sheet,
+    chirp_3hd,
+    config,
+    edit_images,
+    gemini_image_generation,
+    gemini_tts,
+    gemini_writers_workshop,
+    guideline_analysis,
+    home,
+    imagen,
+    imagen_upscale,
+    interior_design_v2,
+    library_v2,
+    library_v3,
+    library_v4,
+    login,
+    lyria,
+    object_rotation,
+    pixie_compositor,
+    portraits,
+    recontextualize,
+    selfie,
+    shop_the_look,
+    starter_pack,
+    storyboarder,
+    team_assets,
+    team_management,
+    veo,
+    vto,
+    welcome,
+)

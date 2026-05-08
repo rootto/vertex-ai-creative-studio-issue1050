@@ -41,7 +41,9 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
         if state.is_loading:
             with me.box(
                 style=me.Style(
-                    display="flex", justify_content="center", margin=me.Margin(top=24),
+                    display="flex",
+                    justify_content="center",
+                    margin=me.Margin(top=24),
                 ),
             ):
                 me.progress_spinner()
@@ -56,7 +58,8 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
             me.text(
                 "Your generated videos will appear here.",
                 style=me.Style(
-                    padding=me.Padding.all(24), color=me.theme_var("on-surface-variant"),
+                    padding=me.Padding.all(24),
+                    color=me.theme_var("on-surface-variant"),
                 ),
             )
             return
@@ -135,7 +138,8 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
                     for duration in model_config.supported_extension_durations:
                         options.append(
                             me.SelectOption(
-                                label=f"{duration} seconds", value=str(duration),
+                                label=f"{duration} seconds",
+                                value=str(duration),
                             ),
                         )
                 else:

@@ -59,7 +59,8 @@ def on_thumb_click(e: me.ClickEvent):
         update_media_feedback(state.current_media_item_id, vote=state.feedback_vote)
 
     yield from _show_snackbar(
-        state, "Vote recorded. You can add an optional comment below.",
+        state,
+        "Vote recorded. You can add an optional comment below.",
     )
 
 
@@ -120,7 +121,10 @@ def feedback(media_item_id: str):
     ):
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="row", gap=8, align_items="center",
+                display="flex",
+                flex_direction="row",
+                gap=8,
+                align_items="center",
             ),
         ):
             me.text("Rate this generation:", style=me.Style(font_size=14))

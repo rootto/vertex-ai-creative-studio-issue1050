@@ -168,7 +168,10 @@ def video_details(
 
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="row", gap=10, margin=me.Margin(top=16),
+                display="flex",
+                flex_direction="row",
+                gap=10,
+                margin=me.Margin(top=16),
             ),
         ):
             with me.content_button(

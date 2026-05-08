@@ -15,19 +15,22 @@
 import uuid
 
 from fastapi import Request
-from google.oauth2 import id_token
 from google.auth.transport import requests
+from google.oauth2 import id_token
 
 from common.storage import get_or_create_session
 from config.default import Default
 
 cfg = Default()
 
+
 def verify_google_id_token(id_token_str: str) -> dict:
     """Verifies a Google ID Token and returns the token payload.
     Raises ValueError if the token is invalid.
     """
-    return id_token.verify_oauth2_token(id_token_str, requests.Request(), cfg.GOOGLE_CLIENT_ID)
+    return id_token.verify_oauth2_token(
+        id_token_str, requests.Request(), cfg.GOOGLE_CLIENT_ID,
+    )
 
 
 async def set_user_identity_and_session(request: Request, call_next):
@@ -55,7 +58,12 @@ async def set_user_identity_and_session(request: Request, call_next):
 
     # Set session ID cookie on the response
     response.set_cookie(
-        key="session_id", value=session_id, httponly=True, samesite="Lax", secure=True, path="/"
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        samesite="Lax",
+        secure=True,
+        path="/",
     )
 
     return response

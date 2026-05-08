@@ -38,7 +38,10 @@ def on_load(e: me.LoadEvent):
         yield
         # get_media_for_page returns a single list of items, not a tuple to be unpacked.
         items = get_media_for_page(
-            page=1, media_per_page=15, type_filters=["images"], sort_by_timestamp=True,
+            page=1,
+            media_per_page=15,
+            type_filters=["images"],
+            sort_by_timestamp=True,
         )
 
         if items:
@@ -85,7 +88,10 @@ def page_content():
         )
         with me.box(
             style=me.Style(
-                display="flex", flex_wrap="wrap", gap=16, margin=me.Margin(top=16),
+                display="flex",
+                flex_wrap="wrap",
+                gap=16,
+                margin=me.Margin(top=16),
             ),
         ):
             for item in state.media_items:
@@ -94,7 +100,10 @@ def page_content():
                     me.image(
                         src=create_display_url(gcs_uri),
                         style=me.Style(
-                            height=150, width=150, object_fit="cover", border_radius=8,
+                            height=150,
+                            width=150,
+                            object_fit="cover",
+                            border_radius=8,
                         ),
                     )
 
@@ -106,7 +115,10 @@ def page_content():
         )
         with me.box(
             style=me.Style(
-                display="flex", flex_wrap="wrap", gap=16, margin=me.Margin(top=16),
+                display="flex",
+                flex_wrap="wrap",
+                gap=16,
+                margin=me.Margin(top=16),
             ),
         ):
             for item in state.media_items:
@@ -115,6 +127,9 @@ def page_content():
                     me.image(
                         src=create_display_url(gcs_uri),
                         style=me.Style(
-                            height=150, width=150, object_fit="cover", border_radius=8,
+                            height=150,
+                            width=150,
+                            object_fit="cover",
+                            border_radius=8,
                         ),
                     )

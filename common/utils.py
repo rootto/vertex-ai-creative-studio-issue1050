@@ -35,6 +35,7 @@ GCS_PUBLIC_URL_PREFIX = "https://storage.cloud.google.com/"
 
 _signed_url_cache = {}
 
+
 def create_display_url(gcs_uri: str) -> str:
     """Create a cacheable display URL for a GCS asset.
 
@@ -47,7 +48,7 @@ def create_display_url(gcs_uri: str) -> str:
     now = datetime.datetime.now(datetime.UTC)
     if gcs_uri in _signed_url_cache:
         url, expiry = _signed_url_cache[gcs_uri]
-        if now < expiry - datetime.timedelta(minutes=2): # 2 min buffer
+        if now < expiry - datetime.timedelta(minutes=2):  # 2 min buffer
             return url
 
     try:
@@ -156,7 +157,6 @@ def print_keys(obj, prefix=""):
             # you might adjust the print statement here or what you pass to print_keys.
             # Current behavior: treats list items as potentially new objects to explore.
             print_keys(item, prefix + f"  [{i}] ")  # indicate list index in prefix
-
 
 
 def _get_gcs_public_https_url(gcs_uri: str | None) -> str:

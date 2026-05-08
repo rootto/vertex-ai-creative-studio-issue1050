@@ -66,7 +66,9 @@ def image_output():
                         if img_uri:
                             with me.box(
                                 style=me.Style(
-                                    display="flex", flex_direction="column", gap=8,
+                                    display="flex",
+                                    flex_direction="column",
+                                    gap=8,
                                 ),
                             ):
                                 me.image(

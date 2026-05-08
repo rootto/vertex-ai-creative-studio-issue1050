@@ -1,5 +1,7 @@
 import typing
+
 import mesop as me
+
 
 @me.web_component(path="./login_component.js")
 def login_component(

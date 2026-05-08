@@ -47,30 +47,36 @@ def model_selection():
             text="Choose a Model",
             type="headline-2",
         )
-    with me.box(), me.box(
-        style=me.Style(
-            height="100%",
-            width="100%",
-            display="flex",
-            flex_direction="row",
-            flex_wrap="wrap",
-        ),
-    ):
-        with me.box(
+    with (
+        me.box(),
+        me.box(
             style=me.Style(
+                height="100%",
+                width="100%",
                 display="flex",
                 flex_direction="row",
-                gap=5,
-                align_items="left",
+                flex_wrap="wrap",
             ),
-        ), me.box(
-            style=me.Style(
-                position="relative",
-                height="100%",
-                margin=me.Margin(left=7, top=7),
-                cursor="pointer",
+        ),
+    ):
+        with (
+            me.box(
+                style=me.Style(
+                    display="flex",
+                    flex_direction="row",
+                    gap=5,
+                    align_items="left",
+                ),
             ),
-            key="model",
+            me.box(
+                style=me.Style(
+                    position="relative",
+                    height="100%",
+                    margin=me.Margin(left=7, top=7),
+                    cursor="pointer",
+                ),
+                key="model",
+            ),
         ):
             me.uploader(
                 label="",
@@ -130,22 +136,25 @@ def model_selection():
             )
 
         for model in state.models:
-            with me.box(
-                style=me.Style(
-                    display="flex",
-                    flex_direction="row",
-                    gap=5,
-                    align_items="left",
+            with (
+                me.box(
+                    style=me.Style(
+                        display="flex",
+                        flex_direction="row",
+                        gap=5,
+                        align_items="left",
+                    ),
                 ),
-            ), me.box(
-                key=f"{model.model_image}",
-                style=me.Style(
-                    position="relative",
-                    height="100%",
-                    margin=me.Margin(left=7, top=7),
-                    cursor="pointer",
+                me.box(
+                    key=f"{model.model_image}",
+                    style=me.Style(
+                        position="relative",
+                        height="100%",
+                        margin=me.Margin(left=7, top=7),
+                        cursor="pointer",
+                    ),
+                    on_click=on_model_click,
                 ),
-                on_click=on_model_click,
             ):
                 me.image(
                     src=create_display_url(model.model_image),

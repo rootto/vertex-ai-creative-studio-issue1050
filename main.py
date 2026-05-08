@@ -18,9 +18,6 @@ import inspect
 import os
 import uuid
 
-from common.storage import get_or_create_session
-from pages import login # Import login page to register it
-from routers import asset_handler # Import asset handler
 import google.auth
 import mesop as me
 from fastapi import APIRouter, HTTPException, Request
@@ -33,6 +30,7 @@ from google.cloud import storage
 from pydantic import BaseModel
 
 from app_factory import app
+from common.storage import get_session
 from common.utils import create_display_url
 from config import default as config
 from models.video_processing import convert_mp4_to_gif
@@ -45,7 +43,10 @@ from pages.test_pixie_compositor import test_pixie_compositor_page
 from pages.test_svg import test_svg_page
 from pages.test_uploader import test_uploader_page
 from pages.test_vto_prompt_generator import page as test_vto_prompt_generator_page
-from routers import veo_router
+from routers import (
+    asset_handler,  # Import asset handler
+    veo_router,
+)
 
 
 class UserInfo(BaseModel):
@@ -146,8 +147,11 @@ async def set_request_context(request: Request, call_next):
         session_id = str(uuid.uuid4())
         user_email = "anonymous@google.com"
     else:
-        session = get_or_create_session(session_id, "anonymous@google.com")
-        user_email = session.user_email
+        session = get_session(session_id)
+        if session:
+            user_email = session.user_email
+        else:
+            user_email = "anonymous@google.com"
 
     request.scope["MESOP_USER_EMAIL"] = user_email
     request.scope["MESOP_SESSION_ID"] = session_id
@@ -158,7 +162,10 @@ async def set_request_context(request: Request, call_next):
 
     response = await call_next(request)
     response.set_cookie(
-        key="session_id", value=session_id, httponly=True, samesite="Lax",
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        samesite="Lax",
     )
     return response
 

@@ -13,27 +13,33 @@
 # limitations under the License.
 
 from fastapi import APIRouter, HTTPException, Request
-from common.utils import create_display_url
+
 from common.storage import get_or_create_session
+from common.utils import create_display_url
 
 router = APIRouter()
+
 
 @router.get("/api/get_asset_url")
 async def get_asset_url(request: Request, gcs_uri: str):
     """Returns a signed URL for a GCS asset if the user is authenticated."""
     session_id = request.cookies.get("session_id")
     if not session_id:
-        raise HTTPException(status_code=401, detail="Unauthorized: No session ID found.")
-    
+        raise HTTPException(
+            status_code=401, detail="Unauthorized: No session ID found.",
+        )
+
     session = get_or_create_session(session_id, "anonymous@google.com")
     if session.user_email == "anonymous@google.com":
         raise HTTPException(status_code=401, detail="Unauthorized: User not signed in.")
-    
+
     if not gcs_uri.startswith("gs://"):
         raise HTTPException(status_code=400, detail="Invalid GCS URI.")
-    
+
     try:
         url = create_display_url(gcs_uri)
         return {"url": url}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate signed URL: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to generate signed URL: {e}",
+        )

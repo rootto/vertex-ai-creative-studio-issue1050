@@ -1,13 +1,11 @@
-"""Component for displaying the room view.
-"""
+"""Component for displaying the room view."""
 
 import mesop as me
 
 
 @me.component
 def room_view(storyboard: dict, is_generating_zoom: bool):
-    """Component for displaying the room view.
-    """
+    """Component for displaying the room view."""
     with me.box(
         style=me.Style(
             display="flex",

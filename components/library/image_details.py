@@ -84,7 +84,10 @@ def image_details(item: MediaItem, on_click_permalink: Callable) -> None:
 
     with me.box(
         style=me.Style(
-            display="flex", flex_direction="column", align_items="center", gap=16,
+            display="flex",
+            flex_direction="column",
+            align_items="center",
+            gap=16,
         ),
     ):
         # Image display
@@ -160,7 +163,9 @@ def image_details(item: MediaItem, on_click_permalink: Callable) -> None:
                         me.image(
                             src=person_url,
                             style=me.Style(
-                                width="200px", height="auto", border_radius="8px",
+                                width="200px",
+                                height="auto",
+                                border_radius="8px",
                             ),
                         )
 
@@ -180,7 +185,9 @@ def image_details(item: MediaItem, on_click_permalink: Callable) -> None:
                         me.image(
                             src=product_url,
                             style=me.Style(
-                                width="200px", height="auto", border_radius="8px",
+                                width="200px",
+                                height="auto",
+                                border_radius="8px",
                             ),
                         )
     if item.comment == "product recontext":
@@ -201,12 +208,17 @@ def image_details(item: MediaItem, on_click_permalink: Callable) -> None:
                     me.image(
                         src=create_display_url(uri),
                         style=me.Style(
-                            width="100px", height="auto", border_radius="8px",
+                            width="100px",
+                            height="auto",
+                            border_radius="8px",
                         ),
                     )
     with me.box(
         style=me.Style(
-            display="flex", flex_direction="row", gap=10, margin=me.Margin(top=16),
+            display="flex",
+            flex_direction="row",
+            gap=10,
+            margin=me.Margin(top=16),
         ),
     ):
         with me.content_button(
