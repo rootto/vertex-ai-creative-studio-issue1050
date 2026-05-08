@@ -450,9 +450,6 @@ resource "google_artifact_registry_repository" "creative_studio" {
   repository_id = "creative-studio"
   description   = "Docker repository for GenMedia Creative Studio related images"
   format        = "DOCKER"
-  vulnerability_scanning_config {
-    enablement_config = "INHERITED"
-  }
   depends_on = [null_resource.sleep]
 }
 
