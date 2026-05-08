@@ -3,6 +3,7 @@ import mesop as me
 from components.login_component.login_component import login_component
 from state.state import AppState, update_user_and_session_info
 from common.auth import verify_google_id_token
+from config.default import Default
 
 
 @me.stateclass
@@ -39,4 +40,5 @@ def page():
     with me.box(style=me.Style(display="flex", flex_direction="column", align_items="center", justify_content="center", height="100vh")):
         me.text("Welcome to GenMedia Creative Studio", type="headline-4")
         me.text("Please sign in to access the application.")
-        login_component(on_login=on_login)
+        cfg = Default()
+        login_component(client_id=cfg.GOOGLE_CLIENT_ID, on_login=on_login)

@@ -4,12 +4,13 @@ export class LoginComponent extends LitElement {
   static get properties() {
     return {
       login: { type: String },
+      clientId: { type: String },
     };
   }
 
   constructor() {
     super();
-    this.clientId = "356909977560-rm29g6coq1jim1l9cehkplvheriog962.apps.googleusercontent.com";
+    this.clientId = "";
     this.login = "";
   }
 

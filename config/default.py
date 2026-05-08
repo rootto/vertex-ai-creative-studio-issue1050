@@ -63,6 +63,7 @@ class Default:
     )
 
     SERVICE_ACCOUNT_EMAIL: str = os.environ.get("SERVICE_ACCOUNT_EMAIL")
+    GOOGLE_CLIENT_ID: str = os.environ.get("GOOGLE_CLIENT_ID", "863507536998-6rs80d2dae5bcalq3cj2oto7tnikt7b6.apps.googleusercontent.com")
     # Gemini
     PROJECT_ID: str = os.environ.get("PROJECT_ID")
     LOCATION: str = os.environ.get("LOCATION", "global")
