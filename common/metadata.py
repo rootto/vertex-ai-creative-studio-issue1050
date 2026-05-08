@@ -148,6 +148,8 @@ class MediaItem:
     original_resolution: str | None = None
     upscale_factor: str | None = None
     image_size: str | None = None
+    feedback_vote: str | None = None
+    feedback_comment: str | None = None
 
     def __post_init__(self):
         # Ensure audio_analysis is always a JSON string for state serialization.
