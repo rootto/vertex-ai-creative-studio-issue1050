@@ -36,7 +36,7 @@ def create_team(name: str, created_by: str) -> str:
         return ""
     try:
         team_ref = db.collection(config.TEAMS_COLLECTION_NAME).document()
-        team = Team(id=team_ref.id, name=name, created_by=created_by)
+        team = Team(id=team_ref.id, name=name, created_by=created_by, managers=[created_by], members=[created_by])
         team_ref.set(asdict(team))
         logger.info(f"Created team {name} with ID {team_ref.id}")
         return team_ref.id
