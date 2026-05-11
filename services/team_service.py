@@ -176,11 +176,10 @@ def get_teams_for_user(
         teams = []
         for doc in docs:
             data = doc.to_dict()
-            assets_data = data.get("assets", [])
+            asset_ids = data.get("asset_ids", [])
             assets = []
-            for asset_data in assets_data:
-                asset_id = asset_data.get("id")
-                assets.append(_create_media_item_from_dict(asset_id, asset_data))
+            for asset_id in asset_ids:
+                assets.append(get_media_item_by_id(asset_id))
             data["assets"] = assets
             data["id"] = doc.id
             teams.append(Team(**data))

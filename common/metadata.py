@@ -172,6 +172,7 @@ class Team:
     created_by: str | None = None
     managers: list[str] = field(default_factory=list)
     members: list[str] = field(default_factory=list)
+    asset_ids: list[str] = field(default_factory=list)
     assets: list[MediaItem] = field(default_factory=list)
     branding_guideline: dict = field(
         default_factory=lambda: {"type": "text", "content": ""},
