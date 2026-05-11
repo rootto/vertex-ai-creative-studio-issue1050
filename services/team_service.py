@@ -19,7 +19,7 @@ from dataclasses import asdict
 from google.cloud import firestore
 
 from common.analytics import get_logger
-from common.metadata import MediaItem, Team, _create_media_item_from_dict
+from common.metadata import MediaItem, Team, _create_media_item_from_dict, get_media_item_by_id
 from config.default import Default
 from config.firebase_config import FirebaseClient
 from models.gemini import generate_text
@@ -54,12 +54,11 @@ def get_team(team_id: str) -> Team | None:
         doc = doc_ref.get()
         if doc.exists:
             data = doc.to_dict()
-            # Convert assets back to MediaItem objects
-            assets_data = data.get("assets", [])
+            # Fetch assets by ID from genmedia collection
+            asset_ids = data.get("asset_ids", [])
             assets = []
-            for asset_data in assets_data:
-                asset_id = asset_data.get("id")
-                assets.append(_create_media_item_from_dict(asset_id, asset_data))
+            for asset_id in asset_ids:
+                assets.append(get_media_item_by_id(asset_id))
             data["assets"] = assets
             data["id"] = doc.id
             return Team(**data)
@@ -95,9 +94,9 @@ def add_asset_to_team(team_id: str, media_item: MediaItem):
     """Add an asset to a team."""
     try:
         team_ref = db.collection(config.TEAMS_COLLECTION_NAME).document(team_id)
-        # We store the full dict representation of MediaItem
-        team_ref.update({"assets": firestore.ArrayUnion([asdict(media_item)])})
-        logger.info(f"Added asset {media_item.id} to team {team_id}")
+        # Store only the reference ID
+        team_ref.update({"asset_ids": firestore.ArrayUnion([media_item.id])})
+        logger.info(f"Added asset reference {media_item.id} to team {team_id}")
     except Exception as e:
         logger.error(f"Error adding asset to team {team_id}: {e}")
         raise e
