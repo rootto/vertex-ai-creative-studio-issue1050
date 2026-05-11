@@ -52,6 +52,11 @@ def team_management_content() -> None:
         f"DEBUG: team_management_content entered. user_role={app_state.user_role}, email={app_state.user_email}",
     )
 
+    if not page_state.teams:
+        from dataclasses import asdict
+        teams = get_teams_for_user(app_state.user_email, app_state.user_role)
+        page_state.teams = [asdict(t) for t in teams]
+
     if app_state.user_role not in ["administrator", "manager"]:
         with me.box(style=me.Style(padding=me.Padding.all(24))):
             me.text(
@@ -125,13 +130,9 @@ def team_management_content() -> None:
                         align_items="center",
                     ),
                 ):
-                    # Fetch all teams for dropdown
-                    teams = get_teams_for_user(
-                        app_state.user_email,
-                        app_state.user_role,
-                    )
+                    # Use teams from state
                     team_options = [
-                        me.SelectOption(label=t.name, value=t.id) for t in teams
+                        me.SelectOption(label=t["name"], value=t["id"]) for t in page_state.teams
                     ]
 
                     me.select(
@@ -239,6 +240,10 @@ def on_create_team_click(_: me.ClickEvent):  # noqa: ANN201
             f"Team '{page_state.new_team_name}' created successfully."
         )
         page_state.new_team_name = ""
+        # Reload teams
+        from dataclasses import asdict
+        teams = get_teams_for_user(app_state.user_email, app_state.user_role)
+        page_state.teams = [asdict(t) for t in teams]
     except Exception as ex:  # noqa: BLE001
         page_state.show_snackbar = True
         page_state.snackbar_message = f"Error creating team: {ex}"

@@ -14,11 +14,13 @@
 
 """State for team management page."""
 
+from dataclasses import field
 import mesop as me
 
 
 @me.stateclass
 class PageState:
+    teams: list[dict] = field(default_factory=list)
     new_team_name: str = ""
     selected_team_id: str = ""
     user_email_to_assign: str = ""
