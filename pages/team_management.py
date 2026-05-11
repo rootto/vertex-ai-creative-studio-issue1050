@@ -243,6 +243,7 @@ def on_create_team_click(_: me.ClickEvent):  # noqa: ANN201
         # Reload teams
         from dataclasses import asdict
         teams = get_teams_for_user(app_state.user_email, app_state.user_role)
+        logger.info(f"DEBUG: Fetched teams after creation: {[t.name for t in teams]}")
         page_state.teams = [asdict(t) for t in teams]
     except Exception as ex:  # noqa: BLE001
         page_state.show_snackbar = True
