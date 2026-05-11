@@ -76,6 +76,7 @@ class AppState:
             bootstrap_first_user(self.user_email)
             self.user_role = get_user_role(self.user_email)
             teams = get_teams_for_user(self.user_email, self.user_role)
+            logger.info(f"DEBUG: AppState.__init__ fetched teams for user {self.user_email}: {[t.name for t in teams]}")
             self.managed_teams = [asdict(t) for t in teams]
 
 
