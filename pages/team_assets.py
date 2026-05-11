@@ -155,8 +155,8 @@ def upload_assets_section(page_state: PageState) -> None:
 
         with me.box(style=me.Style(margin=me.Margin(top=8))):
             me.uploader(
-                label="Select Images",
-                accepted_file_types=["image/jpeg", "image/png"],
+                label="Select Assets",
+                accepted_file_types=["image/jpeg", "image/png", "video/mp4"],
                 on_upload=on_upload_assets,
                 multiple=True,
             )
@@ -350,6 +350,9 @@ def on_upload_assets(e: me.UploadEvent):  # noqa: ANN201
                 contents,
             )
 
+            team = get_team(state.selected_team_id)
+            team_name = team.name if team else "Unknown Team"
+
             # Create MediaItem
             media_item = MediaItem(
                 status="complete",
@@ -360,6 +363,7 @@ def on_upload_assets(e: me.UploadEvent):  # noqa: ANN201
                 gcsuri=gcs_uri,
                 prompt=f"Asset uploaded by {app_state.user_email}",
                 comment="team asset",
+                tags=[team_name],
             )
 
             # Add to library (sets media_item.id)

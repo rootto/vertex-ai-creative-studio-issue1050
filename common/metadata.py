@@ -92,6 +92,9 @@ class MediaItem:
     captions: list[str] = field(
         default_factory=list,
     )  # Captions or narrative text associated with generated images
+    tags: list[str] = field(
+        default_factory=list,
+    )  # For categorization and filtering
     negative_prompt: str | None = None
     num_images: int | None = None  # Number of images generated in a batch
     seed: int | None = (
@@ -338,6 +341,7 @@ def _create_media_item_from_dict(doc_id: str, raw_item_data: dict) -> MediaItem:
         error_message=raw_item_data.get("error_message"),
         gcsuri=gcsuri,
         gcs_uris=raw_item_data.get("gcs_uris", []),
+        tags=raw_item_data.get("tags", []),
         source_images_gcs=raw_item_data.get("source_images_gcs", []),
         source_uris=raw_item_data.get("source_uris", []),
         thumbnail_uri=thumbnail,
@@ -501,7 +505,8 @@ def get_media_for_page(
     type_filters: list[str] | None = None,
     error_filter: str = "all",  # "all", "no_errors", "only_errors"
     sort_by_timestamp: bool = False,
-    filter_by_user_email: str | None = None,  # New parameter
+    filter_by_user_email: str | None = None,
+    tags_filter: list[str] | None = None,
 ) -> list[MediaItem]:
     """Fetches a paginated and filtered list of media items from Firestore.
 
@@ -559,6 +564,15 @@ def get_media_for_page(
                 passes_type_filter = True
 
             if not passes_type_filter:
+                continue
+
+            # Apply tags filters
+            passes_tags_filter = False
+            item_tags = raw_item_data.get("tags", [])
+            if not tags_filter or all(tag in item_tags for tag in tags_filter):
+                passes_tags_filter = True
+
+            if not passes_tags_filter:
                 continue
 
             # Apply error filter

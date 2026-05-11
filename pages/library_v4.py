@@ -52,6 +52,9 @@ class PageState:
         default_factory=lambda: ["all"],
     )  # "all", "images", "videos", "audio"
     error_filter: str = "all"  # "all", "no_errors", "only_errors"
+    selected_tags: list[str] = field(
+        default_factory=list,
+    )
     tour_dialog_active_tab: str = "details"
     extend_dialog_state: VeoExtendDialogState = field(
         default_factory=VeoExtendDialogState,
@@ -95,6 +98,7 @@ def _load_media(pagestate: PageState, is_filter_change: bool = False):
         type_filters=pagestate.type_filters,
         filter_by_user_email=user_email_to_filter,
         error_filter=pagestate.error_filter,
+        tags_filter=pagestate.selected_tags,
     )
 
     if not new_items:
@@ -142,6 +146,18 @@ def on_error_filter_change(e: me.ButtonToggleChangeEvent):
     """Handles changes to the error filter."""
     pagestate = me.state(PageState)
     pagestate.error_filter = e.value
+    yield from _load_media(pagestate, is_filter_change=True)
+
+
+def on_tags_filter_blur(e: me.InputBlurEvent):
+    """Handles changes to the tags filter."""
+    pagestate = me.state(PageState)
+    if e.value:
+        pagestate.selected_tags = [
+            tag.strip() for tag in e.value.split(",") if tag.strip()
+        ]
+    else:
+        pagestate.selected_tags = []
     yield from _load_media(pagestate, is_filter_change=True)
 
 
@@ -198,6 +214,11 @@ def library_content():
                     me.ButtonToggleButton(label="Only Errors", value="only_errors"),
                 ],
                 on_change=on_error_filter_change,
+            )
+            me.input(
+                label="Filter by Tags (comma separated)",
+                on_blur=on_tags_filter_blur,
+                style=me.Style(width="300px"),
             )
 
         with me.box(
