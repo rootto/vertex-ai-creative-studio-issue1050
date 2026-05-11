@@ -234,9 +234,8 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
                         ):
                             me.button(
                                 "Extract guidelines",
-                                on_click=lambda e, t_id=selected_team.id: (
-                                    on_extract_click(e, t_id)
-                                ),
+                                on_click=on_extract_click,
+                                key=selected_team.id,
                                 type="raised",
                             )
 
@@ -245,9 +244,8 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
 
             me.button(
                 "Save",
-                on_click=lambda e, t_id=selected_team.id: on_save_guidelines_click(
-                    e, t_id,
-                ),
+                on_click=on_save_guidelines_click,
+                key=selected_team.id,
                 type="raised",
             )
 
@@ -419,8 +417,9 @@ def on_clear_pdf(_: me.ClickEvent):  # noqa: ANN201
     yield
 
 
-def on_extract_click(_: me.ClickEvent, team_id: str):  # noqa: ANN201
+def on_extract_click(e: me.ClickEvent):  # noqa: ANN201
     """Handle extract text click."""
+    team_id = e.key
     state = me.state(PageState)
     state.is_extracting = True
     yield
@@ -437,8 +436,9 @@ def on_extract_click(_: me.ClickEvent, team_id: str):  # noqa: ANN201
     yield
 
 
-def on_save_guidelines_click(_: me.ClickEvent, team_id: str):  # noqa: ANN201
+def on_save_guidelines_click(e: me.ClickEvent):  # noqa: ANN201
     """Handle save guidelines click."""
+    team_id = e.key
     state = me.state(PageState)
     try:
         if state.guideline_type == "text":
