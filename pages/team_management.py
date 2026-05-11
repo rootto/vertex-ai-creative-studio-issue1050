@@ -213,6 +213,18 @@ def team_management_content() -> None:
                             on_click=on_manage_assets_click,
                             type="stroked",
                         )
+                        if app_state.user_role == "administrator":
+                            me.button(
+                                "Delete Team",
+                                on_click=on_delete_team_click,
+                                key=team.id,
+                                type="raised",
+                                style=me.Style(
+                                    background=me.theme_var("error"),
+                                    color=me.theme_var("on-error"),
+                                    margin=me.Margin(top=8),
+                                ),
+                            )
 
 
 # --- Event Handlers ---
@@ -293,4 +305,26 @@ def on_assign_user_click(_: me.ClickEvent):  # noqa: ANN201
     except Exception as ex:  # noqa: BLE001
         page_state.show_snackbar = True
         page_state.snackbar_message = f"Error assigning user: {ex}"
+    yield
+
+
+def on_delete_team_click(e: me.ClickEvent):
+    """Handle delete team click."""
+    app_state = me.state(AppState)
+    page_state = me.state(PageState)
+    team_id = e.key
+    try:
+        from services.team_service import delete_team
+
+        delete_team(team_id)
+        page_state.show_snackbar = True
+        page_state.snackbar_message = "Team deleted successfully."
+        # Reload teams
+        from dataclasses import asdict
+
+        teams = get_teams_for_user(app_state.user_email, app_state.user_role)
+        page_state.teams = [asdict(t) for t in teams]
+    except Exception as ex:  # noqa: BLE001
+        page_state.show_snackbar = True
+        page_state.snackbar_message = f"Error deleting team: {ex}"
     yield

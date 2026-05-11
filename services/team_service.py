@@ -101,6 +101,26 @@ def add_asset_to_team(team_id: str, media_item: MediaItem):
         logger.error(f"Error adding asset to team {team_id}: {e}")
         raise e
 
+def delete_team(team_id: str):
+    """Delete a team."""
+    try:
+        db.collection(config.TEAMS_COLLECTION_NAME).document(team_id).delete()
+        logger.info(f"Deleted team {team_id}")
+    except Exception as e:
+        logger.error(f"Error deleting team {team_id}: {e}")
+        raise e
+
+
+def remove_asset_from_team(team_id: str, asset_id: str):
+    """Remove an asset reference from a team."""
+    try:
+        team_ref = db.collection(config.TEAMS_COLLECTION_NAME).document(team_id)
+        team_ref.update({"asset_ids": firestore.ArrayRemove([asset_id])})
+        logger.info(f"Removed asset reference {asset_id} from team {team_id}")
+    except Exception as e:
+        logger.error(f"Error removing asset from team {team_id}: {e}")
+        raise e
+
 
 def set_branding_guideline(
     team_id: str,

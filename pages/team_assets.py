@@ -310,11 +310,27 @@ def assets_display_section(selected_team: Team) -> None:
                                 border_radius=4,
                             ),
                         )
-                        me.text(
-                            asset.prompt or "Asset",
-                            type="caption",
-                            style=me.Style(margin=me.Margin(top=4)),
-                        )
+                        with me.box(
+                            style=me.Style(
+                                display="flex",
+                                flex_direction="row",
+                                align_items="center",
+                                justify_content="space-between",
+                                width="100%",
+                                margin=me.Margin(top=4),
+                            ),
+                        ):
+                            me.text(
+                                asset.prompt or "Asset",
+                                type="caption",
+                                style=me.Style(flex_grow=1),
+                            )
+                            with me.content_button(
+                                on_click=on_delete_asset_click,
+                                key=f"{selected_team.id}:{asset.id}",
+                                style=me.Style(padding=me.Padding.all(0), min_width=24, height=24),
+                            ):
+                                me.icon("delete", style=me.Style(color=me.theme_var("error")))
 
 
 def on_select_team_change(e: me.SelectSelectionChangeEvent) -> None:
@@ -450,4 +466,20 @@ def on_save_guidelines_click(e: me.ClickEvent):  # noqa: ANN201
     except Exception as ex:  # noqa: BLE001
         state.show_snackbar = True
         state.snackbar_message = f"Error saving guidelines: {ex}"
+    yield
+
+
+def on_delete_asset_click(e: me.ClickEvent):
+    """Handle delete asset click."""
+    state = me.state(PageState)
+    team_id, asset_id = e.key.split(":")
+    try:
+        from services.team_service import remove_asset_from_team
+
+        remove_asset_from_team(team_id, asset_id)
+        state.snackbar_message = "Asset removed successfully."
+        state.show_snackbar = True
+    except Exception as ex:  # noqa: BLE001
+        state.snackbar_message = f"Error removing asset: {ex}"
+        state.show_snackbar = True
     yield
