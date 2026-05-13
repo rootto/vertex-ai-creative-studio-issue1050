@@ -24,10 +24,23 @@ from common.metadata import MediaItem, add_media_item_to_firestore
 from common.prompt_template_service import prompt_template_service
 from common.storage import store_to_gcs
 from common.utils import create_display_url, https_url_to_gcs_uri
+from components.banana_button.banana_button import banana_button
 from components.content_credentials.content_credentials import (
     content_credentials_viewer,
 )
 from components.dialog import dialog
+from components.gemini_image.events import (
+    get_on_aspect_ratio_change,
+    get_on_image_search_change,
+    get_on_image_size_change,
+    get_on_include_thoughts_change,
+    get_on_model_select,
+    get_on_num_images_change,
+    get_on_prompt_blur,
+    get_on_search_change,
+    get_on_thinking_level_change,
+    get_on_thumbnail_click,
+)
 from components.feedback.feedback import feedback
 from components.header import header
 from components.image_thumbnail import image_thumbnail
@@ -39,7 +52,6 @@ from components.search_entry_point.search_entry_point import search_entry_point
 from components.snackbar import snackbar
 from components.svg_icon.svg_icon import svg_icon
 from config.banana_presets import IMAGE_ACTION_PRESETS
-from config.default import Default as cfg
 from config.gemini_image_models import get_gemini_image_model_config
 from models.gemini import (
     generate_image_from_prompt_and_images,
@@ -47,7 +59,6 @@ from models.gemini import (
 )
 from models.upscale import get_image_resolution
 from services.c2pa_service import c2pa_service
-from services.team_service import get_teams_for_user
 from state.state import AppState
 
 CHIP_STYLE = me.Style(
@@ -67,8 +78,7 @@ def get_all_image_presets():
     try:
         # Load dynamic templates of type 'image'
         dynamic_templates = prompt_template_service.load_templates(
-            config_path="config/image_prompt_templates.json",
-            template_type="image",
+            config_path="config/image_prompt_templates.json", template_type="image",
         )
 
         for template in dynamic_templates:
@@ -94,6 +104,7 @@ def get_all_image_presets():
 class PageState:
     """Gemini Image Generation Page State"""
 
+    selected_model: str = "gemini-3.1-flash-image-preview"
     uploaded_image_gcs_uris: list[str] = field(default_factory=list)  # pylint: disable=invalid-field-call
     uploaded_image_display_urls: list[str] = field(default_factory=list)  # pylint: disable=invalid-field-call
     prompt: str = ""
@@ -110,24 +121,35 @@ class PageState:
     aspect_ratio: str = "1:1"
     image_size: str = "1K"
     num_images_to_generate: int = 0
-    suggested_transformations: list[dict] = field(default_factory=list)  # pylint: disable=invalid-field-call
+    suggested_transformations_json: str = "[]"
+    available_brand_guidelines_json: str = "[]"
+    selected_brand_guideline: str = ""
+
     is_suggesting_transformations: bool = False
     use_search: bool = False
+    use_image_search: bool = False
+    include_thoughts: bool = False
+    thinking_level: str = "HIGH"
+    thoughts: str = ""
     grounding_info: str = ""
     c2pa_manifests: dict[str, str] = field(
         default_factory=dict,
     )  # Store as dict of strings (url -> json_str)
 
-    available_brand_guidelines_json: str = "[]"
-    selected_brand_guideline: str = ""
-
     info_dialog_open: bool = False
     initial_load_complete: bool = False
 
 
-def on_search_change(e: me.CheckboxChangeEvent):
-    """Updates the use_search state."""
-    me.state(PageState).use_search = e.checked
+on_aspect_ratio_change = get_on_aspect_ratio_change(PageState)
+on_image_size_change = get_on_image_size_change(PageState)
+on_num_images_change = get_on_num_images_change(PageState)
+on_search_change = get_on_search_change(PageState)
+on_image_search_change = get_on_image_search_change(PageState)
+on_include_thoughts_change = get_on_include_thoughts_change(PageState)
+on_thinking_level_change = get_on_thinking_level_change(PageState)
+on_model_select = get_on_model_select(PageState)
+on_prompt_blur = get_on_prompt_blur(PageState)
+on_thumbnail_click = get_on_thumbnail_click(PageState)
 
 
 with open("config/about_content.json") as f:
@@ -197,13 +219,11 @@ def _render_grounding_info(grounding_info_str: str, theme_mode: str):
         me.text(grounding_info_str)
 
 
-
-
 def gemini_image_gen_page_content():
     """Renders the main UI for the Gemini Image Generation page."""
     state = me.state(PageState)
     app_state = me.state(AppState)
-    current_model_name = cfg().GEMINI_IMAGE_GEN_MODEL
+    current_model_name = state.selected_model
     model_config = get_gemini_image_model_config(current_model_name)
 
     if state.info_dialog_open:
@@ -234,6 +254,27 @@ def gemini_image_gen_page_content():
                     border_radius=12,
                 ),
             ):
+                from config.gemini_image_models import GEMINI_IMAGE_MODELS
+
+                with me.box(
+                    style=me.Style(
+                        display="flex",
+                        flex_direction="row",
+                        gap=16,
+                        margin=me.Margin(bottom=16),
+                        justify_content="center",
+                    ),
+                ):
+                    for model in GEMINI_IMAGE_MODELS:
+                        is_selected = state.selected_model == model.model_name
+                        banana_button(
+                            selected=is_selected,
+                            badge=model.button_label,
+                            label=model.display_name,
+                            model_name=model.model_name,
+                            on_click=on_model_select,
+                        )
+
                 me.text(
                     "Type a prompt or add images and a prompt",
                     style=me.Style(
@@ -253,10 +294,10 @@ def gemini_image_gen_page_content():
                     ),
                 ):
                     me.uploader(
-                        label="Upload Images",
+                        label="Upload Media",
                         on_upload=on_upload,
                         multiple=True,
-                        accepted_file_types=["image/jpeg", "image/png", "image/webp"],
+                        accepted_file_types=["image/jpeg", "image/png", "image/webp", "application/pdf"],
                         style=me.Style(width="100%"),
                         disabled=upload_disabled,
                     )
@@ -282,27 +323,6 @@ def gemini_image_gen_page_content():
                                 on_remove=on_remove_image,
                                 icon_size=18,
                             )
-                try:
-                    guidelines = json.loads(state.available_brand_guidelines_json)
-                except Exception:
-                    guidelines = []
-
-                me.select(
-                    label="Add Brand Guidelines",
-                    options=[
-                        me.SelectOption(label="None", value=""),
-                    ]
-                    + [
-                        me.SelectOption(
-                            label=g["team_name"],
-                            value=g["content"],
-                        )
-                        for g in guidelines
-                    ],
-                    on_selection_change=on_brand_guideline_change,
-                    value=state.selected_brand_guideline,
-                    style=me.Style(width="100%", margin=me.Margin(bottom=16)),
-                )
                 me.textarea(
                     label="Prompt",
                     rows=3,
@@ -498,9 +518,14 @@ def gemini_image_gen_page_content():
                                     )
 
                 # Suggest transformations button
+                try:
+                    suggested = json.loads(state.suggested_transformations_json)
+                except Exception:
+                    suggested = []
+
                 if (
                     state.generation_complete
-                    and not state.suggested_transformations
+                    and not suggested
                     and state.generated_image_urls
                 ):
                     with me.box(style=me.Style(margin=me.Margin(top=16))):
@@ -525,7 +550,7 @@ def gemini_image_gen_page_content():
                             )
 
                 # Suggested transformations
-                if state.suggested_transformations:
+                if suggested:
                     with me.box(
                         style=me.Style(
                             display="flex",
@@ -543,25 +568,24 @@ def gemini_image_gen_page_content():
                                 gap=8,
                             ),
                         ):
-                            for transformation in state.suggested_transformations:
-                                with (
-                                    me.content_button(
-                                        on_click=on_transformation_click,
-                                        key=json.dumps(transformation),
-                                        type="stroked",
-                                        style=CHIP_STYLE,
-                                    ),
-                                    me.box(
+                            for transformation in suggested:
+                                with me.content_button(
+                                    on_click=on_transformation_click,
+                                    key=json.dumps(transformation),
+                                    type="stroked",
+                                    style=CHIP_STYLE,
+                                ):
+                                    with me.box(
                                         style=me.Style(
                                             display="flex",
                                             flex_direction="row",
                                             align_items="center",
                                             gap=8,
                                         ),
-                                    ),
-                                ):
-                                    svg_icon(icon_name="image_edit_auto")
-                                    me.text(transformation["title"])
+                                    ):
+                                        svg_icon(icon_name="image_edit_auto")
+                                        me.text(transformation["title"])
+
 
             # Right column (generated images)
             with me.box(
@@ -616,9 +640,7 @@ def gemini_image_gen_page_content():
                                 # Content Credentials (C2PA) Viewer
                                 with me.box(
                                     style=me.Style(
-                                        position="absolute",
-                                        top=16,
-                                        right=16,
+                                        position="absolute", top=16, right=16,
                                     ),
                                 ):
                                     manifest_json = state.c2pa_manifests.get(
@@ -639,24 +661,18 @@ def gemini_image_gen_page_content():
                             if state.grounding_info:
                                 with me.box(
                                     style=me.Style(
-                                        margin=me.Margin(top=16),
-                                        width="100%",
+                                        margin=me.Margin(top=16), width="100%",
                                     ),
                                 ):
                                     _render_grounding_info(
-                                        state.grounding_info,
-                                        app_state.theme_mode,
+                                        state.grounding_info, app_state.theme_mode,
                                     )
-
-                            feedback(media_item_id=state.previous_media_item_id)
 
                         else:
                             # Display multiple images in a gallery view
                             with me.box(
                                 style=me.Style(
-                                    display="flex",
-                                    flex_direction="column",
-                                    gap=16,
+                                    display="flex", flex_direction="column", gap=16,
                                 ),
                             ):
                                 # Main image
@@ -696,9 +712,7 @@ def gemini_image_gen_page_content():
                                     # Content Credentials (C2PA) Viewer
                                     with me.box(
                                         style=me.Style(
-                                            position="absolute",
-                                            top=16,
-                                            right=16,
+                                            position="absolute", top=16, right=16,
                                         ),
                                     ):
                                         manifest_json = state.c2pa_manifests.get(
@@ -766,16 +780,12 @@ def gemini_image_gen_page_content():
                                 if state.grounding_info:
                                     with me.box(
                                         style=me.Style(
-                                            margin=me.Margin(top=16),
-                                            width="100%",
+                                            margin=me.Margin(top=16), width="100%",
                                         ),
                                     ):
                                         _render_grounding_info(
-                                            state.grounding_info,
-                                            app_state.theme_mode,
+                                            state.grounding_info, app_state.theme_mode,
                                         )
-
-                                feedback(media_item_id=state.previous_media_item_id)
                 else:
                     # Placeholder
                     with me.box(
@@ -793,7 +803,7 @@ def gemini_image_gen_page_content():
 def on_upload(e: me.UploadEvent):
     """Handles file uploads, stores them in GCS, and updates the state."""
     state = me.state(PageState)
-    current_model_name = cfg().GEMINI_IMAGE_GEN_MODEL
+    current_model_name = state.selected_model
     model_config = get_gemini_image_model_config(current_model_name)
     max_input_images = model_config.max_input_images if model_config else 3
 
@@ -803,8 +813,7 @@ def on_upload(e: me.UploadEvent):
 
     if not files_to_upload:
         yield from show_snackbar(
-            state,
-            f"You can upload a maximum of {max_input_images} images.",
+            state, f"You can upload a maximum of {max_input_images} images.",
         )
         return
 
@@ -829,14 +838,13 @@ def on_upload(e: me.UploadEvent):
 def on_library_select(e: LibrarySelectionChangeEvent):
     """Appends a selected library image's GCS URI to the list of uploaded images."""
     state = me.state(PageState)
-    current_model_name = cfg().GEMINI_IMAGE_GEN_MODEL
+    current_model_name = state.selected_model
     model_config = get_gemini_image_model_config(current_model_name)
     max_input_images = model_config.max_input_images if model_config else 3
 
     if len(state.uploaded_image_gcs_uris) >= max_input_images:
         yield from show_snackbar(
-            state,
-            f"You can upload a maximum of {max_input_images} images.",
+            state, f"You can upload a maximum of {max_input_images} images.",
         )
         return
 
@@ -850,38 +858,6 @@ def on_remove_image(e: me.ClickEvent):
     state = me.state(PageState)
     del state.uploaded_image_gcs_uris[int(e.key)]
     del state.uploaded_image_display_urls[int(e.key)]
-    yield
-
-
-def on_prompt_blur(e: me.InputEvent):
-    """Updates the prompt in the page state when the input field loses focus."""
-    me.state(PageState).prompt = e.value
-
-
-def on_brand_guideline_change(e: me.SelectSelectionChangeEvent):
-    """Updates the selected brand guideline in the page state."""
-    me.state(PageState).selected_brand_guideline = e.value
-
-
-def on_aspect_ratio_change(e: me.SelectSelectionChangeEvent):
-    """Changes the aspect ratio on page state."""
-    me.state(PageState).aspect_ratio = e.value
-
-
-def on_image_size_change(e: me.SelectSelectionChangeEvent):
-    """Changes the image size on page state."""
-    me.state(PageState).image_size = e.value
-
-
-def on_num_images_change(e: me.SelectSelectionChangeEvent):
-    """Updates the number of images to generate in the page state."""
-    me.state(PageState).num_images_to_generate = int(e.value)
-
-
-def on_thumbnail_click(e: me.ClickEvent):
-    """Sets the clicked thumbnail as the main selected image."""
-    state = me.state(PageState)
-    state.selected_image_url = e.key
     yield
 
 
@@ -899,7 +875,7 @@ def on_clear_click(e: me.ClickEvent):
     state.generation_complete = False
     state.previous_media_item_id = None  # Reset the chain
     state.num_images_to_generate = 0
-    state.suggested_transformations = []
+    state.suggested_transformations_json = "[]"
     yield
 
 
@@ -942,8 +918,7 @@ def on_suggest_transformations_click(e: me.ClickEvent):
 
     if not state.generated_image_urls:
         yield from show_snackbar(
-            state,
-            "No image available to suggest transformations for.",
+            state, "No image available to suggest transformations for.",
         )
         return
 
@@ -954,11 +929,11 @@ def on_suggest_transformations_click(e: me.ClickEvent):
         # Use the first generated image to get suggestions
         gcs_uri = f"gs://{state.generated_image_urls[0].replace('/media/', '')}"
         raw_transformations = generate_transformation_prompts(image_uris=[gcs_uri])
-        # Convert Pydantic objects to dicts for state
-        state.suggested_transformations = [t.model_dump() for t in raw_transformations]
+        state.suggested_transformations_json = json.dumps([t.model_dump() for t in raw_transformations])
     except Exception as ex:
         analytics_logger.error(f"Could not generate transformation prompts: {ex}")
-        state.suggested_transformations = []
+        state.suggested_transformations_json = "[]"
+
         yield from show_snackbar(state, f"Failed to get suggestions: {ex}")
     finally:
         state.is_suggesting_transformations = False
@@ -1016,8 +991,7 @@ def on_image_action_click(e: me.ClickEvent):
 
     # The action now uses the combined list of images
     yield from _generate_and_save(
-        base_prompt=preset["prompt"],
-        input_gcs_uris=input_gcs_uris,
+        base_prompt=preset["prompt"], input_gcs_uris=input_gcs_uris,
     )
 
 
@@ -1075,14 +1049,10 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
     state = me.state(PageState)
     app_state = me.state(AppState)
 
-    # Clear previous suggestions before generating new ones
-    state.suggested_transformations = []
+    state.suggested_transformations_json = "[]"
 
     final_prompt = _get_appended_prompt(base_prompt, state.num_images_to_generate)
-    if state.selected_brand_guideline:
-        final_prompt = (
-            f"{final_prompt}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
-        )
+    # final_prompt = base_prompt
 
     state.is_generating = True
     state.generation_complete = False
@@ -1090,13 +1060,13 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
 
     try:
         with track_model_call(
-            model_name=cfg().GEMINI_IMAGE_GEN_MODEL,
+            model_name=state.selected_model,
             prompt_length=len(final_prompt),
             aspect_ratio=state.aspect_ratio,
             # num_input_images=len(input_gcs_uris),
             # num_images_generated=state.num_images_to_generate,
         ):
-            gcs_uris, execution_time, captions, grounding_info = (
+            gcs_uris, execution_time, captions, grounding_info, all_thoughts = (
                 generate_image_from_prompt_and_images(
                     prompt=final_prompt,
                     images=input_gcs_uris,
@@ -1106,11 +1076,16 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
                     candidate_count=1,
                     image_size=state.image_size,
                     use_search=state.use_search,
+                    use_image_search=state.use_image_search,
+                    thinking_level=state.thinking_level,
+                    include_thoughts=state.include_thoughts,
+                    model_name=state.selected_model,
                 )
             )
 
         state.generation_time = execution_time
         state.grounding_info = json.dumps(grounding_info) if grounding_info else ""
+        state.thoughts = all_thoughts[0] if all_thoughts else ""
 
         if grounding_info:
             analytics_logger.info(
@@ -1125,7 +1100,7 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
                 user_email=app_state.user_email,
                 source_images_gcs=input_gcs_uris,
                 comment="generated by gemini image generation",
-                model=cfg().GEMINI_IMAGE_GEN_MODEL,
+                model=state.selected_model,
                 related_media_item_id=state.previous_media_item_id,
                 error_message="No images returned.",
                 generation_time=execution_time,
@@ -1169,7 +1144,7 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
                 user_email=app_state.user_email,
                 source_images_gcs=input_gcs_uris,
                 comment="generated by gemini image generation",
-                model=cfg().GEMINI_IMAGE_GEN_MODEL,
+                model=state.selected_model,
                 related_media_item_id=state.previous_media_item_id,
                 generation_time=execution_time,
                 grounding_info=state.grounding_info,
@@ -1219,37 +1194,20 @@ def on_load(e: me.LoadEvent):
     state = me.state(PageState)
     # This flag ensures the logic runs only once on initial page load,
     # not on subsequent yields or interactions.
-    if not state.initial_load_complete:
-        image_uri = me.query_params.get("image_uri")
-        if image_uri:
-            final_gcs_uri = image_uri
-            # If a signed URL is passed, convert it back to a GCS URI.
-            if image_uri.startswith("https://"):
-                # Strip the query parameters from the signed URL.
-                base_url = image_uri.split("?")[0]
-                final_gcs_uri = https_url_to_gcs_uri(base_url)
+    image_uri = me.query_params.get("image_uri")
+    if image_uri:
+        final_gcs_uri = image_uri
+        # If a signed URL is passed, convert it back to a GCS URI.
+        if image_uri.startswith("https://"):
+            # Strip the query parameters from the signed URL.
+            base_url = image_uri.split("?")[0]
+            final_gcs_uri = https_url_to_gcs_uri(base_url)
 
-            if final_gcs_uri and final_gcs_uri not in state.uploaded_image_gcs_uris:
-                state.uploaded_image_gcs_uris.append(final_gcs_uri)
-                state.uploaded_image_display_urls.append(
-                    create_display_url(final_gcs_uri),
-                )
-        app_state = me.state(AppState)
-        teams = get_teams_for_user(
-            app_state.user_email, role=app_state.user_role, assigned_only=True,
-        )
-        guidelines = []
-        for team in teams:
-            content = team.extracted_text or team.branding_guideline.get("content")
-            if content:
-                guidelines.append(
-                    {
-                        "team_name": team.name,
-                        "content": content,
-                    },
-                )
-        state.available_brand_guidelines_json = json.dumps(guidelines, default=str)
-        state.initial_load_complete = True
+        if final_gcs_uri and final_gcs_uri not in state.uploaded_image_gcs_uris:
+            state.uploaded_image_gcs_uris.append(final_gcs_uri)
+            state.uploaded_image_display_urls.append(
+                create_display_url(final_gcs_uri),
+            )
     yield
 
 

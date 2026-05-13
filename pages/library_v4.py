@@ -42,7 +42,7 @@ class PageState:
     """State for the library page."""
 
     is_loading: bool = True
-    media_items: list[MediaItem] = field(default_factory=list)
+    media_items_json: str = "[]"
     show_details_dialog: bool = False
     selected_media_item_id: str | None = None
     initial_load_complete: bool = False
@@ -82,9 +82,14 @@ def _load_media(pagestate: PageState, is_filter_change: bool = False):
         app_state.user_email if pagestate.user_filter == "mine" else None
     )
 
+    try:
+        current_items = json.loads(pagestate.media_items_json)
+    except Exception:
+        current_items = []
+
     if is_filter_change:
         pagestate.current_page = 1
-        pagestate.media_items = []
+        current_items = []
         pagestate.all_items_loaded = False
 
     pagestate.is_loading = True
@@ -100,12 +105,15 @@ def _load_media(pagestate: PageState, is_filter_change: bool = False):
         team_id_filter=pagestate.selected_team_id,
     )
 
+    new_items_dicts = [asdict(item) for item in new_items]
     if not new_items:
         pagestate.all_items_loaded = True
     elif is_filter_change:
-        pagestate.media_items = new_items
+        current_items = new_items_dicts
     else:
-        pagestate.media_items.extend(new_items)
+        current_items.extend(new_items_dicts)
+
+    pagestate.media_items_json = json.dumps(current_items, default=str)
 
     pagestate.is_loading = False
     yield
@@ -232,13 +240,19 @@ def library_content():
                 width="100%",
             ),
         ):
-            if not pagestate.media_items and not pagestate.is_loading:
+            try:
+                items_dicts = json.loads(pagestate.media_items_json)
+                media_items_list = [MediaItem(**d) for d in items_dicts]
+            except Exception:
+                media_items_list = []
+
+            if not media_items_list and not pagestate.is_loading:
                 with me.box(
                     style=me.Style(padding=me.Padding.all(20), text_align="center"),
                 ):
                     me.text("No media items found for the selected filters.")
             else:
-                for item in pagestate.media_items:
+                for item in media_items_list:
                     gcs_uri = (
                         item.gcsuri
                         if item.gcsuri
