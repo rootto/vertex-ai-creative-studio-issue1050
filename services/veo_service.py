@@ -17,6 +17,7 @@ import datetime
 import logging
 import threading
 
+from common.error_handling import GenerationError
 from common.metadata import (
     MediaItem,
     add_media_item_to_firestore,
@@ -109,6 +110,9 @@ def process_veo_generation_task(
                     daemon=True,
                 ).start()
 
+    except GenerationError as ge:
+        logger.warning(f"GenerationError for job {job_id}: {ge}")
+        _fail_job(job_id, str(ge))
     except Exception:
         logger.exception(f"Background task for job {job_id} failed")
         _fail_job(job_id, "Generation failed. Please try again.")
