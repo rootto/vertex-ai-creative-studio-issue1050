@@ -32,6 +32,7 @@ from components.banana_studio.description_accordion import description_accordion
 from components.dialog import dialog
 from components.feedback.feedback import feedback
 from components.header import header
+from services.team_service import get_teams_for_user
 from components.image_thumbnail import image_thumbnail
 from components.library.events import LibrarySelectionChangeEvent
 from components.library.library_chooser_button import library_chooser_button
@@ -156,6 +157,9 @@ class PageState:
     info_dialog_open: bool = False
     initial_load_complete: bool = False
 
+    available_brand_guidelines_json: str = "[]"
+    selected_brand_guideline: str = ""
+
 
 from components.banana_studio.description_tabs import description_tabs
 
@@ -236,6 +240,11 @@ def on_accordion_toggle(e: me.ExpansionPanelToggleEvent):
     # If a panel is being opened, create a new state dict with only that panel open.
     # This implicitly closes all other panels.
     state.accordion_panels_json = json.dumps({e.key: True})
+
+
+def on_brand_guideline_change(e: me.SelectSelectionChangeEvent):
+    """Updates the selected brand guideline in the page state."""
+    me.state(PageState).selected_brand_guideline = e.value
 
 
 @me.component
@@ -481,7 +490,28 @@ def gemini_image_gen_page_content():
                             model_name=model.model_name,
                             on_click=on_model_select,
                         )
-                
+                try:
+                    guidelines = json.loads(state.available_brand_guidelines_json)
+                except Exception:
+                    guidelines = []
+
+                me.select(
+                    label="Add Brand Guidelines",
+                    options=[
+                        me.SelectOption(label="None", value=""),
+                    ]
+                    + [
+                        me.SelectOption(
+                            label=g["team_name"],
+                            value=g["content"],
+                        )
+                        for g in guidelines
+                    ],
+                    on_selection_change=on_brand_guideline_change,
+                    value=state.selected_brand_guideline,
+                    style=me.Style(width="100%", margin=me.Margin(bottom=16)),
+                )
+
                 me.textarea(
                     label="Prompt",
                     rows=3,
@@ -1212,6 +1242,8 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
 
     try:
         final_prompt = base_prompt
+        if state.selected_brand_guideline:
+            final_prompt = f"{final_prompt}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
         with track_model_call(
             model_name=state.selected_model,
             prompt_length=len(final_prompt),
@@ -1371,6 +1403,22 @@ def on_load(e: me.LoadEvent):
         image_uri = me.query_params.get("image_uri")
         if image_uri and image_uri not in state.uploaded_image_gcs_uris:
             state.uploaded_image_gcs_uris.append(image_uri)
+
+        app_state = me.state(AppState)
+        teams = get_teams_for_user(
+            app_state.user_email, role=app_state.user_role, assigned_only=True,
+        )
+        guidelines = []
+        for team in teams:
+            content = team.extracted_text or team.branding_guideline.get("content")
+            if content:
+                guidelines.append(
+                    {
+                        "team_name": team.name,
+                        "content": content,
+                    },
+                )
+        state.available_brand_guidelines_json = json.dumps(guidelines, default=str)
         state.initial_load_complete = True
 
     yield

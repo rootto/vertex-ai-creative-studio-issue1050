@@ -217,6 +217,11 @@ def on_change_generate_audio(e: me.CheckboxChangeEvent):
     yield
 
 
+def on_brand_guideline_change(e: me.SelectSelectionChangeEvent):
+    """Updates the selected brand guideline in the page state."""
+    me.state(PageState).selected_brand_guideline = e.value
+
+
 def veo_content(app_state: me.state):
     """Veo Mesop Page."""
     state = me.state(PageState)
@@ -266,7 +271,27 @@ def veo_content(app_state: me.state):
                         flex_direction="column",
                         gap=10,
                     )
-                ):
+                    try:
+                        guidelines = json.loads(state.available_brand_guidelines_json)
+                    except Exception:
+                        guidelines = []
+
+                    me.select(
+                        label="Add Brand Guidelines",
+                        options=[
+                            me.SelectOption(label="None", value=""),
+                        ]
+                        + [
+                            me.SelectOption(
+                                label=g["team_name"],
+                                value=g["content"],
+                            )
+                            for g in guidelines
+                        ],
+                        on_selection_change=on_brand_guideline_change,
+                        value=state.selected_brand_guideline,
+                        style=me.Style(width="100%", margin=me.Margin(bottom=10)),
+                    )
                     prompt_inputs(
                         on_click_generate=on_click_veo,
                         on_click_rewrite=on_click_custom_rewriter,
@@ -548,8 +573,12 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
 
     # --- Prepare Request Data ---
     # (Logic copied from original to maintain parity)
+    prompt_to_send = state.veo_prompt_input
+    if state.selected_brand_guideline:
+        prompt_to_send = f"{prompt_to_send}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
+
     request = VideoGenerationRequest(
-        prompt=state.veo_prompt_input,
+        prompt=prompt_to_send,
         model_version_id=state.veo_model,
         aspect_ratio=state.aspect_ratio,
         resolution=state.resolution,
