@@ -23,8 +23,8 @@ from PIL import Image
 
 from common.storage import download_from_gcs, store_to_gcs
 from models.gemini import generate_image_from_prompt_and_images, generate_text
-from models.requests import APIReferenceImage
-from models.veo import VideoGenerationRequest, generate_video
+from models.requests import APIReferenceImage, VideoGenerationRequest
+from models.veo import generate_video
 from models.video_processing import process_videos
 from workflows.retro_games.retro_games_config import RetroGameConfig
 

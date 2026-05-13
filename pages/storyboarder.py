@@ -25,7 +25,8 @@ from components.page_scaffold import page_frame, page_scaffold
 from components.snackbar import snackbar
 from components.feedback.feedback import feedback
 from models.gemini import describe_image, generate_image_from_prompt_and_images
-from models.veo import VideoGenerationRequest, generate_video
+from models.requests import VideoGenerationRequest
+from models.veo import generate_video
 from models.video_processing import process_videos
 from state.state import AppState
 from state.storyboarder_state import PageState

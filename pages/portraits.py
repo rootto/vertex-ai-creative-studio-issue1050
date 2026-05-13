@@ -45,7 +45,8 @@ from components.page_scaffold import (
 from components.selfie_camera.selfie_camera import selfie_camera
 from config.default import Default
 from models.model_setup import GeminiModelSetup, VeoModelSetup
-from models.veo import VideoGenerationRequest, generate_video
+from models.requests import VideoGenerationRequest
+from models.veo import generate_video
 from models.video_processing import convert_mp4_to_gif
 from pages.styles import (
     _BOX_STYLE_CENTER_DISTRIBUTED,
