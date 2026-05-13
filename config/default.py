@@ -124,6 +124,8 @@ class Default:
     LIBRARY_MEDIA_PER_PAGE: int = int(os.environ.get("LIBRARY_MEDIA_PER_PAGE", 15))
 
     # Veo
+    VEO_LOCATION: str = os.environ.get("VEO_LOCATION", "global")
+    PREVIEW_LOCATION: str = os.environ.get("PREVIEW_LOCATION", "us-central1")
     VEO_MODEL_ID: str = os.environ.get("VEO_MODEL_ID", "veo-3.1-fast-generate-001")
     VEO_PROJECT_ID: str = os.environ.get("VEO_PROJECT_ID", PROJECT_ID)
 
