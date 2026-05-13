@@ -13,6 +13,7 @@
 # limitations under the License.
 """Veo mesop UI page."""
 
+import json
 import time
 
 import mesop as me
@@ -83,16 +84,18 @@ def on_veo_load(e: me.LoadEvent):
     teams = get_teams_for_user(
         app_state.user_email, role=app_state.user_role, assigned_only=assigned_only,
     )
-    state.available_brand_guidelines = []
+    guidelines = []
     for team in teams:
         content = team.extracted_text or team.branding_guideline.get("content")
         if content:
-            state.available_brand_guidelines.append(
+            guidelines.append(
                 {
                     "team_name": team.name,
                     "content": content,
                 },
             )
+    state.available_brand_guidelines_json = json.dumps(guidelines, default=str)
+
     yield
 
 
@@ -280,6 +283,11 @@ def veo_content(app_state: me.state):
                         gap=10,
                     ),
                 ):
+                    try:
+                        guidelines = json.loads(state.available_brand_guidelines_json)
+                    except Exception:
+                        guidelines = []
+
                     me.select(
                         label="Add Brand Guidelines",
                         options=[
@@ -290,7 +298,7 @@ def veo_content(app_state: me.state):
                                 label=g["team_name"],
                                 value=g["content"],
                             )
-                            for g in state.available_brand_guidelines
+                            for g in guidelines
                         ],
                         on_selection_change=on_brand_guideline_change,
                         value=state.selected_brand_guideline,

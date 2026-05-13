@@ -118,7 +118,7 @@ class PageState:
         default_factory=dict,
     )  # Store as dict of strings (url -> json_str)
 
-    available_brand_guidelines: list[dict] = field(default_factory=list)
+    available_brand_guidelines_json: str = "[]"
     selected_brand_guideline: str = ""
 
     info_dialog_open: bool = False
@@ -282,6 +282,11 @@ def gemini_image_gen_page_content():
                                 on_remove=on_remove_image,
                                 icon_size=18,
                             )
+                try:
+                    guidelines = json.loads(state.available_brand_guidelines_json)
+                except Exception:
+                    guidelines = []
+
                 me.select(
                     label="Add Brand Guidelines",
                     options=[
@@ -292,7 +297,7 @@ def gemini_image_gen_page_content():
                             label=g["team_name"],
                             value=g["content"],
                         )
-                        for g in state.available_brand_guidelines
+                        for g in guidelines
                     ],
                     on_selection_change=on_brand_guideline_change,
                     value=state.selected_brand_guideline,
@@ -1233,16 +1238,17 @@ def on_load(e: me.LoadEvent):
         teams = get_teams_for_user(
             app_state.user_email, role=app_state.user_role, assigned_only=True,
         )
-        state.available_brand_guidelines = []
+        guidelines = []
         for team in teams:
             content = team.extracted_text or team.branding_guideline.get("content")
             if content:
-                state.available_brand_guidelines.append(
+                guidelines.append(
                     {
                         "team_name": team.name,
                         "content": content,
                     },
                 )
+        state.available_brand_guidelines_json = json.dumps(guidelines, default=str)
         state.initial_load_complete = True
     yield
 

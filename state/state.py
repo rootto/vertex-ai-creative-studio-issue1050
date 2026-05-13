@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from dataclasses import asdict, field
+import json
 from typing import Generator
 
 import mesop as me
@@ -36,11 +37,11 @@ class AppState:
     session_id: str = ""
     current_page: str = ""
     user_role: str = "contributor"
-    managed_teams: list[dict] = field(default_factory=list)
+    managed_teams_json: str = "[]"
 
     def __init__(self):
         """Initializes the AppState, reading user info from the request context."""
-        self.managed_teams = []  # Initialize to avoid AttributeError
+        self.managed_teams_json = "[]"  # Initialize to avoid AttributeError
 
         # Try to get identity from session cookie (Custom Auth)
         session_id = request.cookies.get("session_id")
@@ -77,7 +78,8 @@ class AppState:
             self.user_role = get_user_role(self.user_email)
             teams = get_teams_for_user(self.user_email, self.user_role)
             logger.info(f"DEBUG: AppState.__init__ fetched teams for user {self.user_email}: {[t.name for t in teams]}")
-            self.managed_teams = [asdict(t) for t in teams]
+            self.managed_teams_json = json.dumps([asdict(t) for t in teams], default=str)
+
 
 
 def theme_toggle_button():
@@ -184,7 +186,7 @@ def update_user_and_session_info(user_email: str, session_id: str) -> Generator:
         bootstrap_first_user(user_email)
         app_state.user_role = get_user_role(user_email)
         teams = get_teams_for_user(user_email, app_state.user_role)
-        app_state.managed_teams = [asdict(t) for t in teams]
+        app_state.managed_teams_json = json.dumps([asdict(t) for t in teams], default=str)
     yield
 
 
