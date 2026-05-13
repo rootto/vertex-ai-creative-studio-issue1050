@@ -34,6 +34,7 @@ from common.metadata import MediaItem, add_media_item_to_firestore
 from common.storage import store_to_gcs
 from common.utils import create_display_url
 from components.dialog import dialog
+from components.feedback.feedback import feedback
 from components.header import header
 from components.library.events import LibrarySelectionChangeEvent
 from components.library.library_chooser_button import library_chooser_button
@@ -475,6 +476,16 @@ def motion_portraits_content(app_state: me.state):
                         ):
                             me.progress_spinner()
 
+                    if state.current_media_item_id:
+                        with me.box(
+                            style=me.Style(
+                                display="flex",
+                                justify_content="center",
+                                margin=me.Margin(top=16),
+                            ),
+                        ):
+                            feedback(media_item_id=state.current_media_item_id)
+
                 if state.gif_display_url:
                     with me.box(
                         style=me.Style(
@@ -872,22 +883,20 @@ Do not describe the frame. There should be no lip movement like speaking, but th
 
     if gcs_uri and not current_error_message:
         try:
-            add_media_item_to_firestore(
-                MediaItem(
-                    gcsuri=gcs_uri,
-                    prompt=state.veo_prompt_input,
-                    aspect=state.aspect_ratio,
-                    model=state.veo_model,
-                    generation_time=execution_time,
-                    duration=float(state.video_length),
-                    reference_image=state.reference_image_gcs,
-                    enhanced_prompt_used=state.auto_enhance_prompt,
-                    error_message="",
-                    comment="motion portrait",
-                    last_reference_image=None,
-                    user_email=app_state.user_email,
-                    mime_type="video/mp4",
-                ),
+            media_item = MediaItem(
+                gcsuri=gcs_uri,
+                prompt=state.veo_prompt_input,
+                aspect=state.aspect_ratio,
+                model=state.veo_model,
+                generation_time=execution_time,
+                duration=float(state.video_length),
+                reference_image=state.reference_image_gcs,
+                enhanced_prompt_used=state.auto_enhance_prompt,
+                error_message="",
+                comment="motion portrait",
+                last_reference_image=None,
+                user_email=app_state.user_email,
+                mime_type="video/mp4",
             )
             add_media_item_to_firestore(media_item)
             state.current_media_item_id = media_item.id

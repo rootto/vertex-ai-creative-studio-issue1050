@@ -28,6 +28,7 @@ from components.content_credentials.content_credentials import (
     content_credentials_viewer,
 )
 from components.dialog import dialog
+from components.feedback.feedback import feedback
 from components.header import header
 from components.image_thumbnail import image_thumbnail
 from components.library.events import LibrarySelectionChangeEvent
@@ -642,6 +643,8 @@ def gemini_image_gen_page_content():
                                         app_state.theme_mode,
                                     )
 
+                            feedback(media_item_id=state.previous_media_item_id)
+
                         else:
                             # Display multiple images in a gallery view
                             with me.box(
@@ -766,6 +769,8 @@ def gemini_image_gen_page_content():
                                             state.grounding_info,
                                             app_state.theme_mode,
                                         )
+
+                                feedback(media_item_id=state.previous_media_item_id)
                 else:
                     # Placeholder
                     with me.box(

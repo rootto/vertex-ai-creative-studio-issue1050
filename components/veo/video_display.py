@@ -22,6 +22,7 @@ from models.video_processing import convert_mp4_to_gif
 from state.state import AppState
 from state.veo_state import PageState
 
+from ..feedback.feedback import feedback
 from ..video_thumbnail.video_thumbnail import video_thumbnail
 
 

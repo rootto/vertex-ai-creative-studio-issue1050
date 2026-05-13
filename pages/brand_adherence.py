@@ -22,6 +22,7 @@ import mesop as me
 from common.metadata import MediaItem, add_media_item_to_firestore
 from common.storage import store_to_gcs
 from common.utils import create_display_url
+from components.feedback.feedback import feedback
 from components.header import header
 from components.page_scaffold import page_frame, page_scaffold
 from components.snackbar import snackbar
@@ -228,6 +229,10 @@ def brand_adherence_content():
                                 ),
                             ),
                         )
+
+                        if state.current_media_item_id:
+                            with me.box(style=me.Style(margin=me.Margin(top=16))):
+                                feedback(media_item_id=state.current_media_item_id)
 
                     # Analysis
                     with me.box(style=me.Style(flex_basis="400px", flex_grow=1)):
@@ -455,6 +460,7 @@ Brand Guidelines Context:
                     else None,
                 )
                 add_media_item_to_firestore(media_item)
+                state.current_media_item_id = media_item.id
 
                 yield
 

@@ -29,6 +29,7 @@ from common.storage import store_to_gcs
 from common.utils import create_display_url, https_url_to_gcs_uri
 from components.banana_studio.description_accordion import description_accordion
 from components.dialog import dialog
+from components.feedback.feedback import feedback
 from components.header import header
 from components.image_thumbnail import image_thumbnail
 from components.library.events import LibrarySelectionChangeEvent
@@ -660,6 +661,8 @@ def gemini_image_gen_page_content():
                                         pill_type="resolution",
                                     )
 
+                            feedback(media_item_id=state.previous_media_item_id)
+
                             # Evaluation display
 
                             with me.box(
@@ -756,6 +759,8 @@ def gemini_image_gen_page_content():
                                             label=f"Resolution: {state.generated_resolution}",
                                             pill_type="resolution",
                                         )
+
+                                feedback(media_item_id=state.previous_media_item_id)
 
                                 # Evaluation display
                                 with me.box(

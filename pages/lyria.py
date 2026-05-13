@@ -23,13 +23,14 @@ import mesop as me
 from common.metadata import MediaItem, add_media_item_to_firestore  # Updated import
 from common.utils import create_display_url
 from components.dialog import dialog, dialog_actions
+from components.feedback.feedback import feedback
 from components.header import header
 from components.page_scaffold import (
     page_frame,
     page_scaffold,
 )
 from components.pill import pill
-from config.default import Default
+from config.default import ABOUT_PAGE_CONTENT, Default
 from config.rewriters import MUSIC_REWRITER
 from models.audio_analysis import analyze_audio_file
 from models.gemini import analyze_audio_with_gemini, rewriter
@@ -186,6 +187,16 @@ def lyria_content(app_state: me.state):
                 ),
             ):
                 me.audio(src=pagestate.music_display_url)
+
+            if pagestate.current_media_item_id:
+                with me.box(
+                    style=me.Style(
+                        display="flex",
+                        justify_content="center",
+                        margin=me.Margin(top=8, bottom=16),
+                    ),
+                ):
+                    feedback(media_item_id=pagestate.current_media_item_id)
 
         # Gemini Analysis Loading Indicator - Show if analyzing AND primary loading is done
         if pagestate.is_analyzing and not pagestate.is_loading:
