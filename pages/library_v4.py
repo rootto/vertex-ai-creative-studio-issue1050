@@ -32,6 +32,7 @@ from components.page_scaffold import page_frame, page_scaffold
 from components.scroll_sentinel.scroll_sentinel import scroll_sentinel
 from components.veo.extend_dialog import VeoExtendDialogState, extend_dialog
 from config.default import Default as cfg
+from services.team_service import get_teams_for_user
 from state.state import AppState
 
 
@@ -52,9 +53,7 @@ class PageState:
         default_factory=lambda: ["all"],
     )  # "all", "images", "videos", "audio"
     error_filter: str = "all"  # "all", "no_errors", "only_errors"
-    selected_tags: list[str] = field(
-        default_factory=list,
-    )
+    selected_team_id: str = "all"
     tour_dialog_active_tab: str = "details"
     extend_dialog_state: VeoExtendDialogState = field(
         default_factory=VeoExtendDialogState,
@@ -98,7 +97,7 @@ def _load_media(pagestate: PageState, is_filter_change: bool = False):
         type_filters=pagestate.type_filters,
         filter_by_user_email=user_email_to_filter,
         error_filter=pagestate.error_filter,
-        tags_filter=pagestate.selected_tags,
+        team_id_filter=pagestate.selected_team_id,
     )
 
     if not new_items:
@@ -149,15 +148,10 @@ def on_error_filter_change(e: me.ButtonToggleChangeEvent):
     yield from _load_media(pagestate, is_filter_change=True)
 
 
-def on_tags_filter_blur(e: me.InputBlurEvent):
-    """Handles changes to the tags filter."""
+def on_team_filter_change(e: me.SelectSelectionChangeEvent):
+    """Handles changes to the team filter."""
     pagestate = me.state(PageState)
-    if e.value:
-        pagestate.selected_tags = [
-            tag.strip() for tag in e.value.split(",") if tag.strip()
-        ]
-    else:
-        pagestate.selected_tags = []
+    pagestate.selected_team_id = e.value
     yield from _load_media(pagestate, is_filter_change=True)
 
 
@@ -175,6 +169,7 @@ def page():
 def library_content():
     """The main content of the library page."""
     pagestate = me.state(PageState)
+    app_state = me.state(AppState)
 
     with page_frame():  # pylint: disable=not-context-manager
         header("Library v4", "perm_media")
@@ -215,10 +210,18 @@ def library_content():
                 ],
                 on_change=on_error_filter_change,
             )
-            me.input(
-                label="Filter by Tags (comma separated)",
-                on_blur=on_tags_filter_blur,
-                style=me.Style(width="300px"),
+
+            user_teams = get_teams_for_user(app_state.user_email, app_state.user_role)
+            team_options = [me.SelectOption(label="All Teams", value="all")]
+            for t in user_teams:
+                team_options.append(me.SelectOption(label=t.name, value=t.id))
+
+            me.select(
+                label="Filtered by Teams",
+                options=team_options,
+                on_selection_change=on_team_filter_change,
+                value=pagestate.selected_team_id,
+                style=me.Style(width="200px"),
             )
 
         with me.box(

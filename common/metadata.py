@@ -507,7 +507,7 @@ def get_media_for_page(
     error_filter: str = "all",  # "all", "no_errors", "only_errors"
     sort_by_timestamp: bool = False,
     filter_by_user_email: str | None = None,
-    tags_filter: list[str] | None = None,
+    team_id_filter: str | None = None,
 ) -> list[MediaItem]:
     """Fetches a paginated and filtered list of media items from Firestore.
 
@@ -567,14 +567,11 @@ def get_media_for_page(
             if not passes_type_filter:
                 continue
 
-            # Apply tags filters
-            passes_tags_filter = False
-            item_tags = raw_item_data.get("tags", [])
-            if not tags_filter or all(tag in item_tags for tag in tags_filter):
-                passes_tags_filter = True
+            # Apply team filter
+            if team_id_filter and team_id_filter != "all":
+                if raw_item_data.get("team_id") != team_id_filter:
+                    continue
 
-            if not passes_tags_filter:
-                continue
 
             # Apply error filter
             passes_error_filter = False
