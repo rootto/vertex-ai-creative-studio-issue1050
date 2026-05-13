@@ -14,6 +14,8 @@
 
 from dataclasses import dataclass
 
+DEFAULT_VEO_VERSION_ID = "3.1-fast"
+
 
 @dataclass
 class ModeOverride:
