@@ -6,21 +6,42 @@ Each server can be enabled and run separately, allowing flexibility for environm
 
 ## Generative Media & Compositing Capabilities
 
-*   **[Gemini 3 Pro multimodal output](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/3-pro-image) & [Gemini 2.5 Flash](https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash#image)** - for image generation and editing
-*   **[Veo 2 & 3.1](https://cloud.google.com/vertex-ai/generative-ai/docs/video/generate-videos)** - for video creation
+*   **Nano Banana: [Gemini 3.1 Flash Image](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/3-1-flash-image) & [Gemini 3 Pro Image](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/3-pro-image) & [Gemini 2.5 Flash Image](https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash#image)** - for image generation and editing
+*   **[Veo 3 & 3.1](https://cloud.google.com/vertex-ai/generative-ai/docs/video/generate-videos)** - for video creation
 *   **[Gemini TTS](https://docs.cloud.google.com/text-to-speech/docs/gemini-tts)** & **[Chirp 3 HD](https://cloud.google.com/text-to-speech/docs/chirp3-hd)** - for speech synthesis
-*   **[Imagen 3 & 4](https://cloud.google.com/vertex-ai/generative-ai/docs/image/overview)** - for image generation and editing
 *   **[Lyria](https://cloud.google.com/vertex-ai/generative-ai/docs/music/generate-music)** - for music generation
+*   **[Imagen 3 & 4](https://cloud.google.com/vertex-ai/generative-ai/docs/image/overview)** - for image generation and editing
+
 *   **AVTool** - for audio/video compositing and manipulation
+
+## 🛠️ Agent Skills
+
+We provide a set of expert **Agent Skills** that provide AI agents (like Gemini CLI or Antigravity) with deep domain knowledge on how to use these MCP tools effectively for complex workflows.
+
+*   `genmedia-producer`: Orchestrates multi-step workflows like podcast creation and storyboarding.
+*   `genmedia-video-editor`: Expertise in FFmpeg composition, image overlays, and GIF generation.
+*   `genmedia-audio-engineer`: Specialist in high-fidelity TTS synthesis and multi-track mixing.
+*   `genmedia-image-artist`: Expert in visual generation, prompt optimization, and collaborative refinement.
+*   `genmedia-voice-director`: Expert in casting, directing, and generating expressive text-to-speech using Gemini TTS.
+
+See the [Agent Skills](./skills/README.md) directory for more information on how to link or install these skills.
 
 ## Installation
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/GoogleCloudPlatform/vertex-ai-creative-studio.git
-    cd vertex-ai-creative-studio/experiments/mcp-genmedia
-    ```
-2.  **Install MCP Servers:** For detailed installation instructions, including an easy-to-use installer script, please refer to the [Go Implementations README](./mcp-genmedia-go/README.md).
+**Install MCP Servers:** For detailed installation instructions, including an easy-to-use installer script, please refer to the [Go Implementations README](./mcp-genmedia-go/README.md).
+
+### Easy Installation (Pre-compiled Binaries)
+
+For the fastest setup without needing the Go toolchain installed, you can use our online installer script. This script automatically detects your operating system and architecture, downloads the latest pre-compiled binaries from GitHub Releases, and places them in your `~/.local/bin` directory.
+
+Run the following command in your terminal:
+
+```bash
+curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/vertex-ai-creative-studio/main/experiments/mcp-genmedia/mcp-genmedia-go/install-online.sh | bash
+```
+
+*Note: Ensure `~/.local/bin` is added to your system `PATH`.*
+
 
 ## Running the Servers
 
@@ -42,11 +63,12 @@ The servers are configured primarily through environment variables. Key variable
 
 ## Available MCP Servers and Capabilities
 
-*   **Gemini** Generate and edit images from text prompts.
-*   **Imagen:** Generate and edit images from text prompts.
+*   **Gemini Image** Generate and edit images from text prompts.
+*   **Gemini TTS** Synthesize high-quality audio from text.
 *   **Veo:** Create videos from text or images.
-*   **Chirp 3 HD:** Synthesize high-quality audio from text.
 *   **Lyria:** Generate music from text prompts.
+*   **Chirp 3 HD:** Synthesize high-quality audio from text.
+*   **Imagen:** Generate and edit images from text prompts.
 *   **AVTool:** Perform audio/video compositing and manipulation (e.g., combining, concatenating, format conversion).
 
 For a detailed list of tools provided by each server, refer to the [Go Implementations README](./mcp-genmedia-go/README.md).

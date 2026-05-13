@@ -58,9 +58,31 @@ def _uploader_placeholder(on_upload: Callable, on_library_select: Callable):
 
 
 from components.page_scaffold import page_frame, page_scaffold
+
+from components.dialog import dialog
+import json
+
+with open("config/about_content.json", "r") as f:
+    about_content = json.load(f)
+    OBJECT_ROTATION_INFO = next(
+        (s for s in about_content["sections"] if s.get("id") == "object_rotation"),
+        None,
+    )
+
+def open_info_dialog(e: me.ClickEvent):
+    state = me.state(PageState)
+    state.info_dialog_open = True
+    yield
+
+def close_info_dialog(e: me.ClickEvent):
+    state = me.state(PageState)
+    state.info_dialog_open = False
+    yield
+
 from components.stepper import stepper
 from models.object_rotation import generate_product_views, save_object_rotation_project
 from state.state import AppState
+from config.default import Default as cfg
 
 
 @me.stateclass
@@ -76,6 +98,7 @@ class PageState:
     show_library_for_view: str | None = None
     initial_load_complete: bool = False
     show_snackbar: bool = False
+    info_dialog_open: bool = False
     snackbar_message: str = ""
 
 
@@ -136,14 +159,38 @@ def object_rotation_page():
     state = me.state(PageState)
     with page_scaffold(page_name="object_rotation"):  # pylint: disable=E1129:not-context-manager
         with page_frame():  # pylint: disable=E1129:not-context-manager
-            header("Object Rotation", "360")
+            header(
+                "Object Rotation",
+                "360",
+                show_info_button=True,
+                on_info_click=open_info_dialog,
+            )
             page_content()
         snackbar(is_visible=state.show_snackbar, label=state.snackbar_message)
 
 
 def page_content():
     state = me.state(PageState)
+
+    if state.info_dialog_open:
+        with dialog(is_open=state.info_dialog_open):  # pylint: disable=not-context-manager
+            if OBJECT_ROTATION_INFO:
+                me.text(f"About {OBJECT_ROTATION_INFO["title"]}", type="headline-6")
+                me.markdown(OBJECT_ROTATION_INFO["description"])
+            else:
+                me.text("About Object Rotation", type="headline-6")
+                me.markdown("Information for this page has not been configured yet.")
+            
+            me.divider()
+            me.text("Current Settings", type="headline-6")
+            me.text(f"Image Model: {cfg.OBJECT_ROTATION_IMAGE_MODEL}")
+            me.text(f"Video Model: {cfg.OBJECT_ROTATION_VIDEO_MODEL}")
+            
+            with me.box(style=me.Style(margin=me.Margin(top=16))):
+                me.button("Close", on_click=close_info_dialog, type="flat")
+
     show_library_dialog()
+
 
     with me.box(style=me.Style(margin=me.Margin(top=24))):
         stepper(
@@ -541,6 +588,7 @@ async def on_generate_views(e: me.ClickEvent):
         views = await generate_product_views(
             product_description=state.rotation_project.get("product_description", ""),
             image_uri=state.rotation_project["main_product_image_uri"],
+            image_model=cfg.OBJECT_ROTATION_IMAGE_MODEL
         )
         if not views:
             raise Exception("Model did not return any views.")
@@ -657,7 +705,10 @@ def on_generate_video(e: me.ClickEvent):
     yield
 
     try:
-        video_uri = generate_rotation_video(state.rotation_project["product_views"])
+        video_uri = generate_rotation_video(
+            state.rotation_project["product_views"],
+            video_model=cfg.OBJECT_ROTATION_VIDEO_MODEL
+        )
         state.rotation_project["final_video_uri"] = video_uri
 
         # Create and save the final MediaItem

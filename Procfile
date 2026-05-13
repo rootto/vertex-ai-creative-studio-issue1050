@@ -1,1 +1,1 @@
-web: gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 -k uvicorn.workers.UvicornWorker main:app
+web: gunicorn --bind :$PORT --workers 1 --threads 8 --timeout 0 --forwarded-allow-ips="*" -k uvicorn.workers.UvicornWorker main:app

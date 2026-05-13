@@ -15,6 +15,7 @@
 from dataclasses import field
 
 import mesop as me
+from config.veo_models import DEFAULT_VEO_VERSION_ID
 
 
 @me.stateclass
@@ -23,7 +24,7 @@ class PageState:
 
     # pylint: disable=E3701:invalid-field-call
 
-    veo_model: str = "3.1-fast"
+    veo_model: str = DEFAULT_VEO_VERSION_ID
     veo_prompt_input: str = ""
     veo_prompt_placeholder: str = ""
     veo_prompt_textarea_key: int = 0
@@ -43,7 +44,7 @@ class PageState:
     video_count: int = 1
     aspect_ratio: str = "16:9"
     resolution: str = "720p"
-    video_length: int = 8  # Default for 3.1-fast
+    video_length: int = 8  # Default for 3.1-fast-preview
     generate_audio: bool = True
 
     # I2V reference Image
@@ -69,7 +70,7 @@ class PageState:
     info_dialog_open: bool = False
 
     # extend
-    video_extend_length: int = 0  # 4-7
+    video_extend_length: int = 7  # 4-7
 
     # Rewriter
     auto_enhance_prompt: bool = False

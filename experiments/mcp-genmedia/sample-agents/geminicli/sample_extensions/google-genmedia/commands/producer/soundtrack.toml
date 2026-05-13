@@ -1,0 +1,4 @@
+prompt = """
+Please act as an expert GenMedia Producer and generate a full 2-minute-and-30-second soundtrack for: `{{args}}`.
+Use the `lyria_generate_music` tool and explicitly set the `model_id` to `lyria-3-pro-preview`.
+"""

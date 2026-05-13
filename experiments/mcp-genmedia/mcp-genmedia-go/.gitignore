@@ -1,2 +1,10 @@
 .commit.txt
 .env
+# Compiled binaries
+mcp-avtool-go/mcp-avtool-go
+mcp-chirp3-go/mcp-chirp3-go
+mcp-gemini-go/mcp-gemini-go
+mcp-imagen-go/mcp-imagen-go
+mcp-lyria-go/mcp-lyria-go
+mcp-veo-go/mcp-veo-go
+mcp-nanobanana-go/mcp-nanobanana-go

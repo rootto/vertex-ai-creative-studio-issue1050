@@ -29,11 +29,9 @@ import (
 	"github.com/GoogleCloudPlatform/vertex-ai-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"google.golang.org/genai"
 	"go.opentelemetry.io/otel"
+	"google.golang.org/genai"
 )
-
-
 
 // callGenerateVideosAPI orchestrates the entire video generation process.
 // It initiates the video generation operation, polls for its completion, and handles
@@ -46,8 +44,7 @@ func callGenerateVideosAPI(
 	progressToken mcp.ProgressToken,
 	outputDir string,
 	modelName string,
-	prompt string,
-	image *genai.Image,
+	source *genai.GenerateVideosSource,
 	config *genai.GenerateVideosConfig,
 	callType string,
 ) (*mcp.CallToolResult, error) {
@@ -65,11 +62,16 @@ func callGenerateVideosAPI(
 	defer operationCancel()
 
 	logMsg := fmt.Sprintf("Initiating GenerateVideos (%s) with Model: %s", callType, modelName)
-	if image != nil && image.GCSURI != "" {
-		logMsg += fmt.Sprintf(", ImageGCSURI: %s, ImageMIMEType: %s", image.GCSURI, image.MIMEType)
-	}
-	if prompt != "" {
-		logMsg += fmt.Sprintf(", Prompt: \"%s\"", strings.ReplaceAll(prompt, "\n", " ")) // Sanitize prompt for logging
+	if source != nil {
+		if source.Image != nil && source.Image.GCSURI != "" {
+			logMsg += fmt.Sprintf(", ImageGCSURI: %s, ImageMIMEType: %s", source.Image.GCSURI, source.Image.MIMEType)
+		}
+		if source.Video != nil && source.Video.URI != "" {
+			logMsg += fmt.Sprintf(", VideoURI: %s, VideoMIMEType: %s", source.Video.URI, source.Video.MIMEType)
+		}
+		if source.Prompt != "" {
+			logMsg += fmt.Sprintf(", Prompt: \"%s\"", strings.ReplaceAll(source.Prompt, "\n", " ")) // Sanitize prompt for logging
+		}
 	}
 	if config.DurationSeconds != nil {
 		logMsg += fmt.Sprintf(", Duration: %ds", *config.DurationSeconds)
@@ -83,7 +85,7 @@ func callGenerateVideosAPI(
 	startTime := time.Now()
 
 	// Use operationCtx for the initial call to GenerateVideos
-	operation, err := client.Models.GenerateVideos(operationCtx, modelName, prompt, image, config)
+	operation, err := client.Models.GenerateVideosFromSource(operationCtx, modelName, source, config)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) && operationCtx.Err() == context.DeadlineExceeded {
 			log.Printf("GenerateVideos (%s) failed: initial call timed out: %v", callType, err)

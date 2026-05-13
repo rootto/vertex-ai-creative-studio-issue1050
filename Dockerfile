@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.13-slim
+FROM python:3.14-slim
 
 # Set the working directory in the container
 WORKDIR /app
@@ -23,4 +23,4 @@ EXPOSE 8080
 
 # Define the command to run the app using gunicorn
 # This is taken from the Procfile
-CMD ["/app/.venv/bin/gunicorn", "--bind", ":8080", "--workers", "1", "--threads", "8", "--timeout", "0", "-k", "uvicorn.workers.UvicornWorker", "main:app"]
+CMD ["/app/.venv/bin/gunicorn", "--bind", ":8080", "--workers", "1", "--threads", "8", "--timeout", "0", "--forwarded-allow-ips", "*", "-k", "uvicorn.workers.UvicornWorker", "main:app"]

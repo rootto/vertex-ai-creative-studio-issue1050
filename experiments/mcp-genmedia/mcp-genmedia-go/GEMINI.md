@@ -12,6 +12,8 @@ After making **any** functional or logical code changes, you **must** update bot
 
 2.  **Update Changelog**: Open the `CHANGELOG.md` file in the `mcp-genmedia-go` directory. Add a new entry for the current date and a bulleted list of the changes you made. Use the existing format and tags (e.g., `**Feat:**`, `**Fix:**`, `**Docs:**`) as a guide.
 
+3.  **Release Retries**: GitHub Action workflows triggered by tags use the workflow definition present at the time the tag was created. If a release fails due to a workflow configuration error (like a Go version mismatch), you must fix the workflow on `main` and create a **new tag** (e.g., incrementing the patch version) to trigger a successful release.
+
 ### Architectural Pattern: Model-Specific Constraints
 
 For MCP tools that support different "models" (e.g., `Imagen 3` vs. `Imagen 4`, `Veo 2` vs. `Veo 3`), we use a centralized, configuration-driven approach to manage model-specific parameters and constraints.
@@ -45,6 +47,20 @@ When you need to add a new model or change the parameters of an existing one, fo
 
 This pattern ensures that our tools are robust, self-describing, and easy to maintain.
 
+### Veo API Usage (GenerateVideos vs GenerateVideosFromSource)
+
+When working with Veo in the `google.golang.org/genai` SDK, **always** use the `GenerateVideosFromSource` method instead of `GenerateVideos`. The older `GenerateVideos` method is kept for backward compatibility and does not support newer features like video extension.
+
+**Correct Pattern:**
+```go
+source := &genai.GenerateVideosSource{
+    Prompt: "your prompt", // Optional
+    Image:  inputImage,   // Optional
+    Video:  inputVideo,   // Optional (for extension)
+}
+operation, err := client.Models.GenerateVideosFromSource(ctx, modelName, source, config)
+```
+
 ### Enabling Server Capabilities
 
 The MCP Server is modular. Features like `tools`, `prompts`, and `resources` must be explicitly enabled during server initialization. If you encounter errors like 'resources not supported', ensure you are passing the correct `server.With...Capabilities()` option to the `server.NewMCPServer()` constructor in the `main.go` file for the relevant server.
@@ -62,12 +78,14 @@ s := server.NewMCPServer(
 
 ### **CRITICAL: Environment Variables**
 
-Before running **any** verification or installation command (including `verify.sh` and `install.sh`), you **MUST** ensure the `PROJECT_ID` environment variable is set. The servers will fail to initialize and time out without it.
+Before running **any** verification or installation command (including `verify.sh` and `install.sh`), you **MUST** ensure the `GOOGLE_CLOUD_PROJECT` environment variable is set (or `PROJECT_ID` as a fallback). The servers will fail to initialize and time out without it.
 
 **Example:**
 ```bash
-export PROJECT_ID=$(gcloud config get project)
+export GOOGLE_CLOUD_PROJECT=$(gcloud config get project)
 ```
+
+**Operation Timeouts**: Do not reuse `MCP_SERVER_REQUEST_TIMEOUT` for internal operations (like GCS downloads). Instead, prefer dedicated environment variables (e.g., `GCS_DOWNLOAD_TIMEOUT`) with robust defaults (300s+). This ensures internal tasks have enough time to complete before the top-level client timeout is reached.
 
 ### Mandatory Post-Build Verification
 
@@ -77,7 +95,7 @@ After **any** code change to an MCP server, you **must** run the corresponding `
 ./verify.sh
 ```
 
-**Troubleshooting Timeouts:** If `verify.sh` or other commands time out, the *first* thing to check is that the `PROJECT_ID` environment variable is correctly set for the shell session running the command.
+**Troubleshooting Timeouts:** If `verify.sh` or other commands time out, the *first* thing to check is that the `GOOGLE_CLOUD_PROJECT` environment variable is correctly set for the shell session running the command.
 
 A successful build (`go build`) is **not sufficient**. This script performs a basic "liveness" check by calling the `tools` command with `mcptools`. If the script completes successfully, it confirms that the server builds and is responsive to basic MCP requests. This is the primary guardrail against regressions that cause the server to fail silently on startup.
 
@@ -115,14 +133,14 @@ mcptools call <tool_name> --params '<json_payload>' <path_to_server_binary>
 *   `--params '<json_payload>'`: The arguments for the tool, provided as a single, quoted JSON string.
 *   `<path_to_server_binary>`: The path to the compiled MCP server executable.
 
-**Important:** Ensure any required environment variables (like `PROJECT_ID`) are set for the command.
+**Important:** Ensure any required environment variables (like `GOOGLE_CLOUD_PROJECT`) are set for the command.
 
 #### Example
 
 This example calls the `imagen_t2i` tool from the `mcp-imagen-go` server with specific parameters.
 
 ```bash
-export PROJECT_ID=genai-blackbelt-fishfooding
+export GOOGLE_CLOUD_PROJECT=genai-blackbelt-fishfooding
 
 mcptools call imagen_t2i \
   --params '{"prompt": "a majestic lion", "model":"Imagen 3", "output_directory":"./test_output"}' \
@@ -190,3 +208,11 @@ Once complete, output a report with all prompts used for each model along with t
 *Note: When using `output_directory` with `veo_t2v` or `veo_i2v`, the downloaded file is typically named `sample_0.mp4` (or similar) regardless of the `output_file_name` parameter. To prevent overwriting, ensure you rename the downloaded file immediately after generation if you plan to generate multiple videos to the same directory.*
 
 All generated media will be saved to the GCS bucket `gs://genai-blackbelt-fishfooding-assets` and also downloaded locally to `/Users/ghchinoy/genmedia/genmedia_mcp_tool_test/tool_test_run`.
+
+## CI and Workflow Management
+
+### **Version Sync**
+When updating the Go version in `go.mod` or `go.work`, you **must** also search for and update the `go-version` in all relevant GitHub Action workflows (e.g., `.github/workflows/mcp-release.yml` and `mcp-genmedia-go.yml`) to ensure CI compatibility.
+l`) to ensure CI compatibility.
+l`) to ensure CI compatibility.
+l`) to ensure CI compatibility.

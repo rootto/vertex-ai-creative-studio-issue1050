@@ -1,0 +1,4 @@
+prompt = """
+Please act as an expert GenMedia Producer and initiate the multi-voice Chirp 3 HD audio assembly workflow for the following topic: `{{args}}`.
+Start by writing a brief script with an intro, two speakers, and an outro, and ask for my approval before generating the audio.
+"""

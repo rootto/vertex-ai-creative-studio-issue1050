@@ -1,0 +1,21 @@
+{
+  "name": "ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1",
+    "lit": "^3.3.2",
+    "marked": "^17.0.5"
+  },
+  "devDependencies": {
+    "@types/marked": "^6.0.0",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.5"
+  }
+}

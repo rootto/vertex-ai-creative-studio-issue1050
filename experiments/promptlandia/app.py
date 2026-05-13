@@ -21,6 +21,7 @@ from pages.playground import playground_page_content
 from pages.promptlandia import promptlandia_page_content
 from pages.settings import settings_page_content
 from pages.video_checklist import video_page
+from pages.trimmer import trimmer_page_content
 
 from components.page_scaffold import page_scaffold
 from state.state import AppState
@@ -78,6 +79,9 @@ def prompt_page():
     path="/settings",
     title="Promptlandia: Settings",
     on_load=on_load,
+    security_policy=me.SecurityPolicy(
+        dangerously_disable_trusted_types=True
+    )
 )
 def settings_page():
     """Renders the settings page.
@@ -139,3 +143,23 @@ def video_checklist_page():
     """
     with page_scaffold():  # pylint: disable=not-context-manager
         video_page()
+
+
+@me.page(
+    path="/trimmer",
+    title="Promptlandia: Prompt Trimmer",
+    on_load=on_load,
+    security_policy=me.SecurityPolicy(
+        dangerously_disable_trusted_types=True
+    )
+)
+def trimmer_page():
+    """
+    Renders the prompt trimmer page.
+
+    This page corresponds to the "/trimmer" route and allows users to
+    trim their prompts by removing general best practices while keeping
+    task-specific requirements.
+    """
+    with page_scaffold():  # pylint: disable=not-context-manager
+        trimmer_page_content()

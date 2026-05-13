@@ -1,0 +1,58 @@
+version: 2
+project_name: genmedia-mcp-servers
+
+before:
+  hooks:
+    - 'sh -c "cd experiments/mcp-genmedia/mcp-genmedia-go && go work sync"'
+    - 'sh -c "cd experiments/mcp-genmedia/mcp-genmedia-go && cp -r ../sample-agents/geminicli/sample_extensions ./gemini-extensions"'
+    - 'sh -c "cd experiments/mcp-genmedia/mcp-genmedia-go && cp -r ../sample-agents/antigravity ./gemini-extensions/antigravity"'
+
+builds:
+  - id: mcp-veo-go
+    dir: experiments/mcp-genmedia/mcp-genmedia-go/mcp-veo-go
+    main: .
+    binary: mcp-veo-go
+    env: [CGO_ENABLED=0]
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+  - id: mcp-nanobanana-go
+    dir: experiments/mcp-genmedia/mcp-genmedia-go/mcp-nanobanana-go
+    main: .
+    binary: mcp-nanobanana-go
+    env: [CGO_ENABLED=0]
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+  - id: mcp-chirp3-go
+    dir: experiments/mcp-genmedia/mcp-genmedia-go/mcp-chirp3-go
+    main: .
+    binary: mcp-chirp3-go
+    env: [CGO_ENABLED=0]
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+  - id: mcp-gemini-go
+    dir: experiments/mcp-genmedia/mcp-genmedia-go/mcp-gemini-go
+    main: .
+    binary: mcp-gemini-go
+    env: [CGO_ENABLED=0]
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+  - id: mcp-lyria-go
+    dir: experiments/mcp-genmedia/mcp-genmedia-go/mcp-lyria-go
+    main: .
+    binary: mcp-lyria-go
+    env: [CGO_ENABLED=0]
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+  - id: mcp-avtool-go
+    dir: experiments/mcp-genmedia/mcp-genmedia-go/mcp-avtool-go
+    main: .
+    binary: mcp-avtool-go
+    env: [CGO_ENABLED=0]
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+
+archives:
+  -
+    name_template: "genmedia-mcp-servers_{{ .Os }}_{{ .Arch }}"
+    files:
+      - gemini-extensions/**/*

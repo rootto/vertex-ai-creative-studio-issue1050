@@ -10,10 +10,10 @@ import (
 
 func TestParseGCSPath(t *testing.T) {
 	testCases := []struct {
-		gcsURI       string
+		gcsURI         string
 		expectedBucket string
 		expectedObject string
-		expectError  bool
+		expectError    bool
 	}{
 		{"gs://bucket/object", "bucket", "object", false},
 		{"gs://bucket/object/with/slashes", "bucket", "object/with/slashes", false},
@@ -50,14 +50,14 @@ func TestDownloadFromGCS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tempFile.Name())
+	defer func() { _ = os.Remove(tempFile.Name()) }()
 
 	// Write some content to the file
 	content := []byte("hello world")
 	if _, err := tempFile.Write(content); err != nil {
 		t.Fatal(err)
 	}
-	tempFile.Close()
+	_ = tempFile.Close()
 
 	// Upload the file to the emulator
 	bucket := "test-bucket"
@@ -74,7 +74,7 @@ func TestDownloadFromGCS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	localPath := filepath.Join(tempDir, "downloaded_file")
 	if err := DownloadFromGCS(ctx, gcsURI, localPath); err != nil {

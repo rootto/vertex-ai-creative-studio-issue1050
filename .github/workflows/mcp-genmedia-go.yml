@@ -1,0 +1,68 @@
+name: MCP GenMedia Go CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "experiments/mcp-genmedia/mcp-genmedia-go/**"
+  pull_request:
+    paths:
+      - "experiments/mcp-genmedia/mcp-genmedia-go/**"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: experiments/mcp-genmedia/mcp-genmedia-go
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version: "1.26"
+
+    - name: Install dependencies
+      run: go mod download
+      working-directory: experiments/mcp-genmedia/mcp-genmedia-go/mcp-common
+
+    - name: Setup mcptools
+      run: go install github.com/f/mcptools/cmd/mcptools@latest
+
+
+    - name: Install golangci-lint
+      run: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.64.5
+
+    - name: Remove go.work for isolated module testing
+      run: rm -f go.work go.work.sum
+
+    - name: Install FFmpeg
+      run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+    - name: Test, Build, Lint and Verify
+      env:
+        GOOGLE_CLOUD_PROJECT: test-project-id
+      run: |
+        for dir in mcp-avtool-go mcp-chirp3-go mcp-common mcp-gemini-go mcp-imagen-go mcp-lyria-go mcp-veo-go mcp-nanobanana-go; do
+          echo "Processing $dir"
+          cd $dir
+          
+          echo "-> Running go test in $dir"
+
+
+          go test -v -timeout 30s ./... || { echo "go test failed"; exit 1; }
+          
+          echo "-> Running go build in $dir"
+          go build ./... || { echo "go build failed"; exit 1; }
+          
+          if [ -f "verify.sh" ]; then
+            echo "-> Running verify.sh in $dir"
+            chmod +x verify.sh
+            timeout 60s ./verify.sh || { echo "verify.sh timed out or failed"; exit 1; }
+          fi
+          
+          echo "-> Finished $dir"
+          cd ..
+        done

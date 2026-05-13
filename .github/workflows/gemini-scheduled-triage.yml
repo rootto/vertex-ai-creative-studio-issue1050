@@ -40,7 +40,7 @@ jobs:
     steps:
       - name: 'Get repository labels'
         id: 'get_labels'
-        uses: 'actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b' # v7.1.0
+        uses: 'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3' # v9
         with:
           # NOTE: we intentionally do not use the minted token. The default
           # GITHUB_TOKEN provided by the action has enough permissions to read
@@ -111,6 +111,7 @@ jobs:
           ISSUES_TO_TRIAGE: '${{ steps.find_issues.outputs.issues_to_triage }}'
           REPOSITORY: '${{ github.repository }}'
           AVAILABLE_LABELS: '${{ steps.get_labels.outputs.available_labels }}'
+          GEMINI_CLI_TRUST_WORKSPACE: 'true'
         with:
           gemini_cli_version: '${{ vars.GEMINI_CLI_VERSION }}'
           gcp_workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
@@ -199,7 +200,7 @@ jobs:
         id: 'mint_identity_token'
         if: |-
           ${{ vars.APP_ID }}
-        uses: 'actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf' # v2
+        uses: 'actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3' # v3
         with:
           app-id: '${{ vars.APP_ID }}'
           private-key: '${{ secrets.APP_PRIVATE_KEY }}'
@@ -211,7 +212,7 @@ jobs:
         env:
           AVAILABLE_LABELS: '${{ needs.triage.outputs.available_labels }}'
           TRIAGED_ISSUES: '${{ needs.triage.outputs.triaged_issues }}'
-        uses: 'actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b' # v7.1.0
+        uses: 'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3' # v9
         with:
           # Use the provided token so that the "gemini-cli" is the actor in the
           # log for what changed the labels.

@@ -1,0 +1,33 @@
+{
+  "name": "google-genmedia-video",
+  "version": "3.0.0",
+  "mcpServers": {
+    "veo": {
+      "command": "mcp-veo-go",
+      "env": {
+        "MCP_REQUEST_MAX_TOTAL_TIMEOUT": "240000",
+        "MCP_SERVER_REQUEST_TIMEOUT": "30000"
+      }
+    },
+    "avtool": {
+      "command": "mcp-avtool-go",
+      "env": {
+        "MCP_SERVER_REQUEST_TIMEOUT": "55000"
+      }
+    }
+  },
+  "settings": [
+    {
+      "name": "Google Cloud Project ID",
+      "description": "The GCP Project ID where Vertex AI is enabled.",
+      "envVar": "PROJECT_ID",
+      "sensitive": false
+    },
+    {
+      "name": "GenMedia GCS Bucket",
+      "description": "The GCS bucket URI (gs://your-bucket) to save generated media.",
+      "envVar": "GENMEDIA_BUCKET",
+      "sensitive": false
+    }
+  ]
+}

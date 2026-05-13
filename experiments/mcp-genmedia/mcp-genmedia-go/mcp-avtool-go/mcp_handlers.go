@@ -283,7 +283,7 @@ func ffmpegVideoToGifHandler(ctx context.Context, request mcp.CallToolRequest, c
 	}
 	defer func() {
 		log.Printf("Cleaning up GIF processing temporary directory: %s", gifProcessingTempDir)
-		os.RemoveAll(gifProcessingTempDir)
+		_ = os.RemoveAll(gifProcessingTempDir)
 	}()
 
 	palettePath := filepath.Join(gifProcessingTempDir, "palette.png")
@@ -331,7 +331,7 @@ func ffmpegVideoToGifHandler(ctx context.Context, request mcp.CallToolRequest, c
 	if finalLocalPath != "" {
 		if outputLocalDir != "" {
 			messageParts = append(messageParts, fmt.Sprintf("Output GIF saved locally to: %s.", finalLocalPath))
-		} else if !(outputGCSBucket != "" && finalGCSPath != "") {
+		} else if outputGCSBucket == "" || finalGCSPath == "" {
 			messageParts = append(messageParts, fmt.Sprintf("Temporary GIF output was at: %s (cleaned up if not moved/uploaded).", finalLocalPath))
 		}
 	}
@@ -351,6 +351,8 @@ func addCombineAudioVideoTool(s *server.MCPServer, cfg *common.Config) {
 		mcp.WithDescription("Combines separate audio and video files into a single video file."),
 		mcp.WithString("input_video_uri", mcp.Required(), mcp.Description("URI of the input video file (local path or gs://).")),
 		mcp.WithString("input_audio_uri", mcp.Required(), mcp.Description("URI of the input audio file (local path or gs://).")),
+		mcp.WithNumber("input_video_volume_db_change", mcp.Description("Optional. Volume change in dB for the input video's audio track (e.g., -10).")),
+		mcp.WithNumber("input_audio_volume_db_change", mcp.Description("Optional. Volume change in dB for the input audio track (e.g., +5).")),
 		mcp.WithString("output_file_name", mcp.Description("Optional. Desired name for the output video file (e.g., 'combined.mp4').")),
 		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output video file.")),
 		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output video file to.")),
@@ -382,6 +384,9 @@ func ffmpegCombineAudioVideoHandler(ctx context.Context, request mcp.CallToolReq
 	outputLocalDir, _ := argsMap["output_local_dir"].(string)
 	outputGCSBucket, _ := argsMap["output_gcs_bucket"].(string)
 	outputGCSBucket = strings.TrimSpace(outputGCSBucket)
+
+	inputVideoVolume, hasVideoVol := argsMap["input_video_volume_db_change"].(float64)
+	inputAudioVolume, hasAudioVol := argsMap["input_audio_volume_db_change"].(float64)
 
 	if outputGCSBucket == "" && cfg.GenmediaBucket != "" {
 		outputGCSBucket = cfg.GenmediaBucket
@@ -423,7 +428,56 @@ func ffmpegCombineAudioVideoHandler(ctx context.Context, request mcp.CallToolReq
 	}
 	defer outputCleanup()
 
-	_, ffmpegErr := runFFmpegCommand(ctx, "-y", "-i", localInputVideo, "-i", localInputAudio, "-map", "0", "-map", "1:a", "-c:v", "copy", "-shortest", tempOutputFile)
+	// Check if video has audio
+	mediaInfoJSON, err := executeGetMediaInfo(ctx, localInputVideo)
+	hasAudio := false
+	if err == nil {
+		var info struct {
+			Streams []struct {
+				CodecType string `json:"codec_type"`
+			} `json:"streams"`
+		}
+		if json.Unmarshal([]byte(mediaInfoJSON), &info) == nil {
+			for _, s := range info.Streams {
+				if s.CodecType == "audio" {
+					hasAudio = true
+					break
+				}
+			}
+		}
+	}
+
+	var ffmpegErr error
+	if hasAudio {
+		// Mix audio tracks using amix filter
+		var filterParts []string
+		
+		if hasVideoVol {
+			filterParts = append(filterParts, fmt.Sprintf("[0:a]volume=%.2fdB[v_a]", inputVideoVolume))
+		} else {
+			filterParts = append(filterParts, "[0:a]anull[v_a]")
+		}
+		
+		if hasAudioVol {
+			filterParts = append(filterParts, fmt.Sprintf("[1:a]volume=%.2fdB[a_a]", inputAudioVolume))
+		} else {
+			filterParts = append(filterParts, "[1:a]anull[a_a]")
+		}
+		
+		filterParts = append(filterParts, "[v_a][a_a]amix=inputs=2:duration=longest[a]")
+		filterComplex := strings.Join(filterParts, "; ")
+
+		_, ffmpegErr = runFFmpegCommand(ctx, "-y", "-i", localInputVideo, "-i", localInputAudio, "-filter_complex", filterComplex, "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", tempOutputFile)
+	} else {
+		// Just add the audio track directly if video has no audio
+		if hasAudioVol {
+			filterComplex := fmt.Sprintf("[1:a]volume=%.2fdB[a]", inputAudioVolume)
+			_, ffmpegErr = runFFmpegCommand(ctx, "-y", "-i", localInputVideo, "-i", localInputAudio, "-filter_complex", filterComplex, "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", tempOutputFile)
+		} else {
+			_, ffmpegErr = runFFmpegCommand(ctx, "-y", "-i", localInputVideo, "-i", localInputAudio, "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", tempOutputFile)
+		}
+	}
+
 	if ffmpegErr != nil {
 		span.RecordError(ffmpegErr)
 		return mcp.NewToolResultError(fmt.Sprintf("FFMpeg combine audio/video failed: %v", ffmpegErr)), nil
@@ -794,7 +848,7 @@ func ffmpegConcatenateMediaHandler(ctx context.Context, request mcp.CallToolRequ
 			}
 			defer func() {
 				log.Printf("Cleaning up PCM concat list temporary directory: %s", concatListTempDir)
-				os.RemoveAll(concatListTempDir)
+				_ = os.RemoveAll(concatListTempDir)
 			}()
 
 			concatListPath := filepath.Join(concatListTempDir, "concat_list_pcm.txt")
@@ -805,7 +859,7 @@ func ffmpegConcatenateMediaHandler(ctx context.Context, request mcp.CallToolRequ
 					span.RecordError(absErr)
 					return mcp.NewToolResultError(fmt.Sprintf("Failed to get absolute path for PCM file %s: %v", pcmPath, absErr)), nil
 				}
-				fileListContent.WriteString(fmt.Sprintf("file '%s'\n", absPath))
+				fmt.Fprintf(&fileListContent, "file '%s'\n", absPath)
 			}
 			if errWriteList := os.WriteFile(concatListPath, []byte(fileListContent.String()), 0644); errWriteList != nil {
 				span.RecordError(errWriteList)
@@ -836,7 +890,7 @@ func ffmpegConcatenateMediaHandler(ctx context.Context, request mcp.CallToolRequ
 		}
 		defer func() {
 			log.Printf("Cleaning up standardization temporary directory: %s", standardizationTempDir)
-			os.RemoveAll(standardizationTempDir)
+			_ = os.RemoveAll(standardizationTempDir)
 		}()
 
 		commonWidth := 1280
@@ -902,7 +956,7 @@ func ffmpegConcatenateMediaHandler(ctx context.Context, request mcp.CallToolRequ
 		}
 		defer func() {
 			log.Printf("Cleaning up standardized concat list temporary directory: %s", concatListTempDir)
-			os.RemoveAll(concatListTempDir)
+			_ = os.RemoveAll(concatListTempDir)
 		}()
 
 		concatListPath := filepath.Join(concatListTempDir, "concat_list_std.txt")
@@ -913,7 +967,7 @@ func ffmpegConcatenateMediaHandler(ctx context.Context, request mcp.CallToolRequ
 				span.RecordError(absErr)
 				return mcp.NewToolResultError(fmt.Sprintf("Failed to get absolute path for standardized file %s: %v", sf, absErr)), nil
 			}
-			fileListContent.WriteString(fmt.Sprintf("file '%s'\n", absPath))
+			fmt.Fprintf(&fileListContent, "file '%s'\n", absPath)
 		}
 		if errWriteList := os.WriteFile(concatListPath, []byte(fileListContent.String()), 0644); errWriteList != nil {
 			span.RecordError(errWriteList)
@@ -943,7 +997,7 @@ func ffmpegConcatenateMediaHandler(ctx context.Context, request mcp.CallToolRequ
 	messageParts = append(messageParts, fmt.Sprintf("Media concatenation completed in %v.", duration))
 	if outputLocalDir != "" && finalLocalPath != "" {
 		messageParts = append(messageParts, fmt.Sprintf("Output saved locally to: %s.", finalLocalPath))
-	} else if finalLocalPath != "" && !(outputGCSBucket != "" && finalGCSPath != "") {
+	} else if finalLocalPath != "" && (outputGCSBucket == "" || finalGCSPath == "") {
 		messageParts = append(messageParts, fmt.Sprintf("Temporary output was at: %s (cleaned up if not moved/uploaded).", finalLocalPath))
 	}
 	if finalGCSPath != "" {
@@ -1065,7 +1119,7 @@ func ffmpegAdjustVolumeHandler(ctx context.Context, request mcp.CallToolRequest,
 	messageParts = append(messageParts, fmt.Sprintf("Volume adjustment (%ddB) completed in %v.", volumeDBChange, duration))
 	if outputLocalDir != "" && finalLocalPath != "" {
 		messageParts = append(messageParts, fmt.Sprintf("Output saved locally to: %s.", finalLocalPath))
-	} else if finalLocalPath != "" && !(outputGCSBucket != "" && finalGCSPath != "") {
+	} else if finalLocalPath != "" && (outputGCSBucket == "" || finalGCSPath == "") {
 		messageParts = append(messageParts, fmt.Sprintf("Temporary output was at: %s (cleaned up if not moved/uploaded).", finalLocalPath))
 	}
 	if finalGCSPath != "" {
@@ -1082,7 +1136,7 @@ func ffmpegAdjustVolumeHandler(ctx context.Context, request mcp.CallToolRequest,
 func addLayerAudioTool(s *server.MCPServer, cfg *common.Config) {
 	tool := mcp.NewTool("ffmpeg_layer_audio_files",
 		mcp.WithDescription("Layers multiple audio files together (mixing)."),
-		mcp.WithArray("input_audio_uris", mcp.Required(), mcp.Description("Array of URIs for the input audio files to layer (local paths or gs://).")),
+		mcp.WithArray("input_audio_uris", mcp.Required(), mcp.Description("Array of URIs for the input audio files to layer (local paths or gs://)."), mcp.Items(map[string]any{"type": "string"})),
 		mcp.WithString("output_file_name", mcp.Description("Optional. Desired name for the output mixed audio file (e.g., 'layered_audio.mp3').")),
 		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output file.")),
 		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output file to.")),
@@ -1113,7 +1167,7 @@ func addLayerAudioTool(s *server.MCPServer, cfg *common.Config) {
 			args[k] = v
 		}
 		toolRequest := mcp.CallToolRequest{
-			Params:   mcp.CallToolParams{Arguments: args},
+			Params: mcp.CallToolParams{Arguments: args},
 		}
 		result, err := ffmpegVideoToGifHandler(ctx, toolRequest, cfg)
 		if err != nil {
@@ -1272,7 +1326,7 @@ func ffmpegLayerAudioHandler(ctx context.Context, request mcp.CallToolRequest, c
 	messageParts = append(messageParts, fmt.Sprintf("Audio layering of %d files completed in %v.", len(localInputFiles), duration))
 	if outputLocalDir != "" && finalLocalPath != "" {
 		messageParts = append(messageParts, fmt.Sprintf("Output saved locally to: %s.", finalLocalPath))
-	} else if finalLocalPath != "" && !(outputGCSBucket != "" && finalGCSPath != "") {
+	} else if finalLocalPath != "" && (outputGCSBucket == "" || finalGCSPath == "") {
 		messageParts = append(messageParts, fmt.Sprintf("Temporary output was at: %s (cleaned up if not moved/uploaded).", finalLocalPath))
 	}
 	if finalGCSPath != "" {

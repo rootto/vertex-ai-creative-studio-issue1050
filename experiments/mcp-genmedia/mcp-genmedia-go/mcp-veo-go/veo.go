@@ -34,16 +34,15 @@ import (
 )
 
 var (
-	appConfig    *common.Config
-	genAIClient  *genai.Client // Global GenAI client
-	transport    string
-	port         int
-	otel_enabled bool
+	appConfig   *common.Config
+	genAIClient *genai.Client // Global GenAI client
+	transport   string
+	port        int
 )
 
 const (
 	serviceName = "mcp-veo-go"
-	version     = "1.13.0" // generate audio and Veo 3.1
+	version     = "3.8.0" // Synchronize release version
 )
 
 // init handles command-line flags and initial logging setup.
@@ -62,21 +61,11 @@ func init() {
 // and starts listening for requests on the configured transport.
 func main() {
 	var err error
-	appConfig = common.LoadConfig()
 
 	// Initialize OpenTelemetry
-	tp, err := common.InitTracerProvider(serviceName, version)
-	if err != nil {
-		log.Fatalf("failed to initialize tracer provider: %v", err)
-	}
-	if tp != nil {
-		defer func() {
-			if err := tp.Shutdown(context.Background()); err != nil {
-				log.Printf("Error shutting down tracer provider: %v", err)
-			}
-		}()
-	}
-	
+	var cleanup func()
+	appConfig, cleanup = common.Init(serviceName, version)
+	defer cleanup()
 
 	log.Printf("Initializing global GenAI client...")
 	clientCtx, clientCancel := context.WithTimeout(context.Background(), 1*time.Minute)
@@ -95,9 +84,10 @@ func main() {
 
 	genAIClient, err = genai.NewClient(clientCtx, clientConfig)
 	if err != nil {
-		log.Fatalf("Error creating global GenAI client: %v", err)
+		log.Printf("Warning: Error creating global GenAI client: %v. Deferring initialization to runtime.", err)
+	} else {
+		log.Printf("Global GenAI client initialized successfully.")
 	}
-	log.Printf("Global GenAI client initialized successfully.")
 
 	s := server.NewMCPServer(
 		"Veo", // Standardized name
@@ -112,7 +102,7 @@ func main() {
 			mcp.Description("Optional. If provided, specifies a local directory to download the generated video(s) to. Filenames will be generated automatically."),
 		),
 		mcp.WithString("model",
-			mcp.DefaultString("veo-2.0-generate-001"),
+			mcp.DefaultString("veo-3.1-fast-generate-001"),
 			mcp.Description(common.BuildVeoModelDescription()),
 		),
 		mcp.WithNumber("num_videos",
@@ -120,16 +110,18 @@ func main() {
 			mcp.Description("Number of videos to generate. Note: the maximum is model-dependent."),
 		),
 		mcp.WithString("aspect_ratio",
-			mcp.DefaultString("16:9"),
 			mcp.Description("Aspect ratio of the generated videos. Note: supported aspect ratios are model-dependent."),
 		),
 		mcp.WithNumber("duration",
-			mcp.DefaultNumber(5),
 			mcp.Description("Duration of the generated video in seconds. Note: the supported duration range is model-dependent."),
 		),
 		mcp.WithBoolean("generate_audio",
 			mcp.DefaultBool(true),
 			mcp.Description("Optional. Generate audio for the video. Only supported by Veo 3 models. Defaults to true."),
+		),
+		mcp.WithString("person_generation",
+			mcp.DefaultString("allow_adult"),
+			mcp.Description("Whether to allow generating videos with people. Supported values: 'dont_allow', 'allow_adult'."),
 		),
 	}
 
@@ -171,6 +163,117 @@ func main() {
 	)
 	s.AddTool(imageToVideoTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return veoImageToVideoHandler(genAIClient, ctx, request)
+	})
+
+	var firstLastToVideoToolParams []mcp.ToolOption
+	firstLastToVideoToolParams = append(firstLastToVideoToolParams,
+		mcp.WithDescription("Generate a video using a first and last frame image using Veo. Video is saved to GCS and optionally downloaded locally. Supported image MIME types: image/jpeg, image/png."),
+		mcp.WithString("first_image_uri",
+			mcp.Required(),
+			mcp.Description("GCS URI of the first input image (e.g., gs://your-bucket/first-image.png)."),
+		),
+		mcp.WithString("first_mime_type",
+			mcp.Description("MIME type of the first image. Supported types are 'image/jpeg' and 'image/png'. If not provided, inferred from the first_image_uri extension."),
+		),
+		mcp.WithString("last_image_uri",
+			mcp.Required(),
+			mcp.Description("GCS URI of the last input image (e.g., gs://your-bucket/last-image.png)."),
+		),
+		mcp.WithString("last_mime_type",
+			mcp.Description("MIME type of the last image. Supported types are 'image/jpeg' and 'image/png'. If not provided, inferred from the last_image_uri extension."),
+		),
+		mcp.WithString("prompt",
+			mcp.Description("Optional text prompt to guide video generation."),
+		),
+	)
+	firstLastToVideoToolParams = append(firstLastToVideoToolParams, commonVideoParams...)
+
+	firstLastToVideoTool := mcp.NewTool("veo_first_last_to_video",
+		firstLastToVideoToolParams...,
+	)
+	s.AddTool(firstLastToVideoTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return veoFirstLastToVideoHandler(genAIClient, ctx, request)
+	})
+
+	var referenceToVideoToolParams []mcp.ToolOption
+	referenceToVideoToolParams = append(referenceToVideoToolParams,
+		mcp.WithDescription("Generate a video using reference images (up to 3) and a text prompt using Veo. Video is saved to GCS and optionally downloaded locally. Supported image MIME types: image/jpeg, image/png."),
+		mcp.WithString("prompt",
+			mcp.Required(),
+			mcp.Description("Text prompt for video generation (Required when using reference images)."),
+		),
+		mcp.WithArray("reference_image_uris",
+			mcp.Required(),
+			mcp.Description("Array of up to 3 GCS URIs of input reference images (e.g., [\"gs://your-bucket/ref1.png\"])."),
+			mcp.WithStringItems(),
+		),
+		mcp.WithArray("reference_mime_types",
+			mcp.Description("Optional array of MIME types corresponding to reference_image_uris. If provided, must match the length of URIs. If not provided, inferred from extensions."),
+			mcp.WithStringItems(),
+		),
+	)
+	referenceToVideoToolParams = append(referenceToVideoToolParams, commonVideoParams...)
+
+	referenceToVideoTool := mcp.NewTool("veo_reference_to_video",
+		referenceToVideoToolParams...,
+	)
+	s.AddTool(referenceToVideoTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return veoReferenceToVideoHandler(genAIClient, ctx, request)
+	})
+
+	// Alias for reference to video
+	ingredientsToVideoTool := mcp.NewTool("veo_ingredients_to_video",
+		referenceToVideoToolParams...,
+	)
+	s.AddTool(ingredientsToVideoTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return veoReferenceToVideoHandler(genAIClient, ctx, request)
+	})
+
+	var extendVideoToolParams []mcp.ToolOption
+	extendVideoToolParams = append(extendVideoToolParams,
+		mcp.WithDescription("Extend an existing video using Veo. The input video must be MP4, 1-30s, 24fps, and 720p/1080p/4k in 16:9 or 9:16. Output is a 7s extension. Video is saved to GCS and optionally downloaded locally."),
+		mcp.WithString("video_uri",
+			mcp.Required(),
+			mcp.Description("GCS URI of the input video for extension (e.g., gs://your-bucket/input-video.mp4)."),
+		),
+		mcp.WithString("mime_type",
+			mcp.Description("MIME type of the input video. Currently, only 'video/mp4' is supported. If not provided, assumed to be video/mp4."),
+		),
+		mcp.WithString("prompt",
+			mcp.Description("Optional text prompt to guide video extension."),
+		),
+		mcp.WithString("bucket",
+			mcp.Description("Google Cloud Storage bucket where the API will save the generated video(s) (e.g., your-bucket/output-folder or gs://your-bucket/output-folder). If not provided, GENMEDIA_BUCKET env var will be used. One of them is required."),
+		),
+		mcp.WithString("output_directory",
+			mcp.Description("Optional. If provided, specifies a local directory to download the generated video(s) to. Filenames will be generated automatically."),
+		),
+		mcp.WithString("model",
+			mcp.DefaultString("veo-3.1-fast-generate-001"),
+			mcp.Description(common.BuildVeoModelDescription()),
+		),
+		mcp.WithNumber("num_videos",
+			mcp.DefaultNumber(1),
+			mcp.Description("Number of videos to generate. Note: the maximum is model-dependent."),
+		),
+		mcp.WithString("aspect_ratio",
+			mcp.Description("Aspect ratio of the generated videos. Note: supported aspect ratios are model-dependent."),
+		),
+		mcp.WithBoolean("generate_audio",
+			mcp.DefaultBool(true),
+			mcp.Description("Optional. Generate audio for the video. Only supported by Veo 3 models. Defaults to true."),
+		),
+		mcp.WithString("person_generation",
+			mcp.DefaultString("allow_adult"),
+			mcp.Description("Whether to allow generating videos with people. Supported values: 'dont_allow', 'allow_adult'."),
+		),
+	)
+
+	extendVideoTool := mcp.NewTool("veo_extend_video",
+		extendVideoToolParams...,
+	)
+	s.AddTool(extendVideoTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return veoExtendVideoHandler(genAIClient, ctx, request)
 	})
 
 	s.AddPrompt(mcp.NewPrompt("generate-video",

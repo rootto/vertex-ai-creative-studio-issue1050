@@ -24,12 +24,12 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"google.golang.org/genai"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"google.golang.org/genai"
 )
 
-	// veoTextToVideoHandler is the handler for the 'veo_t2v' tool.
+// veoTextToVideoHandler is the handler for the 'veo_t2v' tool.
 func veoTextToVideoHandler(client *genai.Client, ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	tr := otel.Tracer(serviceName)
 	ctx, span := tr.Start(ctx, "veo_t2v")
@@ -40,7 +40,7 @@ func veoTextToVideoHandler(client *genai.Client, ctx context.Context, request mc
 		return mcp.NewToolResultError("prompt must be a non-empty string and is required for text-to-video"), nil
 	}
 
-	gcsBucket, outputDir, model, finalAspectRatio, numberOfVideos, durationSecs, generateAudio, err := parseCommonVideoParams(request.GetArguments(), appConfig)
+	gcsBucket, outputDir, model, finalAspectRatio, numberOfVideos, durationSecs, generateAudio, personGeneration, err := parseCommonVideoParams(request.GetArguments(), appConfig, false)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -54,6 +54,7 @@ func veoTextToVideoHandler(client *genai.Client, ctx context.Context, request mc
 		attribute.Int("num_videos", int(numberOfVideos)),
 		attribute.Int("duration_secs", int(durationSecs)),
 		attribute.Bool("generate_audio", generateAudio),
+		attribute.String("person_generation", personGeneration),
 	)
 
 	mcpServer := server.ServerFromContext(ctx)
@@ -67,21 +68,25 @@ func veoTextToVideoHandler(client *genai.Client, ctx context.Context, request mc
 		log.Printf("Incoming t2v context for prompt \"%s\" was already canceled: %v", prompt, ctx.Err())
 		return mcp.NewToolResultError(fmt.Sprintf("request processing canceled early: %v", ctx.Err())), nil
 	default:
-		log.Printf("Handling Veo t2v request: Prompt=\"%s\", GCSBucket=%s, OutputDir='%s', Model=%s, NumVideos=%d, AspectRatio=%s, Duration=%ds, GenerateAudio=%t", prompt, gcsBucket, outputDir, model, numberOfVideos, finalAspectRatio, durationSecs, generateAudio)
+		log.Printf("Handling Veo t2v request: Prompt=\"%s\", GCSBucket=%s, OutputDir='%s', Model=%s, NumVideos=%d, AspectRatio=%s, Duration=%ds, GenerateAudio=%t, PersonGen=%s", prompt, gcsBucket, outputDir, model, numberOfVideos, finalAspectRatio, durationSecs, generateAudio, personGeneration)
 	}
 
 	config := &genai.GenerateVideosConfig{
-		NumberOfVideos:  numberOfVideos,
-		AspectRatio:     finalAspectRatio,
-		OutputGCSURI:    gcsBucket,
-		DurationSeconds: &durationSecs,
+		NumberOfVideos:   numberOfVideos,
+		AspectRatio:      finalAspectRatio,
+		OutputGCSURI:     gcsBucket,
+		DurationSeconds:  &durationSecs,
+		PersonGeneration: personGeneration,
 	}
 
 	if generateAudio {
 		config.GenerateAudio = &generateAudio
 	}
 
-	return callGenerateVideosAPI(client, ctx, mcpServer, progressToken, outputDir, model, prompt, nil, config, "t2v")
+	source := &genai.GenerateVideosSource{
+		Prompt: prompt,
+	}
+	return callGenerateVideosAPI(client, ctx, mcpServer, progressToken, outputDir, model, source, config, "t2v")
 }
 
 // veoImageToVideoHandler is the handler for the 'veo_i2v' tool.
@@ -120,7 +125,7 @@ func veoImageToVideoHandler(client *genai.Client, ctx context.Context, request m
 		prompt = strings.TrimSpace(promptArg)
 	}
 
-	gcsBucket, outputDir, modelName, finalAspectRatio, numberOfVideos, durationSecs, generateAudio, err := parseCommonVideoParams(request.GetArguments(), appConfig)
+	gcsBucket, outputDir, modelName, finalAspectRatio, numberOfVideos, durationSecs, generateAudio, personGeneration, err := parseCommonVideoParams(request.GetArguments(), appConfig, false)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -136,6 +141,7 @@ func veoImageToVideoHandler(client *genai.Client, ctx context.Context, request m
 		attribute.Int("num_videos", int(numberOfVideos)),
 		attribute.Int("duration_secs", int(durationSecs)),
 		attribute.Bool("generate_audio", generateAudio),
+		attribute.String("person_generation", personGeneration),
 	)
 
 	mcpServer := server.ServerFromContext(ctx)
@@ -149,7 +155,7 @@ func veoImageToVideoHandler(client *genai.Client, ctx context.Context, request m
 		log.Printf("Incoming i2v context for image_uri \"%s\" was already canceled: %v", imageURI, ctx.Err())
 		return mcp.NewToolResultError(fmt.Sprintf("request processing canceled early: %v", ctx.Err())), nil
 	default:
-		log.Printf("Handling Veo i2v request: ImageURI=\"%s\", MimeType=\"%s\", Prompt=\"%s\", GCSBucket=%s, OutputDir='%s', Model=%s, NumVideos=%d, AspectRatio=%s, Duration=%ds, GenerateAudio=%t", imageURI, mimeType, prompt, gcsBucket, outputDir, modelName, numberOfVideos, finalAspectRatio, durationSecs, generateAudio)
+		log.Printf("Handling Veo i2v request: ImageURI=\"%s\", MimeType=\"%s\", Prompt=\"%s\", GCSBucket=%s, OutputDir='%s', Model=%s, NumVideos=%d, AspectRatio=%s, Duration=%ds, GenerateAudio=%t, PersonGen=%s", imageURI, mimeType, prompt, gcsBucket, outputDir, modelName, numberOfVideos, finalAspectRatio, durationSecs, generateAudio, personGeneration)
 	}
 
 	inputImage := &genai.Image{
@@ -158,15 +164,21 @@ func veoImageToVideoHandler(client *genai.Client, ctx context.Context, request m
 	}
 
 	config := &genai.GenerateVideosConfig{
-		NumberOfVideos:  numberOfVideos,
-		AspectRatio:     finalAspectRatio,
-		OutputGCSURI:    gcsBucket,
-		DurationSeconds: &durationSecs,
+		NumberOfVideos:   numberOfVideos,
+		AspectRatio:      finalAspectRatio,
+		OutputGCSURI:     gcsBucket,
+		DurationSeconds:  &durationSecs,
+		PersonGeneration: personGeneration,
 	}
 
 	if generateAudio {
 		config.GenerateAudio = &generateAudio
 	}
 
-	return callGenerateVideosAPI(client, ctx, mcpServer, progressToken, outputDir, modelName, prompt, inputImage, config, "i2v")
+	source := &genai.GenerateVideosSource{
+		Prompt: prompt,
+		Image:  inputImage,
+	}
+
+	return callGenerateVideosAPI(client, ctx, mcpServer, progressToken, outputDir, modelName, source, config, "i2v")
 }

@@ -1,4 +1,7 @@
 {
   "database": "dolt",
-  "jsonl_export": "issues.jsonl"
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "gmcs",
+  "project_id": "2fff66be-2510-4091-be32-bb8ba5e6cdf4"
 }

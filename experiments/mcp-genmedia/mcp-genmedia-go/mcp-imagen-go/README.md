@@ -33,11 +33,18 @@ The server exposes the following resources:
 
 The tool utilizes the following environment variables:
 
-*   `PROJECT_ID` (string): **Required**. Your Google Cloud Project ID. The application will terminate if this is not set.
-*   `LOCATION` (string): The Google Cloud location/region for Vertex AI services.
+*   `GOOGLE_CLOUD_PROJECT` (string): **Required**. Your Google Cloud Project ID. The application will terminate if this is not set. Note: `PROJECT_ID` is also supported as a fallback.
+    *   **Override**: You can override this globally for this specific server by setting `IMAGEN_PROJECT_ID`.
+*   `GOOGLE_CLOUD_LOCATION` (string): The preferred Google Cloud location/region for Vertex AI services.
     *   Default: `"us-central1"`
+    *   **Fallback**: `LOCATION` is also supported as a fallback for `GOOGLE_CLOUD_LOCATION`.
+    *   **Override**: You can override this globally for this specific server by setting `IMAGEN_LOCATION`.
 *   `GENMEDIA_BUCKET` (string): An optional default Google Cloud Storage bucket to use for GCS outputs if `gcs_bucket_uri` is not specified in the tool request. The path `imagen_outputs/` will be appended to this bucket.
     *   Default: `""` (empty string, meaning no default GCS output path is formed from this variable unless `gcs_bucket_uri` is also absent).
+*   `ALLOW_UNSAFE_MODELS` (boolean): Optional (`true`/`false`). Allows users to bypass strict local model constraint validation, enabling them to test experimental or pre-release model strings that are not yet hardcoded in the registry.
+    *   Default: `false`
+*   `ENABLE_OPTIONAL_HEADER_CAPTURE` (boolean): Optional (`true`/`false`). Intended for internal debugging. When set to `true`, the server intercepts API requests and injects the raw ADC Bearer token to capture and surface the `x-goog-sherlog-link` header in the tool output. This feature is supported for Imagen.
+    *   Default: `false`
 *   `PORT` (string, for HTTP transport): The port for the HTTP server to listen on.
     *   Default: `"8080"`
 

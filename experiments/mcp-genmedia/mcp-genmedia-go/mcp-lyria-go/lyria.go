@@ -55,12 +55,12 @@ var (
 )
 
 const (
-	serviceName                 = "mcp-lyria-go"
-	version                     = "1.5.0" // Standardize port handling
-	defaultPublisher            = "google"
-	defaultLyriaModelID         = "lyria-002"
-	defaultSampleCount          = 1
-	audioMIMEType               = "audio/wav" // Define MIME type for audio
+	serviceName         = "mcp-lyria-go"
+	version     = "3.8.0" // Synchronize release version
+	defaultPublisher    = "google"
+	defaultLyriaModelID = "lyria-3-clip-preview"
+	defaultSampleCount  = 1
+	audioMIMEType       = "audio/wav" // Define MIME type for audio
 )
 
 // init handles command-line flags and initial logging setup.
@@ -78,26 +78,18 @@ func init() {
 // listening for requests on the configured transport.
 func main() {
 	flag.Parse()
-	appConfig = common.LoadConfig()
 
 	// Initialize OpenTelemetry
-	tp, err := common.InitTracerProvider(serviceName, version)
-	if err != nil {
-		log.Fatalf("failed to initialize tracer provider: %v", err)
-	}
-	if tp != nil {
-		defer func() {
-			if err := tp.Shutdown(context.Background()); err != nil {
-				log.Printf("Error shutting down tracer provider: %v", err)
-			}
-		}()
-	}
+	var cleanup func()
+	appConfig, cleanup = common.Init(serviceName, version)
+	defer cleanup()
+	var err error
 
 	log.Println("Initializing global AI Platform Prediction client...")
 	regionalEndpoint := fmt.Sprintf("%s-aiplatform.googleapis.com:443", appConfig.Location)
 	predictionClient, err = aiplatform.NewPredictionClient(context.Background(), option.WithEndpoint(regionalEndpoint))
 	if err != nil {
-		log.Fatalf("Failed to create global AI Platform Prediction client: %v", err)
+		log.Printf("Warning: Failed to create global AI Platform Prediction client: %v. Deferring to runtime.", err)
 	}
 	defer func() {
 		if predictionClient != nil {
@@ -141,12 +133,13 @@ func main() {
 			mcp.Description("Optional. Local directory path. If provided, audio is saved locally and direct audio data is NOT returned (unless GCS is also not specified)."),
 		),
 		mcp.WithString("model_id",
-			mcp.Description(fmt.Sprintf("Optional. Specific Lyria model ID to use for the Vertex AI endpoint. Defaults to '%s'.", defaultLyriaModelID)),
+			mcp.DefaultString(defaultLyriaModelID),
+			mcp.Description(common.BuildLyriaModelDescription()),
 		),
 	}
 
 	lyriaTool := mcp.NewTool("lyria_generate_music", lyriaToolParams...)
-		s.AddTool(lyriaTool, lyriaGenerateMusicHandler)
+	s.AddTool(lyriaTool, lyriaGenerateMusicHandler)
 
 	s.AddPrompt(mcp.NewPrompt("generate-music",
 		mcp.WithPromptDescription("Generates music from a text prompt."),
@@ -169,7 +162,7 @@ func main() {
 			args[k] = v
 		}
 		toolRequest := mcp.CallToolRequest{
-			Params:   mcp.CallToolParams{Arguments: args},
+			Params: mcp.CallToolParams{Arguments: args},
 		}
 		result, err := lyriaGenerateMusicHandler(ctx, toolRequest)
 		if err != nil {
@@ -280,10 +273,16 @@ func lyriaGenerateMusicHandler(ctx context.Context, request mcp.CallToolRequest)
 		localDirectoryPathParameter = strings.TrimSpace(val)
 	}
 
-	modelID := defaultLyriaModelID
+	modelInput := defaultLyriaModelID
 	if val, ok := params["model_id"].(string); ok && strings.TrimSpace(val) != "" {
-		modelID = strings.TrimSpace(val)
+		modelInput = strings.TrimSpace(val)
 	}
+
+	modelInfo, found := common.ResolveLyriaModel(modelInput, appConfig.AllowUnsafeModels)
+	if !found {
+		return mcp.NewToolResultError(fmt.Sprintf("Error: Model '%s' is not a valid or supported model name.", modelInput)), nil
+	}
+	modelID := modelInfo.CanonicalName
 
 	negativePrompt := ""
 	if val, ok := params["negative_prompt"].(string); ok {
@@ -336,7 +335,7 @@ func lyriaGenerateMusicHandler(ctx context.Context, request mcp.CallToolRequest)
 	}
 	baseFilename = strings.TrimPrefix(baseFilename, "/")
 
-	gcsUploadedObjectName, base64AudioData, err := invokeLyriaAndUpload(predictionClient, ctx, prompt, negativePrompt, seed, sampleCount, modelID, gcsBucketParam, baseFilename)
+	gcsUploadedObjectName, base64AudioData, sherlogLink, err := invokeLyriaAndUpload(predictionClient, ctx, prompt, negativePrompt, seed, sampleCount, modelInfo, gcsBucketParam, baseFilename)
 
 	duration := time.Since(startTime)
 	span.SetAttributes(attribute.Float64("duration_ms", float64(duration.Milliseconds())))
@@ -402,6 +401,10 @@ func lyriaGenerateMusicHandler(ctx context.Context, request mcp.CallToolRequest)
 		finalMessageParts = append(finalMessageParts, localSaveMessage)
 	}
 
+	if sherlogLink != "" {
+		finalMessageParts = append(finalMessageParts, fmt.Sprintf("\nOptional header capture: %s", sherlogLink))
+	}
+
 	messageText = strings.Join(finalMessageParts, " ")
 	textContent := mcp.TextContent{Type: "text", Text: messageText}
 	resultContents = append(resultContents, textContent)
@@ -425,98 +428,116 @@ func lyriaGenerateMusicHandler(ctx context.Context, request mcp.CallToolRequest)
 // It constructs the prediction request, sends it to the AI Platform Prediction service,
 // and processes the response. If a GCS bucket is specified, it uploads the generated
 // audio to the bucket.
-func invokeLyriaAndUpload(client *aiplatform.PredictionClient, ctx context.Context, prompt, negativePrompt string, seed *uint32, sampleCount uint32, modelID, gcsBucket, gcsObjectNameForUpload string) (gcsWrittenObjectName string, audioDataB64 string, err error) {
+func invokeLyriaAndUpload(client *aiplatform.PredictionClient, ctx context.Context, prompt, negativePrompt string, seed *uint32, sampleCount uint32, modelInfo common.LyriaModelInfo, gcsBucket, gcsObjectNameForUpload string) (gcsWrittenObjectName string, audioDataB64 string, sherlogLink string, err error) {
 	tr := otel.Tracer(serviceName)
 	ctx, span := tr.Start(ctx, "invokeLyriaAndUpload")
 	defer span.End()
 
-	lyriaEndpointPath := fmt.Sprintf("projects/%s/locations/%s/publishers/google/models/%s",
-		appConfig.ProjectID, appConfig.Location, modelID)
-	log.Printf("Using Lyria Endpoint Path: %s", lyriaEndpointPath)
-
-	instanceData := map[string]interface{}{
-		"prompt":       prompt,
-		"sample_count": sampleCount,
-	}
-	if negativePrompt != "" {
-		instanceData["negative_prompt"] = negativePrompt
-	}
-	if seed != nil {
-		instanceData["seed"] = *seed
-	}
-
-	instanceStructVal, errStruct := structpb.NewValue(instanceData)
-	if errStruct != nil {
-		return "", "", fmt.Errorf("failed to create instance struct value: %w", errStruct)
-	}
-	instances := []*structpb.Value{instanceStructVal}
-
-	predictRequest := &aiplatformpb.PredictRequest{
-		Endpoint:  lyriaEndpointPath,
-		Instances: instances,
-	}
-
-	log.Printf("Sending Predict request to Lyria model '%s'. Instance data: %+v", modelID, instanceData)
-
-	resp, errPredict := client.Predict(ctx, predictRequest)
-	if errPredict != nil {
-		return "", "", fmt.Errorf("lyria prediction request failed: %w", errPredict)
-	}
-
-	if len(resp.GetPredictions()) == 0 {
-		return "", "", errors.New("lyria prediction returned no predictions")
-	}
-
-	predictionStruct := resp.GetPredictions()[0].GetStructValue()
-	if predictionStruct == nil {
-		return "", "", errors.New("prediction is not a struct")
-	}
-
+	var audioBytes []byte
 	var extractedB64Audio string
-	if generatedMusicValue, ok := predictionStruct.GetFields()["generated_music"]; ok {
-		generatedMusicList := generatedMusicValue.GetListValue()
-		if generatedMusicList != nil && len(generatedMusicList.GetValues()) > 0 {
-			firstMusicSampleStruct := generatedMusicList.GetValues()[0].GetStructValue()
-			if firstMusicSampleStruct != nil {
-				if audioVal, audioOK := firstMusicSampleStruct.GetFields()["audio"]; audioOK {
-					extractedB64Audio = audioVal.GetStringValue()
-				} else if audioVal, b64OK := firstMusicSampleStruct.GetFields()["bytesBase64Encoded"]; b64OK {
-					log.Println("Found 'bytesBase64Encoded' within generated_music sample.")
-					extractedB64Audio = audioVal.GetStringValue()
+
+	modelID := modelInfo.CanonicalName
+
+	// 1. GENERATE AUDIO DATA
+	if modelInfo.EndpointType == "interactions" {
+		// --- V3 INTERACTIONS API ROUTE ---
+		log.Printf("Routing request to Interactions API for model: %s", modelID)
+		audioBytes, sherlogLink, err = generateAudioWithInteractions(ctx, modelID, prompt)
+		if err != nil {
+			return "", "", "", fmt.Errorf("interactions API failed: %w", err)
+		}
+		// Interactions API gives us raw bytes, but the rest of the pipeline expects base64 string
+		extractedB64Audio = base64.StdEncoding.EncodeToString(audioBytes)
+
+	} else {
+		// --- V2 PREDICTION API ROUTE ---
+		lyriaEndpointPath := fmt.Sprintf("projects/%s/locations/%s/publishers/google/models/%s",
+			appConfig.ProjectID, appConfig.Location, modelID)
+		log.Printf("Using Lyria Prediction Endpoint Path: %s", lyriaEndpointPath)
+
+		instanceData := map[string]interface{}{
+			"prompt":       prompt,
+			"sample_count": sampleCount,
+		}
+		if negativePrompt != "" {
+			instanceData["negative_prompt"] = negativePrompt
+		}
+		if seed != nil {
+			instanceData["seed"] = *seed
+		}
+
+		instanceStructVal, errStruct := structpb.NewValue(instanceData)
+		if errStruct != nil {
+			return "", "", "", fmt.Errorf("failed to create instance struct value: %w", errStruct)
+		}
+		instances := []*structpb.Value{instanceStructVal}
+
+		predictRequest := &aiplatformpb.PredictRequest{
+			Endpoint:  lyriaEndpointPath,
+			Instances: instances,
+		}
+
+		log.Printf("Sending Predict request to Lyria model %s. Instance data: %+v", modelID, instanceData)
+
+		resp, errPredict := client.Predict(ctx, predictRequest)
+		if errPredict != nil {
+			return "", "", "", fmt.Errorf("lyria prediction request failed: %w", errPredict)
+		}
+
+		if len(resp.GetPredictions()) == 0 {
+			return "", "", "", errors.New("lyria prediction returned no predictions")
+		}
+
+		predictionStruct := resp.GetPredictions()[0].GetStructValue()
+		if predictionStruct == nil {
+			return "", "", "", errors.New("prediction is not a struct")
+		}
+
+		if generatedMusicValue, ok := predictionStruct.GetFields()["generated_music"]; ok {
+			generatedMusicList := generatedMusicValue.GetListValue()
+			if generatedMusicList != nil && len(generatedMusicList.GetValues()) > 0 {
+				firstMusicSampleStruct := generatedMusicList.GetValues()[0].GetStructValue()
+				if firstMusicSampleStruct != nil {
+					if audioVal, audioOK := firstMusicSampleStruct.GetFields()["audio"]; audioOK {
+						extractedB64Audio = audioVal.GetStringValue()
+					} else if audioVal, b64OK := firstMusicSampleStruct.GetFields()["bytesBase64Encoded"]; b64OK {
+						extractedB64Audio = audioVal.GetStringValue()
+					}
 				}
 			}
 		}
-	}
-	if extractedB64Audio == "" {
-		if base64AudioValue, directAudioOK := predictionStruct.GetFields()["bytesBase64Encoded"]; directAudioOK {
-			log.Println("Found 'bytesBase64Encoded' directly in prediction. Using this.")
-			extractedB64Audio = base64AudioValue.GetStringValue()
+		if extractedB64Audio == "" {
+			if base64AudioValue, directAudioOK := predictionStruct.GetFields()["bytesBase64Encoded"]; directAudioOK {
+				extractedB64Audio = base64AudioValue.GetStringValue()
+			}
+		}
+
+		if extractedB64Audio == "" {
+			return "", "", "", errors.New("failed to extract audio data (audio or bytesBase64Encoded) from Lyria prediction")
+		}
+		
+		audioBytes, err = base64.StdEncoding.DecodeString(extractedB64Audio)
+		if err != nil {
+			return "", "", "", fmt.Errorf("failed to decode base64 audio data: %w", err)
 		}
 	}
 
-	if extractedB64Audio == "" {
-		return "", "", errors.New("failed to extract audio data ('audio' or 'bytesBase64Encoded') from Lyria prediction")
-	}
-	log.Printf("Received audio data (base64, length: %d) from Lyria for the first sample.", len(extractedB64Audio))
+	log.Printf("Received audio data (decoded length: %d bytes) from Lyria.", len(audioBytes))
 
+	// 2. OPTIONAL GCS UPLOAD
 	if gcsBucket != "" {
 		if gcsObjectNameForUpload == "" {
-			return "", extractedB64Audio, errors.New("GCS bucket provided but object name for upload is empty")
+			return "", extractedB64Audio, sherlogLink, errors.New("GCS bucket provided but object name for upload is empty")
 		}
-		audioBytes, decodeErr := base64.StdEncoding.DecodeString(extractedB64Audio)
-		if decodeErr != nil {
-			return "", extractedB64Audio, fmt.Errorf("failed to decode base64 audio data for GCS upload: %w", decodeErr)
-		}
-		log.Printf("Decoded audio data (decoded length: %d bytes) for GCS upload.", len(audioBytes))
-
+		
 		uploadErr := common.UploadToGCS(ctx, gcsBucket, gcsObjectNameForUpload, audioMIMEType, audioBytes)
 		if uploadErr != nil {
-			return "", extractedB64Audio, fmt.Errorf("failed to upload audio to GCS (bucket: %s, object: %s): %w", gcsBucket, gcsObjectNameForUpload, uploadErr)
+			return "", extractedB64Audio, sherlogLink, fmt.Errorf("failed to upload audio to GCS (bucket: %s, object: %s): %w", gcsBucket, gcsObjectNameForUpload, uploadErr)
 		}
-		log.Printf("Successfully uploaded first audio sample to gs://%s/%s", gcsBucket, gcsObjectNameForUpload)
-		return gcsObjectNameForUpload, extractedB64Audio, nil
+		log.Printf("Successfully uploaded audio sample to gs://%s/%s", gcsBucket, gcsObjectNameForUpload)
+		return gcsObjectNameForUpload, extractedB64Audio, sherlogLink, nil
 	}
 
 	log.Println("GCS bucket not provided, skipping upload.")
-	return "", extractedB64Audio, nil
+	return "", extractedB64Audio, sherlogLink, nil
 }

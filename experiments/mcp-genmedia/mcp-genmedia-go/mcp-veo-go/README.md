@@ -1,4 +1,4 @@
-# MCP Veo Server (Version: 1.3.7)
+# MCP Veo Server (Version: 3.7.0)
 
 This tool provides video generation capabilities using Google's Veo models (via Vertex AI). It is one of the MCP tools for Google Cloud Genmedia services, acting as an MCP server component to allow LLMs and other MCP clients to generate videos from text prompts or source images.
 
@@ -29,20 +29,44 @@ The server exposes the following tools:
     *   `prompt` (string, optional): Optional text prompt to guide video generation from the image.
     *   `bucket` (string, optional): Google Cloud Storage bucket for output. Same logic as `veo_t2v`.
     *   `output_directory` (string, optional): Local directory for download. Same logic as `veo_t2v`.
-    *   `model` (string, optional): Model to use. Default: `"veo-2.0-generate-001"`.
+    *   `model` (string, optional): Model to use. Default: `"veo-3.1-fast-generate-001"`.
     *   `num_videos` (number, optional): Number of videos. Default: `1`. Min: `1`, Max: `4`.
     *   `aspect_ratio` (string, optional): Aspect ratio. Default: `"16:9"`.
     *   `duration` (number, optional): Duration in seconds. Default: `5`. Min: `5`, Max: `8`.
+
+### 3. `veo_extend_video` (Extend Video)
+
+*   **Description**: Extend an existing video using Veo. The input video must be MP4, 1-30s, 24fps, and 720p/1080p/4k in 16:9 or 9:16. Output is a 7s extension. Video is saved to GCS and optionally downloaded locally.
+*   **Handler**: `veoExtendVideoHandler`
+*   **Parameters**:
+    *   `video_uri` (string, required): GCS URI of the input video for extension (e.g., "gs://your-bucket/input-video.mp4").
+    *   `mime_type` (string, optional): MIME type of the input video. Currently, only 'video/mp4' is supported.
+    *   `prompt` (string, optional): Optional text prompt to guide video extension.
+    *   `bucket` (string, optional): Google Cloud Storage bucket for output. Same logic as `veo_t2v`.
+    *   `output_directory` (string, optional): Local directory for download. Same logic as `veo_t2v`.
+    *   `model` (string, optional): Model to use. Supported by Veo 3.1 models.
+    *   `num_videos` (number, optional): Number of videos. Default: `1`. Min: `1`, Max: `4`.
+
+### 4. `veo_first_last_to_video` & `veo_reference_to_video` & `veo_ingredients_to_video`
+
+*   **Description**: Advanced video generation features supporting reference images and start/end frame interpolation.
 
 ## Environment Variable Configuration
 
 The tool utilizes the following environment variables:
 
-*   `PROJECT_ID` (string): **Required**. Your Google Cloud Project ID. The application will terminate if this is not set.
-*   `LOCATION` (string): The Google Cloud location/region for Vertex AI services.
+*   `GOOGLE_CLOUD_PROJECT` (string): **Required**. Your Google Cloud Project ID. The application will terminate if this is not set. Note: `PROJECT_ID` is also supported as a fallback.
+    *   **Override**: You can override this globally for this specific server by setting `VEO_PROJECT_ID`.
+*   `GOOGLE_CLOUD_LOCATION` (string): The preferred Google Cloud location/region for Vertex AI services.
     *   Default: `"us-central1"`
+    *   **Fallback**: `LOCATION` is also supported as a fallback for `GOOGLE_CLOUD_LOCATION`.
+    *   **Override**: You can override this globally for this specific server by setting `VEO_LOCATION`.
 *   `GENMEDIA_BUCKET` (string): An optional default Google Cloud Storage bucket to use for GCS outputs if the `bucket` parameter is not specified in the tool request. The path `veo_outputs/` will be appended to this bucket.
     *   Default: `""` (empty string).
+*   `ALLOW_UNSAFE_MODELS` (boolean): Optional (`true`/`false`). Allows users to bypass strict local model constraint validation, enabling them to test experimental or pre-release model strings that are not yet hardcoded in the registry.
+    *   Default: `false`
+*   `ENABLE_OPTIONAL_HEADER_CAPTURE` (boolean): Optional (`true`/`false`). Intended for internal debugging. When set to `true`, the server intercepts API requests and injects the raw ADC Bearer token to capture and surface the `x-goog-sherlog-link` header in the tool output. This feature is currently **not supported** for Veo due to Go SDK limitations with long-running operations.
+    *   Default: `false`
 *   `PORT` (string, for HTTP transport): The port for the HTTP server to listen on.
     *   Default: `"8080"`
 
@@ -87,7 +111,7 @@ Build the tool using `go build` or `go install`.
     "name": "veo_t2v",
     "arguments": {
       "prompt": "A majestic eagle soaring over a mountain range at sunset.",
-      "model": "veo-2.0-generate-001",
+      "model": "veo-3.1-fast-generate-001",
       "num_videos": 1,
       "aspect_ratio": "16:9",
       "duration": 8,
@@ -108,10 +132,17 @@ Build the tool using `go build` or `go install`.
       "image_uri": "gs://your-gcs-bucket/source_images/landscape.png",
       "mime_type": "image/png",
       "prompt": "Animate this landscape with a gentle breeze and flowing river.",
-      "model": "veo-2.0-generate-001",
+      "model": "veo-3.1-fast-generate-001",
       "num_videos": 1,
       "aspect_ratio": "16:9",
       "duration": 6,
+      "bucket": "your-gcs-bucket/veo_i2v_outputs",
+      "output_directory": "./veo_videos_i2v"
+    }
+  }
+}
+```
+ 6,
       "bucket": "your-gcs-bucket/veo_i2v_outputs",
       "output_directory": "./veo_videos_i2v"
     }

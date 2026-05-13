@@ -133,7 +133,7 @@ def image_details(item: MediaItem, on_click_permalink: Callable) -> None:
         me.text(f"Critique: {item.critique}")
 
     # Conditionally display VTO input images
-    if item.raw_data and "virtual-try-on" in item.raw_data.get("model", ""):
+    if "virtual-try-on" in (item.model or ""):
         with me.box(style=me.Style(margin=me.Margin(top=16))):
             me.text(
                 "Input Images",
@@ -148,7 +148,7 @@ def image_details(item: MediaItem, on_click_permalink: Callable) -> None:
                 ),
             ):
                 # Person Image
-                person_gcs_uri = item.raw_data.get("person_image_gcs")
+                person_gcs_uri = item.person_image_gcs
                 if person_gcs_uri:
                     with me.box(
                         style=me.Style(
@@ -170,7 +170,7 @@ def image_details(item: MediaItem, on_click_permalink: Callable) -> None:
                         )
 
                 # Product Image
-                product_gcs_uri = item.raw_data.get("product_image_gcs")
+                product_gcs_uri = item.product_image_gcs
                 if product_gcs_uri:
                     with me.box(
                         style=me.Style(

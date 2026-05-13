@@ -8,24 +8,15 @@
       "description": "The home page of the application."
     },
     {
-      "id": 6,
-      "display": "Imagen",
-      "icon": "image",
-      "route": "/imagen",
-      "group": "foundation",
-      "mode": "image",
-      "description": "Generate images from text prompts using Imagen.",
-      "video_url": "https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/imagen__page_cover.mp4"
-    },
-    {
       "id": 8,
-      "display": "Edit Images",
-      "icon": "edit",
-      "route": "/edit_images",
+      "display": "Gemini Image Generation",
+      "icon": "spark",
+      "icon_family": "Google Symbols",
+      "route": "/nano-banana",
       "group": "foundation",
       "mode": "image",
-      "feature_flag": "EDIT_IMAGES_ENABLED",
-      "description": "Edit images using inpainting and outpainting."
+      "description": "Generate images from text prompts using Gemini.",
+      "video_url": "https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/gemini-image__page-cover.mp4"
     },
     {
       "id": 10,
@@ -36,17 +27,6 @@
       "mode": "video",
       "description": "Generate videos from text or image prompts using Veo.",
       "video_url": "https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/veo__cover_s0RKXWX.mp4"
-    },
-    {
-      "id": 12,
-      "display": "Gemini Image Generation",
-      "icon": "spark",
-      "icon_family": "Google Symbols",
-      "route": "/nano-banana",
-      "group": "foundation",
-      "mode": "image",
-      "description": "Generate images from text prompts using Gemini.",
-      "video_url": "https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/gemini-image__page-cover.mp4"
     },
     {
       "id": 14,
@@ -60,18 +40,7 @@
       "video_object_position": "bottom"
     },
     {
-      "id": 15,
-      "display": "Chirp 3 HD",
-      "icon": "graphic_eq",
-      "route": "/chirp-3hd",
-      "group": "foundation",
-      "mode": "speech",
-      "description": "Generate high-definition speech from text using Chirp 3.",
-      "video_url": "https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/lyria_realtime_header.mp4",
-      "video_object_position": "bottom"
-    },
-    {
-      "id": 20,
+      "id": 16,
       "display": "Lyria",
       "icon": "music_note",
       "route": "/lyria",
@@ -83,7 +52,7 @@
       "video_object_position": "bottom"
     },
     {
-      "id": 25,
+      "id": 18,
       "display": "Gemini",
       "icon": "spark",
       "route": "/gemini-writers-workshop",
@@ -94,12 +63,46 @@
       "video_object_position": "bottom"
     },
     {
+      "id": 20,
+      "display": "Chirp 3 HD",
+      "icon": "graphic_eq",
+      "route": "/chirp-3hd",
+      "group": "foundation",
+      "mode": "speech",
+      "description": "Generate high-definition speech from text using Chirp 3.",
+      "video_url": "https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/lyria_realtime_header.mp4",
+      "video_object_position": "bottom"
+    },
+    {
+      "id": 22,
+      "display": "Imagen",
+      "icon": "image",
+      "route": "/imagen",
+      "group": "foundation",
+      "mode": "image",
+      "description": "Generate images from text prompts using Imagen.",
+      "video_url": "https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/imagen__page_cover.mp4"
+    },
+    {
+      "id": 24,
+      "display": "Edit Images",
+      "icon": "edit",
+      "route": "/edit_images",
+      "group": "foundation",
+      "mode": "image",
+      "feature_flag": "EDIT_IMAGES_ENABLED",
+      "description": "Edit images using inpainting and outpainting."
+    },
+    {
       "id": 30,
       "display": "Virtual Try-On",
       "icon": "checkroom",
       "route": "/vto",
       "group": "workflows",
-      "mode": ["video", "image"],
+      "mode": [
+        "video",
+        "image"
+      ],
       "description": "Virtually try on clothing items."
     },
     {
@@ -110,15 +113,6 @@
       "group": "workflows",
       "mode": "image",
       "description": "Generate a starter pack of images for a concept."
-    },
-    {
-      "id": 40,
-      "display": "Product in Scene",
-      "icon": "scene",
-      "route": "/recontextualize",
-      "group": "workflows",
-      "mode": "image",
-      "description": "Place a product in a generated scene."
     },
     {
       "id": 50,
@@ -135,7 +129,10 @@
       "icon": "person",
       "route": "/character_consistency",
       "group": "workflows",
-      "mode": ["image", "video"],
+      "mode": [
+        "image",
+        "video"
+      ],
       "description": "Create consistent characters across multiple images and videos."
     },
     {
@@ -144,7 +141,10 @@
       "icon": "shopping_bag",
       "route": "/shop_the_look",
       "group": "workflows",
-      "mode": ["image", "video"],
+      "mode": [
+        "image",
+        "video"
+      ],
       "description": "Create a 'shop the look' experience from a model and clothing."
     },
     {
@@ -195,7 +195,10 @@
       "icon": "auto_fix_high",
       "route": "/pixie_compositor",
       "group": "studio",
-      "mode": ["image", "video"],
+      "mode": [
+        "image",
+        "video"
+      ],
       "description": "Pixie helps you combine generative media."
     },
     {
@@ -205,7 +208,10 @@
       "route": "/labs",
       "group": "studio",
       "align": "bottom",
-      "mode": ["image", "video"],
+      "mode": [
+        "image",
+        "video"
+      ],
       "description": "Odd things are bubbling."
     },
     {

@@ -1,0 +1,4 @@
+prompt = """
+Please act as an expert GenMedia Producer and generate a 5-shot storyboard for: `{{args}}`. 
+Save it as a markdown file. Focus on visual descriptions suitable for Veo video generation prompts.
+"""

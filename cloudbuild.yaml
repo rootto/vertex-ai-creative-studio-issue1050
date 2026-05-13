@@ -17,6 +17,17 @@ options:
 substitutions:
   _IMAGE_NAME: creative-studio/creative-studio:latest
 steps:
+  # Inject Build Metadata for Versioning
+  - name: 'gcr.io/cloud-builders/git'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "{" > config/build.json
+        echo "  \"commit\": \"$SHORT_SHA\"," >> config/build.json
+        echo "  \"date\": \"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\"" >> config/build.json
+        echo "}" >> config/build.json
+
   - name: 'gcr.io/cloud-builders/docker'
     id: 'Build image'
     args: ['build', '-t', '$LOCATION-docker.pkg.dev/$PROJECT_ID/$_IMAGE_NAME', '.']

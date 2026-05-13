@@ -1,5 +1,109 @@
 # Changelog
 
+## 2026-04-15 (v3.8.0)
+
+*   **Feat:** Added support for `gemini-3.1-flash-tts-preview` to the `gemini_audio_tts` tool in `mcp-gemini-go` and set it as the default model.
+*   **Chore:** Bumped minor versions for all MCP servers to synchronize the release.
+
+## 2026-04-14 (v3.7.2)
+
+*   **Fix:** Removed `duration` from the `veo_extend_video` tool schema in `mcp-veo-go`. Because the extension duration is strictly hardcoded to 7 seconds by the backend API, exposing it as an optional parameter confused LLM agents, leading them to falsely assume a conflict between the API requirements and the model's standard limits.
+
+## 2026-04-14 (v3.7.1)
+
+*   **Fix:** Corrected parameter parsing in `mcp-veo-go`'s `veo_extend_video` tool to correctly bypass standard duration validation and supply the required 7-second duration to the Vertex AI API.
+*   **Chore:** Bumped minor versions for all MCP servers to synchronize the release.
+
+## 2026-04-14 (v3.7.0)
+
+*   **Feat:** Upgraded `google.golang.org/genai` SDK to `v1.54.0` across all MCP servers.
+*   **Feat:** Migrated `mcp-veo-go` to use the new `GenerateVideosFromSource` API, enabling new features.
+*   **Feat:** Added `veo_extend_video` tool to `mcp-veo-go` to support extending MP4 videos up to 30s. Supported by Veo 3.1 models.
+*   **Chore:** Bumped minor versions for all MCP servers to synchronize the release.
+
+## 2026-04-14 (v3.6.0)
+
+*   **Feat:** Updated `ffmpeg_combine_audio_and_video` in `mcp-avtool-go` to check if the input video already contains an audio stream. If it does, the tool now uses the `amix` filter to mix the tracks properly instead of appending a secondary audio track.
+*   **Feat:** Added optional `input_video_volume_db_change` and `input_audio_volume_db_change` parameters to `ffmpeg_combine_audio_and_video` to allow for independent volume control during mixing.
+
+## 2026-04-08 (v3.5.2)
+
+*   **Fix:** Corrected the `SupportedAspectRatios` for `veo-3.1-lite-generate-001` in `mcp-veo-go` to use standard `"16:9"` and `"9:16"` instead of `"720p"` and `"1080p"` (which were rejected by the API).
+*   **Fix:** Removed hardcoded defaults for `duration` and `aspect_ratio` in `mcp-veo-go` tool schemas, allowing model-specific fallbacks (like the strict 4/6/8 second constraints of Veo 3.1 Lite) to function correctly.
+*   **Fix:** Added an explicit 120-second timeout context for the `gemini_audio_tts` API call in `mcp-gemini-go` to prevent long-running generative prompts from hanging indefinitely.
+*   **Docs:** Updated Gemini CLI integration documentation to explicitly call out the necessity of increasing the global `toolExecutionTimeout` for long-running media generation tools (like Veo and TTS).
+*   **Chore:** Incremented versions for all `mcp-*` servers to `3.5.2` to synchronize the release.
+
+## 2026-04-08 (v3.5.1)
+
+*   **Chore:** Initial preparation for the 3.5.x release line.
+
+## 2026-04-02 (v3.5.0)
+
+*   **Feat:** Add support for the `veo-3.1-lite-generate-001` model.
+
+## 2026-04-01 (v3.4.2)
+
+*   **Feat:** Support `GOOGLE_CLOUD_LOCATION` as the primary environment variable for location, with `LOCATION` as a fallback.
+*   **Feat:** Enhanced configuration flexibility for mixed-region deployments with prefix-based overrides (e.g., `CHIRP3_LOCATION`).
+
+## 2026-04-01 (v3.4.1)
+
+*   **Feat:** Introduce `ALLOW_UNSAFE_MODELS` environment variable to bypass strict model validation for experimental testing.
+*   **Fix:** Enforce correct regional routing and fallback logic for Chirp3-HD based on the `LOCATION` parameter.
+*   **Feat:** Implement optional header capture (`ENABLE_OPTIONAL_HEADER_CAPTURE`) to surface `x-goog-sherlog-link` debug links for Gemini, Imagen, NanoBanana, and Lyria.
+*   **Feat:** Allow per-server LOCATION overrides (e.g., `CHIRP3_LOCATION`, `VEO_LOCATION`) to isolate server environments and support mixed-region deployments.
+
+## 2026-03-30 (v3.3.0)
+
+*   **Feat:** Support `GOOGLE_CLOUD_PROJECT` as primary project env var across all tools, with fallback to `PROJECT_ID`.
+*   **Feat:** Allow per-server Google Cloud Project overrides (e.g., `VEO_PROJECT_ID`, `LYRIA_PROJECT_ID`) to isolate server environments.
+*   **Feat:** Allow per-server custom PATH override (`MCP_CUSTOM_PATH`) for dependencies like `ffmpeg` and `ffprobe` in `mcp-avtool-go`.
+
+## 2026-03-28 (v3.2.0)
+
+*   **Feat:** Added `veo_first_last_to_video` tool to support First-Last Frame video generation modality in `mcp-veo-go`.
+*   **Feat:** Added `veo_reference_to_video` tool (with `veo_ingredients_to_video` alias) to support video generation with up to 3 reference images in `mcp-veo-go`.
+*   **Feat:** Added optional `person_generation` parameter to all Veo tools (defaulting to `allow_adult`) to prevent silent filtering of humans.
+*   **Feat:** Registered Veo preview models (`veo-2.0-generate-exp`, `veo-2.0-generate-preview`, `veo-3.1-generate-preview`, `veo-3.1-fast-generate-preview`) and updated output constraints.
+*   **Fix:** Added explicit optional MIME type parameters (`first_mime_type`, `last_mime_type`, `reference_mime_types`) to new Veo modalities to prevent unsafe inference fallbacks.
+
+## 2026-03-26 (v3.1.3)
+
+*   **Fix:** Added missing `mcp.Items` to `mcp.WithArray` definitions in `mcp-gemini-go`, `mcp-imagen-go`, and `mcp-avtool-go` to fix JSON Schema validation errors (HTTP 400 Bad Request) when used as Function Declarations in Vertex AI/Gemini API backends.
+*   **Chore:** Incremented versions for `mcp-gemini-go` (3.1.3), `mcp-imagen-go` (3.1.3), `mcp-avtool-go` (3.1.3), `mcp-chirp3-go` (3.1.3), `mcp-lyria-go` (3.1.3), `mcp-nanobanana-go` (3.1.3), and `mcp-veo-go` (3.1.3).
+
+## 2026-03-25 (v3.1.2)
+
+## 2026-03-25 (v3.1.1)
+
+*   **Fix:** Resolved a routing issue where Lyria 3 models were inadvertently hitting the legacy Prediction API instead of the new Interactions API.
+*   **Fix:** Enforced `global` region strictly for the Lyria 3 Interactions API to prevent `NotFound` errors when `us-central1` is used as a fallback.
+*   **Feat:** Added native support for the [Antigravity](https://antigravity.google) AI editor.
+*   **Feat:** The `install-online.sh` and `install.sh` scripts now interactively offer to install the expert `genmedia-producer` Agent Skill globally for Antigravity.
+*   **Docs:** Provided an Antigravity `mcp_config.json` template and instructions for connecting the GenMedia MCP suite.
+
+## 2026-03-25 (v3.1.0)
+
+*   **Feat:** Added support for `lyria-3-clip-preview` (30s) and `lyria-3-pro-preview` (2:30s) music generation models to `mcp-lyria-go`.
+*   **Feat:** Implemented a new, lightweight Go port of the Vertex AI Interactions API to support the Lyria 3 backends.
+*   **Feat:** Set `lyria-3-clip-preview` as the new default model for the `lyria_generate_music` tool.
+*   **Config:** Added the Lyria model registry to `mcp-common/models.go` to provide self-describing model options to the LLM agent via the MCP tool description.
+
+## 2026-03-24
+
+*   **Feat:** Added a new `mcp-nanobanana-go` server dedicated to Google Gemini Image models.
+*   **Feat:** Added `gemini-3.1-flash-image-preview` (Nano Banana 2) support to `mcp-gemini-go` and `mcp-nanobanana-go`, setting it as the new default model.
+*   **Feat:** Added `SupportedAspectRatios` to Gemini Image model definitions and updated `mcp-gemini-go` and `mcp-nanobanana-go` to accept an `aspect_ratio` parameter.
+*   **Feat:** Set `veo-3.1-fast-generate-001` as the new default model for `mcp-veo-go`.
+*   **Deprecation:** Removed deprecated Veo models (`veo-2.0-generate-exp`, `veo-2.0-generate-preview`, `veo-3.0-generate-preview`, `veo-3.0-fast-generate-preview`, `veo-3.1-generate-preview`, `veo-3.1-fast-generate-preview`) from supported lists.
+*   **Deprecation:** Excluded `mcp-imagen-go` from the standard `install.sh` installation loop (Imagen models set to be deprecated by June 30, 2026).
+*   **Chore:** Updated Go GenAI SDK (`google.golang.org/genai`) from `v1.22.0` to `v1.51.0` and bumped all other module dependencies to latest versions.
+*   **Fix:** Resolved numerous `golangci-lint` issues (errcheck, unused variables, string formatting) across all modules to ensure zero linting warnings.
+*   **CI:** Added `.golangci.yml` configuration and a dedicated GitHub Actions workflow (`mcp-genmedia-go.yml`) for linting, building, and verifying tests for the MCP servers on PRs/pushes.
+*   **Refactor:** Centralized OpenTelemetry initialization and configuration loading into a unified `common.Init` function in `mcp-common`.
+*   **Docs:** Added a PATH reminder output to `install.sh` upon successful server installation.
+
 ## 2025-11-23
 
 *   **Feat:** Added support for `gemini-3-pro-image-preview` (alias: "Nano Banana Pro") and `gemini-2.5-flash-image` (alias: "Nano Banana") to the `gemini_image_generation` tool in `mcp-gemini-go`.

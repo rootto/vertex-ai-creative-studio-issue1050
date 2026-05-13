@@ -31,16 +31,23 @@ Controls which versions of the Gemini models are used for various tasks.
 | **`GEMINI_IMAGE_GEN_LOCATION`** | `global` | The region for the Gemini Image Generation API. |
 | **`GEMINI_AUDIO_ANALYSIS_MODEL_ID`** | `gemini-2.5-flash` | The model used specifically for analyzing audio content. |
 | **`GEMINI_WRITERS_WORKSHOP_MODEL_ID`** | `MODEL_ID` | The model used for the Gemini Writers Workshop page. Defaults to `MODEL_ID`. |
+| **`GEMINI_CRITIQUE_MODEL_ID`** | `gemini-3-flash-preview` | The specific model used for the Imagen critique functionality. |
+| **`GEMINI_CRITIQUE_LOCATION`** | `global` | The region for the Gemini image critique model. |
+| **`CHARACTER_CONSISTENCY_GEMINI_MODEL`** | `MODEL_ID` | The model used for Character Consistency tasks. |
+| **`CHARACTER_CONSISTENCY_GEMINI_LOCATION`** | `global` | The region for the Character Consistency Gemini model. |
 
 ## 🎥 Veo (Video Generation)
 Configuration for the Veo video generation models.
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| **`VEO_MODEL_ID`** | `veo-2.0-generate-001` | The standard Veo model version. |
+| **`DEFAULT_VEO_MODEL_NAME`** | `veo-3.1-fast-generate-001` | The fallback model name for the UI when a user clears their session or deep links. |
+| **`VEO_LOCATION`** | `us-central1` | Region for GA Veo API calls. |
+| **`PREVIEW_LOCATION`** | `global` | Region for Preview Veo API calls (models with "preview" in their name). |
+| **`VEO_MODEL_ID`** | `veo-3.1-fast-generate-001` | The standard Veo model version. |
 | **`VEO_PROJECT_ID`** | `PROJECT_ID` | Allows using a different project for Veo quota if needed. |
-| **`VEO_EXP_MODEL_ID`** | `veo-3.0-generate-001` | The experimental/newer Veo model version. |
-| **`VEO_EXP_FAST_MODEL_ID`** | `veo-3.0-fast-generate-001` | The faster, lower-latency experimental Veo model. |
+| **`VEO_EXP_MODEL_ID`** | `veo-3.1-generate-001` | The experimental/newer Veo model version. |
+| **`VEO_EXP_FAST_MODEL_ID`** | `veo-3.1-fast-generate-001` | The faster, lower-latency experimental Veo model. |
 | **`VEO_EXP_PROJECT_ID`** | `PROJECT_ID` | Project ID for experimental Veo models. |
 
 ## 🎨 Imagen (Image Generation & Editing)
@@ -48,7 +55,6 @@ Settings for Imagen models, including specialized versions for editing and produ
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| **`MODEL_IMAGEN_PRODUCT_RECONTEXT`** | `imagen-product-recontext-preview-06-30` | Model used for "Product Recontextualization" features. |
 | **`IMAGEN_GENERATED_SUBFOLDER`** | `generated_images` | Subfolder in the GCS bucket where generated images are saved. |
 | **`IMAGEN_EDITED_SUBFOLDER`** | `edited_images` | Subfolder for images resulting from editing operations. |
 
@@ -61,6 +67,25 @@ Specific configuration for the Virtual Try-On feature.
 | **`VTO_MODEL_ID`** | `virtual-try-on-001` | The specific VTO model version. |
 | **`GENMEDIA_VTO_MODEL_COLLECTION_NAME`** | `genmedia-vto-model` | Firestore collection for VTO model data. |
 | **`GENMEDIA_VTO_CATALOG_COLLECTION_NAME`** | `genmedia-vto-catalog` | Firestore collection for VTO product catalog data. |
+
+
+
+## 🔄 Object Rotation
+Specific configuration for the Object Rotation workflow.
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| **`OBJECT_ROTATION_VIDEO_MODEL`** | `veo-3.1-generate-001` | The specific Veo model used for 360-degree rotation videos. |
+| **`OBJECT_ROTATION_IMAGE_MODEL`** | `gemini-2.5-flash-image` | The specific Gemini image model used for generating multi-angle views. |
+
+## 🛋️ Interior Design
+Specific configuration for the Interior Design workflow.
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| **`INTERIOR_DESIGN_VIDEO_MODEL`** | `veo-3.1-lite-generate-001` | The specific Veo model used for 3D walkthrough video segments. |
+| **`INTERIOR_DESIGN_IMAGE_MODEL`** | `gemini-3-pro-image-preview` | The specific Gemini image model used for floor plan to 3D and styled images. |
+| **`INTERIOR_DESIGN_VIDEO_DURATION`** | `6` | The duration in seconds for each generated video segment. |
 
 ## 🎵 Lyria (Music Generation)
 Configuration for the Lyria music generation model.
@@ -116,8 +141,11 @@ These variables are exposed in `variables.tf` and directly map to environment va
 | `project_id` | `PROJECT_ID` | *(Required)* |
 | `region` | `LOCATION` | `us-central1` |
 | `model_id` | `MODEL_ID` | `gemini-2.5-flash` |
-| `veo_model_id` | `VEO_MODEL_ID` | `veo-3.0-generate-001` |
-| `veo_exp_model_id` | `VEO_EXP_MODEL_ID` | `veo-3.0-generate-preview` |
+| `gemini_critique_model_id` | `GEMINI_CRITIQUE_MODEL_ID` | `gemini-3-flash-preview` |
+| `gemini_critique_location` | `GEMINI_CRITIQUE_LOCATION` | `global` |
+| `character_consistency_gemini_location` | `CHARACTER_CONSISTENCY_GEMINI_LOCATION` | `global` |
+| `veo_model_id` | `VEO_MODEL_ID` | `veo-3.1-fast-generate-001` |
+| `veo_exp_model_id` | `VEO_EXP_MODEL_ID` | `veo-3.1-generate-001` |
 | `lyria_model_id` | `LYRIA_MODEL_VERSION` | `lyria-002` |
 | `edit_images_enabled` | `EDIT_IMAGES_ENABLED` | `true` |
 
@@ -139,9 +167,11 @@ These variables are computed within `main.tf` based on the resources Terraform c
 The following variables are **not** explicitly set in the `main.tf` configuration. This means the application will use the **default values defined in `config/default.py`** when deployed via Terraform.
 
 *   **Gemini Models:** `GEMINI_IMAGE_GEN_MODEL`, `GEMINI_IMAGE_GEN_LOCATION`, `GEMINI_AUDIO_ANALYSIS_MODEL_ID`
-*   **Veo:** `VEO_PROJECT_ID`, `VEO_EXP_FAST_MODEL_ID`, `VEO_EXP_PROJECT_ID`
+*   **Veo:** `DEFAULT_VEO_MODEL_NAME`, `VEO_LOCATION`, `PREVIEW_LOCATION`, `VEO_PROJECT_ID`, `VEO_EXP_FAST_MODEL_ID`, `VEO_EXP_PROJECT_ID`
 *   **VTO (Virtual Try-On):** `VTO_LOCATION`, `VTO_MODEL_ID`, `GENMEDIA_VTO_*` collection names.
 *   **Imagen:** `MODEL_IMAGEN_PRODUCT_RECONTEXT`, `IMAGEN_GENERATED_SUBFOLDER`, `IMAGEN_EDITED_SUBFOLDER`
+*   **Interior Design:** `INTERIOR_DESIGN_VIDEO_MODEL`, `INTERIOR_DESIGN_IMAGE_MODEL`, `INTERIOR_DESIGN_VIDEO_DURATION`
+*   **Object Rotation:** `OBJECT_ROTATION_VIDEO_MODEL`, `OBJECT_ROTATION_IMAGE_MODEL`
 *   **App Logic:** `APP_ENV`, `API_BASE_URL`, `GA_MEASUREMENT_ID`, `LIBRARY_MEDIA_PER_PAGE`, `USE_MEDIA_PROXY`
 *   **Collections:** `GENMEDIA_COLLECTION_NAME`, `SESSIONS_COLLECTION_NAME`
 

@@ -35,13 +35,13 @@ func registerImagenEditingTools(s *server.MCPServer, client *genai.Client, appCo
 			return nil, fmt.Errorf("failed to marshal segmentation classes: %w", err)
 		}
 		return []mcp.ResourceContents{
-			mcp.TextResourceContents{
-				URI:      "imagen://segmentation_classes",
-				MIMEType: "application/json",
-				Text:     string(jsonData),
+				mcp.TextResourceContents{
+					URI:      "imagen://segmentation_classes",
+					MIMEType: "application/json",
+					Text:     string(jsonData),
+				},
 			},
-		},
-		nil
+			nil
 	})
 
 	// Inpainting Insert Tool
@@ -51,7 +51,7 @@ func registerImagenEditingTools(s *server.MCPServer, client *genai.Client, appCo
 		mcp.WithString("image_uri", mcp.Required(), mcp.Description("The GCS URI of the image to edit.")),
 		mcp.WithString("mask_mode", mcp.Required(), mcp.Description("The masking mode to use (e.g., MASK_MODE_FOREGROUND, MASK_MODE_SEMANTIC).")),
 		mcp.WithNumber("mask_dilation", mcp.Description("The dilation to apply to the mask.")),
-		mcp.WithArray("segmentation_classes", mcp.Description("The segmentation classes to use for semantic masking.")),
+		mcp.WithArray("segmentation_classes", mcp.Description("The segmentation classes to use for semantic masking."), mcp.Items(map[string]any{"type": "integer"})),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return imagenEditHandler(ctx, request, client, appConfig)
 	})
@@ -62,7 +62,7 @@ func registerImagenEditingTools(s *server.MCPServer, client *genai.Client, appCo
 		mcp.WithString("image_uri", mcp.Required(), mcp.Description("The GCS URI of the image to edit.")),
 		mcp.WithString("mask_mode", mcp.Required(), mcp.Description("The masking mode to use (e.g., MASK_MODE_FOREGROUND, MASK_MODE_SEMANTIC).")),
 		mcp.WithNumber("mask_dilation", mcp.Description("The dilation to apply to the mask.")),
-		mcp.WithArray("segmentation_classes", mcp.Description("The segmentation classes to use for semantic masking.")),
+		mcp.WithArray("segmentation_classes", mcp.Description("The segmentation classes to use for semantic masking."), mcp.Items(map[string]any{"type": "integer"})),
 	), func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return imagenEditHandler(ctx, request, client, appConfig)
 	})
@@ -76,23 +76,23 @@ func registerImagenEditingTools(s *server.MCPServer, client *genai.Client, appCo
 		imageURI, ok := request.Params.Arguments["image_uri"]
 		if !ok || strings.TrimSpace(imageURI) == "" {
 			return mcp.NewGetPromptResult(
-				"Missing Image URI",
-				[]mcp.PromptMessage{
-					mcp.NewPromptMessage(mcp.RoleAssistant, mcp.NewTextContent("What image (GCS URI) would you like to edit?")),
-				},
-			),
-			nil
+					"Missing Image URI",
+					[]mcp.PromptMessage{
+						mcp.NewPromptMessage(mcp.RoleAssistant, mcp.NewTextContent("What image (GCS URI) would you like to edit?")),
+					},
+				),
+				nil
 		}
 
 		prompt, ok := request.Params.Arguments["prompt"]
 		if !ok || strings.TrimSpace(prompt) == "" {
 			return mcp.NewGetPromptResult(
-				"Missing Prompt",
-				[]mcp.PromptMessage{
-					mcp.NewPromptMessage(mcp.RoleAssistant, mcp.NewTextContent("What would you like to do? (e.g., \"add a hat\", \"remove the car\")")),
-				},
-			),
-			nil
+					"Missing Prompt",
+					[]mcp.PromptMessage{
+						mcp.NewPromptMessage(mcp.RoleAssistant, mcp.NewTextContent("What would you like to do? (e.g., \"add a hat\", \"remove the car\")")),
+					},
+				),
+				nil
 		}
 
 		// Determine the tool to call based on the prompt
@@ -124,12 +124,12 @@ func registerImagenEditingTools(s *server.MCPServer, client *genai.Client, appCo
 		}
 
 		return mcp.NewGetPromptResult(
-			"Image Editing Result",
-			[]mcp.PromptMessage{
-				mcp.NewPromptMessage(mcp.RoleAssistant, mcp.NewTextContent(strings.TrimSpace(responseText))),
-			},
-		),
-		nil
+				"Image Editing Result",
+				[]mcp.PromptMessage{
+					mcp.NewPromptMessage(mcp.RoleAssistant, mcp.NewTextContent(strings.TrimSpace(responseText))),
+				},
+			),
+			nil
 	})
 }
 
@@ -230,6 +230,14 @@ func imagenEditHandler(ctx context.Context, request mcp.CallToolRequest, client 
 
 	// Process the response
 	var resultText string
+
+	// Check for optional Sherlog header
+	if response != nil && response.SDKHTTPResponse != nil && response.SDKHTTPResponse.Headers != nil {
+		if link := response.SDKHTTPResponse.Headers.Get("x-goog-sherlog-link"); link != "" {
+			resultText += fmt.Sprintf("Optional header capture: %s\n\n", link)
+		}
+	}
+
 	if len(response.GeneratedImages) > 0 {
 		genImg := response.GeneratedImages[0]
 		if genImg.Image != nil && len(genImg.Image.ImageBytes) > 0 {

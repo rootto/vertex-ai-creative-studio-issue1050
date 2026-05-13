@@ -112,6 +112,7 @@ module "lb-http" {
   backends = {
     default = {
       description = "Creative Studio backend"
+      protocol    = "HTTPS"
       enable_cdn  = false
       groups = [
         {
@@ -171,7 +172,11 @@ locals {
   creative_studio_env_vars = {
     PROJECT_ID            = var.project_id
     LOCATION              = var.region
+    GEMINI_TTS_LOCATION   = var.gemini_tts_location
     MODEL_ID              = var.model_id
+    GEMINI_CRITIQUE_MODEL_ID = var.gemini_critique_model_id
+    GEMINI_CRITIQUE_LOCATION = var.gemini_critique_location
+    CHARACTER_CONSISTENCY_GEMINI_LOCATION = var.character_consistency_gemini_location
     VEO_MODEL_ID          = var.veo_model_id
     VEO_EXP_MODEL_ID      = var.veo_exp_model_id
     LYRIA_MODEL_VERSION   = var.lyria_model_id
@@ -425,7 +430,7 @@ resource "google_project_iam_member" "build_logs_writer" {
 
 module "source_bucket" {
   source     = "terraform-google-modules/cloud-storage/google"
-  version    = "~>11.0"
+  version    = "~> 12.0"
   project_id = var.project_id
   names      = ["run-resources-${var.project_id}-${var.region}"]
   location   = var.region

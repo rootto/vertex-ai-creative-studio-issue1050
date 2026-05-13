@@ -27,8 +27,8 @@ The `avtool` provides the following functionalities, exposed as MCP tools:
     *   Output: GIF image file. Can be saved locally and/or to a GCS bucket.
 
 *   **`ffmpeg_combine_audio_and_video`**:
-    *   Combines a separate video file and an audio file into a single video file with the new audio track.
-    *   Inputs: URI of the input video file, URI of the input audio file.
+    *   Combines a separate video file and an audio file into a single video file. If the video already has an audio track, it mixes the new audio with the existing audio.
+    *   Inputs: URI of the input video file, URI of the input audio file, optional `input_video_volume_db_change`, optional `input_audio_volume_db_change`.
     *   Output: Combined video file (e.g., MP4). Can be saved locally and/or to a GCS bucket.
 
 *   **`ffmpeg_overlay_image_on_video`**:
@@ -67,9 +67,13 @@ The `avtool` provides the following functionalities, exposed as MCP tools:
 
 The tool is configured using environment variables:
 
-*   `PROJECT_ID`: (Required for GCS operations) Your Google Cloud Project ID.
+*   `MCP_CUSTOM_PATH`: (Optional) Overrides the system `PATH` for `ffmpeg` and `ffprobe` tool executions. Useful for pointing to custom binary installations (e.g., Homebrew) without polluting the host environment.
+*   `GOOGLE_CLOUD_PROJECT`: (Required for GCS operations) Your Google Cloud Project ID. Note: `PROJECT_ID` is also supported as a fallback.
+    *   **Override**: You can override this globally for this specific server by setting `AVTOOL_PROJECT_ID`.
 *   `GENMEDIA_BUCKET`: (Optional) Default Google Cloud Storage bucket to use for outputs if not specified in the tool request.
-*   `LOCATION`: (Optional) Google Cloud location (e.g., `us-central1`). Defaults to `us-central1`. Primarily for GCS client initialization context.
+*   `GOOGLE_CLOUD_LOCATION`: (Optional) The preferred Google Cloud location (e.g., `us-central1`). Defaults to `us-central1`. Primarily for GCS client initialization context.
+    *   **Fallback**: `LOCATION` is also supported as a fallback for `GOOGLE_CLOUD_LOCATION`.
+    *   **Override**: You can override this globally for this specific server by setting `AVTOOL_LOCATION`.
 *   `PORT`: (Optional, for HTTP transport) The port for the HTTP server to listen on. Defaults to `8080`.
 
 ## Running the Tool

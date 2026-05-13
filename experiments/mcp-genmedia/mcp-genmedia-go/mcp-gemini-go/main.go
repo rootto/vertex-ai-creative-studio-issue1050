@@ -19,12 +19,12 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
-	"fmt"
 
 	common "github.com/GoogleCloudPlatform/vertex-ai-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -41,7 +41,7 @@ var (
 
 const (
 	serviceName = "mcp-gemini-go"
-	version     = "0.5.1" // Add new Gemini models
+	version     = "3.8.0" // Synchronize release version
 )
 
 func init() {
@@ -54,25 +54,17 @@ func init() {
 }
 
 func main() {
-	appConfig = common.LoadConfig()
+
+	var cleanup func()
+	appConfig, cleanup = common.Init(serviceName, version)
+	defer cleanup()
 
 	// Override default location for Gemini models if not explicitly set
 	if os.Getenv("LOCATION") == "" {
 		log.Printf("LOCATION environment variable not set. Defaulting to 'global' for mcp-gemini-go.")
 		appConfig.Location = "global"
 	}
-
-	tp, err := common.InitTracerProvider(serviceName, version)
-	if err != nil {
-		log.Fatalf("failed to initialize tracer provider: %v", err)
-	}
-	if tp != nil {
-		defer func() {
-			if err := tp.Shutdown(context.Background()); err != nil {
-				log.Printf("Error shutting down tracer provider: %v", err)
-			}
-		}()
-	}
+	var err error
 
 	log.Printf("Initializing global GenAI client...")
 	clientCtx, clientCancel := context.WithTimeout(context.Background(), 1*time.Minute)
@@ -88,19 +80,25 @@ func main() {
 		clientConfig.HTTPOptions.BaseURL = appConfig.ApiEndpoint
 	}
 
+	if err := common.InjectCaptureHeaders(clientCtx, appConfig, clientConfig); err != nil {
+		log.Printf("Warning: Failed to inject capture headers: %v", err)
+	}
+
 	genAIClient, err = genai.NewClient(clientCtx, clientConfig)
 	if err != nil {
-		log.Fatalf("Error creating global GenAI client: %v", err)
+		log.Printf("Warning: Error creating global GenAI client: %v. Deferring initialization to runtime.", err)
+	} else {
+		log.Printf("Global GenAI client initialized successfully.")
 	}
-	log.Printf("Global GenAI client initialized successfully.")
 
 	s := server.NewMCPServer("Gemini", version, server.WithResourceCapabilities(true, false))
 
 	tool := mcp.NewTool("gemini_image_generation",
 		mcp.WithDescription("Generates content (text and/or images) based on a multimodal prompt using Gemini Image generation models."),
 		mcp.WithString("prompt", mcp.Required(), mcp.Description("The text prompt for content generation.")),
-		mcp.WithString("model", mcp.DefaultString("gemini-2.5-flash-image"), mcp.Description(common.BuildGeminiImageModelDescription())),
-		mcp.WithArray("images", mcp.Description("Optional. A list of local file paths or GCS URIs for input images.")),
+		mcp.WithString("model", mcp.DefaultString("gemini-3.1-flash-image-preview"), mcp.Description(common.BuildGeminiImageModelDescription())),
+		mcp.WithString("aspect_ratio", mcp.DefaultString("1:1"), mcp.Description("Aspect ratio of the generated images. Note: supported aspect ratios are model-dependent.")),
+		mcp.WithArray("images", mcp.Description("Optional. A list of local file paths or GCS URIs for input images."), mcp.Items(map[string]any{"type": "string"})),
 		mcp.WithString("output_directory", mcp.Description("Optional. Local directory to save generated image(s) to.")),
 		mcp.WithString("gcs_bucket_uri", mcp.Description("Optional. GCS URI prefix to store generated images (e.g., your-bucket/outputs/).")),
 	)
@@ -133,7 +131,7 @@ func main() {
 		mcp.WithString("model_name",
 			mcp.DefaultString(defaultGeminiTTSModel),
 			mcp.Description("The model to use."),
-			mcp.Enum("gemini-2.5-flash-tts", "gemini-2.5-pro-tts", "gemini-2.5-flash-lite-preview-tts"),
+			mcp.Enum("gemini-3.1-flash-tts-preview", "gemini-2.5-flash-tts", "gemini-2.5-pro-tts", "gemini-2.5-flash-lite-preview-tts"),
 		),
 		mcp.WithString("language_code",
 			mcp.DefaultString("en-US"),

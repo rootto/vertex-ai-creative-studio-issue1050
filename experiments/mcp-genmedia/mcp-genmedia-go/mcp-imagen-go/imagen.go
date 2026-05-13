@@ -49,7 +49,7 @@ var (
 
 const (
 	serviceName = "mcp-imagen-go"
-	version     = "1.12.0" // Standardize port handling
+	version     = "3.8.0" // Synchronize release version
 )
 
 func init() {
@@ -63,19 +63,11 @@ func init() {
 
 // main is the entry point for the mcp-imagen-go service.
 func main() {
-	appConfig = common.LoadConfig()
 
-	tp, err := common.InitTracerProvider(serviceName, version)
-	if err != nil {
-		log.Fatalf("failed to initialize tracer provider: %v", err)
-	}
-	if tp != nil {
-		defer func() {
-			if err := tp.Shutdown(context.Background()); err != nil {
-				log.Printf("Error shutting down tracer provider: %v", err)
-			}
-		}()
-	}
+	var cleanup func()
+	appConfig, cleanup = common.Init(serviceName, version)
+	defer cleanup()
+	var err error
 
 	log.Printf("Initializing global GenAI client...")
 	clientCtx, clientCancel := context.WithTimeout(context.Background(), 1*time.Minute)
@@ -91,11 +83,16 @@ func main() {
 		clientConfig.HTTPOptions.BaseURL = appConfig.ApiEndpoint
 	}
 
+	if err := common.InjectCaptureHeaders(clientCtx, appConfig, clientConfig); err != nil {
+		log.Printf("Warning: Failed to inject capture headers: %v", err)
+	}
+
 	genAIClient, err = genai.NewClient(clientCtx, clientConfig)
 	if err != nil {
-		log.Fatalf("Error creating global GenAI client: %v", err)
+		log.Printf("Warning: Error creating global GenAI client: %v. Deferring initialization to runtime.", err)
+	} else {
+		log.Printf("Global GenAI client initialized successfully.")
 	}
-	log.Printf("Global GenAI client initialized successfully.")
 
 	s := server.NewMCPServer("Imagen", version, server.WithResourceCapabilities(true, true))
 	registerImagenEditingTools(s, genAIClient, appConfig)
@@ -111,13 +108,13 @@ func main() {
 			return nil, fmt.Errorf("failed to marshal supported models: %w", err)
 		}
 		return []mcp.ResourceContents{
-			mcp.TextResourceContents{
-				URI:      "imagen://models",
-				MIMEType: "application/json",
-				Text:     string(jsonData),
+				mcp.TextResourceContents{
+					URI:      "imagen://models",
+					MIMEType: "application/json",
+					Text:     string(jsonData),
+				},
 			},
-		},
-		nil
+			nil
 	})
 
 	tool := mcp.NewTool("imagen_t2i",
@@ -273,12 +270,12 @@ func imagenGenerationHandler(client *genai.Client, ctx context.Context, request 
 		modelInput = "imagen-4.0-fast-generate-001"
 	}
 
-	canonicalName, found := common.ResolveImagenModel(modelInput)
+	modelInfo, found := common.ResolveImagenModel(modelInput, appConfig.AllowUnsafeModels)
 	if !found {
 		return &mcp.CallToolResult{Content: []mcp.Content{mcp.TextContent{Type: "text", Text: fmt.Sprintf("Error: Model '%s' is not a valid or supported model name.", modelInput)}}}, nil
 	}
-	model := canonicalName
-	modelDetails := common.SupportedImagenModels[model]
+	model := modelInfo.CanonicalName
+	modelDetails := modelInfo
 
 	var numberOfImages int32 = 1
 	if numImagesArg, ok := request.GetArguments()["num_images"]; ok {
@@ -292,33 +289,33 @@ func imagenGenerationHandler(client *genai.Client, ctx context.Context, request 
 	if numberOfImages < 1 {
 		numberOfImages = 1
 	}
-			if numberOfImages > modelDetails.MaxImages {
-				log.Printf("Warning: Requested %d images, but model %s only supports up to %d. Adjusting to max.", numberOfImages, model, modelDetails.MaxImages)
-				numberOfImages = modelDetails.MaxImages
-			}
-	
-			aspectRatio, ok := request.GetArguments()["aspect_ratio"].(string)
-			if !ok || aspectRatio == "" {
-				log.Printf("Aspect ratio not provided or empty, using default: 1:1")
-				aspectRatio = "1:1"
-			}
-	
-					if !contains(modelDetails.SupportedAspectRatios, aspectRatio) {
-						log.Printf("Warning: Requested aspect ratio '%s' is not supported by model %s. Supported ratios are: %v. Falling back to '1:1'.", aspectRatio, model, modelDetails.SupportedAspectRatios)
-						aspectRatio = "1:1" // Fallback to a safe default
-					}
-			
-					imageSize, _ := request.GetArguments()["image_size"].(string)
-					var finalImageSize string
-					if imageSize != "" {
-						if len(modelDetails.SupportedImageSizes) == 0 {
-							log.Printf("Warning: image_size parameter ('%s') provided, but model %s does not support it. The parameter will be ignored.", imageSize, model)
-						} else if !contains(modelDetails.SupportedImageSizes, imageSize) {
-							log.Printf("Warning: Requested image size '%s' is not supported by model %s. Supported sizes are: %v. The parameter will be ignored.", imageSize, model, modelDetails.SupportedImageSizes)
-						} else {
-							finalImageSize = imageSize
-						}
-					}	// ... rest of handler ...
+	if numberOfImages > modelDetails.MaxImages {
+		log.Printf("Warning: Requested %d images, but model %s only supports up to %d. Adjusting to max.", numberOfImages, model, modelDetails.MaxImages)
+		numberOfImages = modelDetails.MaxImages
+	}
+
+	aspectRatio, ok := request.GetArguments()["aspect_ratio"].(string)
+	if !ok || aspectRatio == "" {
+		log.Printf("Aspect ratio not provided or empty, using default: 1:1")
+		aspectRatio = "1:1"
+	}
+
+	if !contains(modelDetails.SupportedAspectRatios, aspectRatio) {
+		log.Printf("Warning: Requested aspect ratio '%s' is not supported by model %s. Supported ratios are: %v. Falling back to '1:1'.", aspectRatio, model, modelDetails.SupportedAspectRatios)
+		aspectRatio = "1:1" // Fallback to a safe default
+	}
+
+	imageSize, _ := request.GetArguments()["image_size"].(string)
+	var finalImageSize string
+	if imageSize != "" {
+		if len(modelDetails.SupportedImageSizes) == 0 {
+			log.Printf("Warning: image_size parameter ('%s') provided, but model %s does not support it. The parameter will be ignored.", imageSize, model)
+		} else if !contains(modelDetails.SupportedImageSizes, imageSize) {
+			log.Printf("Warning: Requested image size '%s' is not supported by model %s. Supported sizes are: %v. The parameter will be ignored.", imageSize, model, modelDetails.SupportedImageSizes)
+		} else {
+			finalImageSize = imageSize
+		}
+	} // ... rest of handler ...
 	gcsOutputURI := ""
 	gcsBucketUriParam, _ := request.GetArguments()["gcs_bucket_uri"].(string)
 	gcsBucketUriParam = strings.TrimSpace(gcsBucketUriParam)
@@ -393,6 +390,13 @@ func imagenGenerationHandler(client *genai.Client, ctx context.Context, request 
 
 	var contentItems []mcp.Content
 
+	// Check for optional Sherlog header
+	if response != nil && response.SDKHTTPResponse != nil && response.SDKHTTPResponse.Headers != nil {
+		if link := response.SDKHTTPResponse.Headers.Get("x-goog-sherlog-link"); link != "" {
+			contentItems = append(contentItems, mcp.TextContent{Type: "text", Text: fmt.Sprintf("Optional header capture: %s\n", link)})
+		}
+	}
+
 	if err != nil {
 		errorMessage := fmt.Sprintf("error generating images: %v", err.Error())
 		if errors.Is(err, context.DeadlineExceeded) && apiCallCtx.Err() == context.DeadlineExceeded {
@@ -422,14 +426,14 @@ func imagenGenerationHandler(client *genai.Client, ctx context.Context, request 
 	var failedLocalSaveReasons []string
 	var gcsSavedURIs []string
 	var totalSizeBytesGenerated int64 = 0
-	var imagesWithDataOrURI int = 0
+	imagesWithDataOrURI := 0
 	returnImageDataInResponse := gcsOutputURI == "" && !attemptLocalSave
 	log.Printf("Will return image data in response: %t", returnImageDataInResponse)
 
 	for n, genImg := range response.GeneratedImages {
 		var imageData []byte
-		var imageMimeType string = "image/png"
-		var imageSourceIsGCS bool = false
+		imageMimeType := "image/png"
+		imageSourceIsGCS := false
 		var currentImageGCSURI string
 
 		if genImg.Image != nil && genImg.Image.GCSURI != "" {
