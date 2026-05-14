@@ -209,7 +209,7 @@ def on_generate_sheet_click(e: me.ClickEvent):
     try:
         prompt = "Character sheet of this character, white background, multiple views: front, back, side, three-quarter, close-up face. Consistent style. High quality, detailed. Retain realism of original image."
 
-        gcs_uris, _, _, _ = generate_image_from_prompt_and_images(
+        gcs_uris, _, _, _, _ = generate_image_from_prompt_and_images(
             prompt=prompt,
             images=[state.original_image_gcs_uri],
             aspect_ratio="16:9",  # Wide aspect ratio for a sheet
@@ -267,7 +267,7 @@ def on_generate_scenario_click(e: me.ClickEvent):
         if state.asset_sheet_gcs_uri:
             images.append(state.asset_sheet_gcs_uri)
 
-        gcs_uris, _, _, _ = generate_image_from_prompt_and_images(
+        gcs_uris, _, _, _, _ = generate_image_from_prompt_and_images(
             prompt=prompt,
             images=images,
             aspect_ratio="16:9",

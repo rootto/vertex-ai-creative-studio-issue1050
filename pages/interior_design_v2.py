@@ -397,7 +397,7 @@ def on_generate_3d_view_click(e: me.ClickEvent):
     try:
         prompt = "create a 3D version for the floor plan. make it realistic. keep the furnitures as per the floor plan and follow the measurement. retain the names of rooms in the appropriate location"
 
-        gcs_uris, _, _, _ = generate_image_from_prompt_and_images(
+        gcs_uris, _, _, _, _ = generate_image_from_prompt_and_images(
             prompt=prompt,
             images=[state.storyboard["original_floor_plan_uri"]],
             aspect_ratio="16:9",
@@ -472,7 +472,7 @@ def on_room_button_click(e: me.ClickEvent):
     try:
         prompt = f"Using the provided 3D rendering as a layout guide, create a photorealistic interior photograph. The photo should be from a first-person perspective, as if a person is standing in the hallway or adjacent room and looking through the doorway into the {room_name}. Capture the sense of entering the room for the first time on a house tour. Ensure the lighting and furniture placement are consistent with the 3D model."
 
-        gcs_uris, _, _, _ = generate_image_from_prompt_and_images(
+        gcs_uris, _, _, _, _ = generate_image_from_prompt_and_images(
             prompt=prompt,
             images=[state.storyboard["generated_3d_view_uri"]],
             aspect_ratio="16:9",
@@ -570,7 +570,7 @@ def on_design_click(e: me.ClickEvent):
         if state.design_image_uri:
             images.append(state.design_image_uri)
 
-        gcs_uris, _, _, _ = generate_image_from_prompt_and_images(
+        gcs_uris, _, _, _, _ = generate_image_from_prompt_and_images(
             prompt=state.design_prompt,
             images=images,
             aspect_ratio="16:9",

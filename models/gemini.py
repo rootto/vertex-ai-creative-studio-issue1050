@@ -101,10 +101,14 @@ def generate_image_from_prompt_and_images(
     candidate_count: int = 1,
     image_size: str | None = None,
     use_search: bool = False,
-) -> tuple[list[str], float, list[str], dict[str, Any] | None]:
+    use_image_search: bool = False,
+    thinking_level: str | None = None,
+    include_thoughts: bool = False,
+    model_name: str | None = None,
+) -> tuple[list[str], float, list[str], dict[str, Any] | None, list[str]]:
     """Generates images from a prompt and a list of images."""
     start_time = time.time()
-    model_name = cfg.GEMINI_IMAGE_GEN_MODEL
+    active_model_name = model_name or cfg.GEMINI_IMAGE_GEN_MODEL
 
     parts = [types.Part.from_text(text=prompt)]
     for image_uri in images:
@@ -122,7 +126,7 @@ def generate_image_from_prompt_and_images(
     )
 
     analytics_logger.info(
-        f"Generating image with model: {model_name}, aspect_ratio: {aspect_ratio}, num_images: {len(images)}, image_size: {image_size}, use_search: {use_search}",
+        f"Generating image with model: {active_model_name}, aspect_ratio: {aspect_ratio}, num_images: {len(images)}, image_size: {image_size}, use_search: {use_search}, use_image_search: {use_image_search}, thinking_level: {thinking_level}",
     )
     for i, img in enumerate(images):
         analytics_logger.info(f"  Image {i}: {img}")
@@ -132,21 +136,38 @@ def generate_image_from_prompt_and_images(
         image_config_args["image_size"] = image_size
 
     tools = []
-    if use_search:
-        tools.append(types.Tool(google_search=types.GoogleSearch()))
+    if use_search or use_image_search:
+        search_types = types.SearchTypes()
+        if use_search:
+            search_types.web_search = types.WebSearch()
+        if use_image_search:
+            search_types.image_search = types.ImageSearch()
+        tools.append(
+            types.Tool(google_search=types.GoogleSearch(search_types=search_types)),
+        )
+
+    thinking_config = None
+    if include_thoughts:
+        thinking_config = types.ThinkingConfig(
+            include_thoughts=include_thoughts,
+            thinking_budget=-1
+            if thinking_level == "HIGH"
+            else 1024,
+        )
 
     with track_model_call(
-        model_name=model_name,
+        model_name=active_model_name,
         aspect_ratio=aspect_ratio,
         num_images=len(images),
     ):
         response = client.models.generate_content(
-            model=model_name,
+            model=active_model_name,
             contents=contents,
             config=types.GenerateContentConfig(
                 response_modalities=["IMAGE", "TEXT"],
                 image_config=types.ImageConfig(**image_config_args),
                 tools=tools if tools else None,
+                thinking_config=thinking_config,
                 # candidate_count=candidate_count,
             ),
         )
@@ -156,14 +177,15 @@ def generate_image_from_prompt_and_images(
 
     gcs_uris = []
     captions = []
+    all_thoughts = []
     current_text_buffer = ""
+    current_thought_buffer = ""
     grounding_info = None
 
     if response.candidates:
         candidate = response.candidates[0]
         if candidate.grounding_metadata:
             try:
-                # google-genai types usually have model_dump()
                 grounding_info = candidate.grounding_metadata.model_dump()
             except Exception as e:
                 analytics_logger.warning(f"Failed to extract grounding metadata: {e}")
@@ -173,14 +195,16 @@ def generate_image_from_prompt_and_images(
                 f"generate_image_from_prompt_and_images: {len(candidate.content.parts)} parts",
             )
             for i, part in enumerate(candidate.content.parts):
-                if hasattr(part, "text") and part.text:
+                if hasattr(part, "thought") and part.thought:
+                    if part.text:
+                        current_thought_buffer += part.text
+                elif hasattr(part, "text") and part.text:
                     analytics_logger.info(
                         f"generate_image_from_prompt_and_images (text): {part.text}",
                     )
                     current_text_buffer += part.text
 
                 if hasattr(part, "inline_data") and part.inline_data:
-                    # Default to "image/png" if mime_type is missing
                     mime_type = "image/png"
                     if (
                         hasattr(part.inline_data, "mime_type")
@@ -195,12 +219,12 @@ def generate_image_from_prompt_and_images(
                     )
                     gcs_uris.append(gcs_uri)
                     captions.append(current_text_buffer.strip())
-                    current_text_buffer = (
-                        ""  # Reset buffer after associating with an image
-                    )
+                    all_thoughts.append(current_thought_buffer.strip())
+                    current_text_buffer = ""
+                    current_thought_buffer = ""
     else:
         analytics_logger.warning("generate_image_from_prompt_and_images: no images")
-    return gcs_uris, execution_time, captions, grounding_info
+    return gcs_uris, execution_time, captions, grounding_info, all_thoughts
 
 
 @retry(

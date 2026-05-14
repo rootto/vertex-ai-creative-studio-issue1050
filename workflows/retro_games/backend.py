@@ -117,7 +117,7 @@ def step_1_generate_8bit(state: RetroGameWorkflowState) -> RetroGameWorkflowStat
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                gcs_uris, _, _, _ = generate_image_from_prompt_and_images(
+                gcs_uris, _, _, _, _ = generate_image_from_prompt_and_images(
                     prompt=full_prompt,
                     images=[input_uri],
                     aspect_ratio="1:1",
@@ -172,7 +172,7 @@ def step_2_generate_character_sheet(
 
     def _gen_sheet(input_uri, folder):
         try:
-            gcs_uris, _, _, _ = generate_image_from_prompt_and_images(
+            gcs_uris, _, _, _, _ = generate_image_from_prompt_and_images(
                 prompt=prompt,
                 images=[input_uri],
                 aspect_ratio="1:1",

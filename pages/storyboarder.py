@@ -190,7 +190,7 @@ def on_generate_images_click(e: me.ClickEvent):
     yield
 
     try:
-        gcs_uris, _, captions, _ = generate_image_from_prompt_and_images(
+        gcs_uris, _, captions, _, _ = generate_image_from_prompt_and_images(
             prompt=state.prompt,
             images=[],
             aspect_ratio=state.aspect_ratio,
@@ -200,7 +200,7 @@ def on_generate_images_click(e: me.ClickEvent):
         # If we only got 1, let's loop to get more.
         if len(gcs_uris) < 4:
             for _ in range(4 - len(gcs_uris)):
-                new_uris, _, new_captions, _ = generate_image_from_prompt_and_images(
+                new_uris, _, new_captions, _, _ = generate_image_from_prompt_and_images(
                     prompt=state.prompt,
                     images=[],
                     aspect_ratio=state.aspect_ratio,
