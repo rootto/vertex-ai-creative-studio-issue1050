@@ -126,7 +126,7 @@ VEO_MODELS: list[VeoModelConfig] = [
         version_id="3.1-fast",
         model_name="veo-3.1-fast-generate-001",
         display_name="Veo 3.1 Fast",
-        supported_modes=["t2v", "i2v", "interpolation"],
+        supported_modes=["t2v", "i2v", "interpolation", "r2v"],
         supported_aspect_ratios=["16:9", "9:16"],
         resolutions=["720p", "1080p", "4k"],
         min_duration=4,
@@ -138,6 +138,16 @@ VEO_MODELS: list[VeoModelConfig] = [
         requires_prompt_enhancement=True,
         default_prompt_enhancement=True,
         supported_durations=[4, 6, 8],
+        supports_video_extension=True,
+        supported_extension_durations=[7],
+        mode_overrides={
+            "r2v": ModeOverride(
+                supported_durations=[8],
+                default_duration=8,
+                supports_style_reference=True,
+                supported_aspect_ratios=["16:9", "9:16"],
+            ),
+        },
     ),
     VeoModelConfig(
         version_id="3.1-fast-preview",
