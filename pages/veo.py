@@ -41,6 +41,7 @@ from models.gemini import rewriter
 from models.model_setup import VeoModelSetup
 from models.requests import APIReferenceImage, VideoGenerationRequest
 from models.veo import generate_video
+from services.team_service import get_teams_for_user
 from state.state import AppState
 from state.veo_state import PageState
 from config.veo_models import get_veo_model_config, DEFAULT_VEO_VERSION_ID
@@ -80,6 +81,23 @@ def on_veo_load(e: me.LoadEvent):
         # Provide a default prompt for a better user experience
         state.veo_prompt_input = "Animate this image with subtle motion."
 
+    app_state = me.state(AppState)
+    assigned_only = app_state.user_role != "administrator"
+    teams = get_teams_for_user(
+        app_state.user_email, role=app_state.user_role, assigned_only=assigned_only,
+    )
+    guidelines = []
+    for team in teams:
+        content = team.extracted_text or team.branding_guideline.get("content")
+        content_str = content or "No brand guidelines configured for this team."
+        team_label = team.name or f"Team ({team.id or 'Unnamed'})"
+        guidelines.append(
+            {
+                "team_name": team_label,
+                "content": content_str,
+            },
+        )
+    state.available_brand_guidelines_json = json.dumps(guidelines, default=str)
     yield
 
 
@@ -574,7 +592,7 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
     # --- Prepare Request Data ---
     # (Logic copied from original to maintain parity)
     prompt_to_send = state.veo_prompt_input
-    if state.selected_brand_guideline:
+    if state.selected_brand_guideline and not state.selected_brand_guideline.startswith("No brand guidelines"):
         prompt_to_send = f"{prompt_to_send}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
 
     request = VideoGenerationRequest(

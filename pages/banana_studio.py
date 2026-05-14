@@ -1242,7 +1242,7 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
 
     try:
         final_prompt = base_prompt
-        if state.selected_brand_guideline:
+        if state.selected_brand_guideline and not state.selected_brand_guideline.startswith("No brand guidelines"):
             final_prompt = f"{final_prompt}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
         with track_model_call(
             model_name=state.selected_model,
