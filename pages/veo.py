@@ -630,7 +630,8 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
 
     # --- 1. Initiate Async Job ---
     try:
-        api_url = f"{config.API_BASE_URL}/api/veo/generate_async"
+        base_url = "http://localhost:8080" if "localhost" not in config.API_BASE_URL else config.API_BASE_URL
+        api_url = f"{base_url}/api/veo/generate_async"
         headers = {"X-Goog-Authenticated-User-Email": app_state.user_email}
         
         # Log the initial click/attempt
@@ -665,7 +666,8 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
     while state.job_status in ["pending", "processing", "created"]:
         time.sleep(2) 
         try:
-            status_url = f"{config.API_BASE_URL}/api/veo/job/{state.current_job_id}"
+            base_url = "http://localhost:8080" if "localhost" not in config.API_BASE_URL else config.API_BASE_URL
+            status_url = f"{base_url}/api/veo/job/{state.current_job_id}"
             resp = requests.get(status_url)
             resp.raise_for_status()
             status_data = resp.json()
