@@ -59,6 +59,7 @@ from models.gemini import (
 )
 from models.upscale import get_image_resolution
 from services.c2pa_service import c2pa_service
+from services.team_service import get_teams_for_user
 from state.state import AppState
 
 CHIP_STYLE = me.Style(
@@ -150,6 +151,11 @@ on_thinking_level_change = get_on_thinking_level_change(PageState)
 on_model_select = get_on_model_select(PageState)
 on_prompt_blur = get_on_prompt_blur(PageState)
 on_thumbnail_click = get_on_thumbnail_click(PageState)
+
+
+def on_brand_guideline_change(e: me.SelectSelectionChangeEvent):
+    """Updates the selected brand guideline in the page state."""
+    me.state(PageState).selected_brand_guideline = e.value
 
 
 with open("config/about_content.json") as f:
@@ -323,6 +329,28 @@ def gemini_image_gen_page_content():
                                 on_remove=on_remove_image,
                                 icon_size=18,
                             )
+                try:
+                    guidelines = json.loads(state.available_brand_guidelines_json)
+                except Exception:
+                    guidelines = []
+
+                me.select(
+                    label="Add Brand Guidelines",
+                    options=[
+                        me.SelectOption(label="None", value=""),
+                    ]
+                    + [
+                        me.SelectOption(
+                            label=g["team_name"],
+                            value=g["content"],
+                        )
+                        for g in guidelines
+                    ],
+                    on_selection_change=on_brand_guideline_change,
+                    value=state.selected_brand_guideline,
+                    style=me.Style(width="100%", margin=me.Margin(bottom=16)),
+                )
+
                 me.textarea(
                     label="Prompt",
                     rows=3,
@@ -668,6 +696,9 @@ def gemini_image_gen_page_content():
                                         state.grounding_info, app_state.theme_mode,
                                     )
 
+                            if state.previous_media_item_id:
+                                feedback(media_item_id=state.previous_media_item_id)
+
                         else:
                             # Display multiple images in a gallery view
                             with me.box(
@@ -786,6 +817,9 @@ def gemini_image_gen_page_content():
                                         _render_grounding_info(
                                             state.grounding_info, app_state.theme_mode,
                                         )
+
+                                if state.previous_media_item_id:
+                                    feedback(media_item_id=state.previous_media_item_id)
                 else:
                     # Placeholder
                     with me.box(
@@ -1052,6 +1086,8 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
     state.suggested_transformations_json = "[]"
 
     final_prompt = _get_appended_prompt(base_prompt, state.num_images_to_generate)
+    if state.selected_brand_guideline and not state.selected_brand_guideline.startswith("No brand guidelines"):
+        final_prompt = f"{final_prompt}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
     # final_prompt = base_prompt
 
     state.is_generating = True
@@ -1208,6 +1244,24 @@ def on_load(e: me.LoadEvent):
             state.uploaded_image_display_urls.append(
                 create_display_url(final_gcs_uri),
             )
+        app_state = me.state(AppState)
+        assigned_only = app_state.user_role != "administrator"
+        teams = get_teams_for_user(
+            app_state.user_email, role=app_state.user_role, assigned_only=assigned_only,
+        )
+        guidelines = []
+        for team in teams:
+            content = team.extracted_text or team.branding_guideline.get("content")
+            content_str = content or "No brand guidelines configured for this team."
+            team_label = team.name or f"Team ({team.id or 'Unnamed'})"
+            guidelines.append(
+                {
+                    "team_name": team_label,
+                    "content": content_str,
+                },
+            )
+        state.available_brand_guidelines_json = json.dumps(guidelines, default=str)
+        state.initial_load_complete = True
     yield
 
 

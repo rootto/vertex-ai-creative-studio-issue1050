@@ -1405,19 +1405,21 @@ def on_load(e: me.LoadEvent):
             state.uploaded_image_gcs_uris.append(image_uri)
 
         app_state = me.state(AppState)
+        assigned_only = app_state.user_role != "administrator"
         teams = get_teams_for_user(
-            app_state.user_email, role=app_state.user_role, assigned_only=True,
+            app_state.user_email, role=app_state.user_role, assigned_only=assigned_only,
         )
         guidelines = []
         for team in teams:
             content = team.extracted_text or team.branding_guideline.get("content")
-            if content:
-                guidelines.append(
-                    {
-                        "team_name": team.name,
-                        "content": content,
-                    },
-                )
+            content_str = content or "No brand guidelines configured for this team."
+            team_label = team.name or f"Team ({team.id or 'Unnamed'})"
+            guidelines.append(
+                {
+                    "team_name": team_label,
+                    "content": content_str,
+                },
+            )
         state.available_brand_guidelines_json = json.dumps(guidelines, default=str)
         state.initial_load_complete = True
 
