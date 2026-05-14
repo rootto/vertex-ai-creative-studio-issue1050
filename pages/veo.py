@@ -269,8 +269,8 @@ def veo_content(app_state: me.state):
                         flex_basis="max(480px, calc(60% - 48px))",
                         display="flex",
                         flex_direction="column",
-                        gap=10,
-                    ):
+                    )
+                ):
                     try:
                         guidelines = json.loads(state.available_brand_guidelines_json)
                     except Exception:
