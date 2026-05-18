@@ -153,6 +153,7 @@ class MediaItem:
     image_size: str | None = None
     feedback_vote: str | None = None
     feedback_comment: str | None = None
+    signed_url: str | None = None
 
     def __post_init__(self):
         # Ensure audio_analysis is always a JSON string for state serialization.
@@ -371,6 +372,7 @@ def _create_media_item_from_dict(doc_id: str, raw_item_data: dict) -> MediaItem:
         grounding_info=raw_item_data.get("grounding_info"),
         audio_analysis=raw_item_data.get("audio_analysis"),
         media_type=raw_item_data.get("media_type"),
+        signed_url=raw_item_data.get("signed_url"),
         source_character_images=raw_item_data.get("source_character_images", []),
         character_description=raw_item_data.get("character_description"),
         imagen_prompt=raw_item_data.get("imagen_prompt"),
@@ -756,6 +758,11 @@ def get_media_for_page_optimized(
                 resolution=(
                     str(raw_item_data.get("resolution"))
                     if raw_item_data.get("resolution") is not None
+                    else None
+                ),
+                mime_type=(
+                    str(raw_item_data.get("mime_type"))
+                    if raw_item_data.get("mime_type") is not None
                     else None
                 ),
                 media_type=(
