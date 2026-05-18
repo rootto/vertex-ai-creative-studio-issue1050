@@ -1087,6 +1087,8 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
     final_prompt = _get_appended_prompt(base_prompt, state.num_images_to_generate)
 
     brand_pdf_uri = None
+    team_id_to_log = None
+    tags_to_log = []
     if state.selected_brand_guideline and not state.selected_brand_guideline.startswith("No brand guidelines"):
         selected_g = None
         guidelines = json.loads(state.available_brand_guidelines_json) if state.available_brand_guidelines_json else []
@@ -1096,6 +1098,8 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
                 break
 
         if selected_g:
+            team_id_to_log = selected_g["team_id"]
+            tags_to_log = [selected_g["team_name"]]
             if selected_g["type"] == "text":
                 final_prompt = f"{final_prompt}\n\nBrand Guidelines:\n{selected_g['content']}"
             elif selected_g["type"] == "pdf" and selected_g["content"]:
