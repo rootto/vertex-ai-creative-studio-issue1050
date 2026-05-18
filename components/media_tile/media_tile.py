@@ -11,6 +11,12 @@ def get_pills_for_item(item: MediaItem, https_url: str) -> str:
     pills = []
     # Infer type if missing, to make pill generation more robust.
     effective_media_type = item.media_type
+    if effective_media_type:
+        if effective_media_type == "images":
+            effective_media_type = "image"
+        elif effective_media_type == "videos":
+            effective_media_type = "video"
+
     if not effective_media_type and https_url:
         if ".wav" in https_url or ".mp3" in https_url:
             effective_media_type = "audio"
@@ -64,6 +70,12 @@ def media_tile(
 ):
     """Defines the API for the media_tile web component."""
     effective_media_type = media_type
+    if effective_media_type:
+        if effective_media_type == "images":
+            effective_media_type = "image"
+        elif effective_media_type == "videos":
+            effective_media_type = "video"
+
     if not effective_media_type and https_url:
         if ".wav" in https_url or ".mp3" in https_url:
             effective_media_type = "audio"
