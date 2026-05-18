@@ -12,13 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
 from collections.abc import Callable
 from dataclasses import field
 from functools import partial
 
 import mesop as me
 
-from common.metadata import MediaItem, get_media_for_page_optimized
+from common.metadata import (
+    _create_media_item_from_dict,
+    get_media_for_page_optimized,
+)
 from common.utils import create_display_url
 from components.dialog import dialog
 from components.library.events import LibrarySelectionChangeEvent
@@ -33,7 +37,7 @@ class State:
     show_library_dialog: bool = False
     active_chooser_key: str = ""
     is_loading: bool = False
-    media_items: list[MediaItem] = field(default_factory=list)  # pylint: disable=E3701
+    media_items_json: str = "[]"
     show_only_my_items: bool = False
     media_type: list[str] = field(default_factory=lambda: ["images"])
 
@@ -79,7 +83,8 @@ def library_chooser_button(
             )
             item.signed_url = create_display_url(gcs_uri)
 
-        state.media_items = items
+        from dataclasses import asdict
+        state.media_items_json = json.dumps([asdict(item) for item in items], default=str)
         state.is_loading = False
         yield
 
@@ -193,9 +198,13 @@ def library_chooser_button(
                         ):
                             me.progress_spinner()
                     else:
+                        media_items_list = [
+                            _create_media_item_from_dict(item["id"], item)
+                            for item in json.loads(state.media_items_json)
+                        ] if state.media_items_json else []
                         library_image_selector(
                             on_select=on_select_from_library,
-                            media_items=state.media_items,
+                            media_items=media_items_list,
                         )
                 with me.box(
                     style=me.Style(

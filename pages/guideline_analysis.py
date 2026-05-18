@@ -15,7 +15,7 @@
 
 import json
 from collections.abc import Callable
-from dataclasses import field
+from dataclasses import asdict, field
 
 import mesop as me
 from google.cloud import firestore
@@ -57,7 +57,7 @@ class PageState:
     evaluation_error: str | None = None
     show_chooser_dialog: bool = False
     chooser_is_loading: bool = False
-    chooser_media_items: list[MediaItem] = field(default_factory=list)  # pylint: disable=E3701:invalid-field-call
+    chooser_media_items_json: str = "[]"
     chooser_last_doc_id: str = ""
     chooser_all_items_loaded: bool = False
 
@@ -434,7 +434,7 @@ def render_chooser_dialog():
         state = me.state(PageState)
         media_item_id = e.key
         state.show_chooser_dialog = False
-        state.chooser_media_items = []
+        state.chooser_media_items_json = "[]"
         state.selected_media_item_id = media_item_id
         yield
 
@@ -459,7 +459,9 @@ def render_chooser_dialog():
             gcs_uri = item.gcsuri or (item.gcs_uris[0] if item.gcs_uris else None)
             item.signed_url = create_display_url(gcs_uri) if gcs_uri else ""
 
-        state.chooser_media_items.extend(new_items)
+        current_items = json.loads(state.chooser_media_items_json) if state.chooser_media_items_json else []
+        current_items.extend([asdict(item) for item in new_items])
+        state.chooser_media_items_json = json.dumps(current_items, default=str)
         state.chooser_last_doc_id = last_doc.id if last_doc else ""
         state.chooser_is_loading = False
         yield
@@ -504,7 +506,8 @@ def render_chooser_dialog():
                         padding=me.Padding.all(10),
                     ),
                 ):
-                    if state.chooser_is_loading and not state.chooser_media_items:
+                    chooser_media_items = json.loads(state.chooser_media_items_json) if state.chooser_media_items_json else []
+                    if state.chooser_is_loading and not chooser_media_items:
                         me.progress_spinner()
                     else:
                         with me.box(
@@ -514,18 +517,15 @@ def render_chooser_dialog():
                                 gap="16px",
                             ),
                         ):
-                            for item in state.chooser_media_items:
-                                https_url = (
-                                    item.signed_url
-                                    if hasattr(item, "signed_url")
-                                    else ""
-                                )
+                            for item in chooser_media_items:
+                                https_url = item.get("signed_url", "")
 
                                 render_type = "image"
-                                if item.mime_type:
-                                    if item.mime_type.startswith("video/"):
+                                mime_type = item.get("mime_type")
+                                if mime_type:
+                                    if mime_type.startswith("video/"):
                                         render_type = "video"
-                                    elif item.mime_type.startswith("audio/"):
+                                    elif mime_type.startswith("audio/"):
                                         render_type = "audio"
                                 elif https_url:
                                     if ".mp4" in https_url or ".webm" in https_url:
@@ -534,7 +534,7 @@ def render_chooser_dialog():
                                         render_type = "audio"
 
                                 media_tile(
-                                    key=item.id,
+                                    key=item.get("id"),
                                     on_click=handle_item_selected,
                                     media_type=render_type,
                                     https_url=https_url,
@@ -551,7 +551,7 @@ def open_chooser_dialog(e: me.ClickEvent):
     state = me.state(PageState)
     state.show_chooser_dialog = True
     state.chooser_is_loading = True
-    state.chooser_media_items = []
+    state.chooser_media_items_json = "[]"
     state.chooser_all_items_loaded = False
     state.chooser_last_doc_id = ""
     yield
@@ -562,7 +562,7 @@ def open_chooser_dialog(e: me.ClickEvent):
         gcs_uri = item.gcsuri or (item.gcs_uris[0] if item.gcs_uris else None)
         item.signed_url = create_display_url(gcs_uri) if gcs_uri else ""
 
-    state.chooser_media_items = items
+    state.chooser_media_items_json = json.dumps([asdict(item) for item in items], default=str)
     state.chooser_last_doc_id = last_doc.id if last_doc else ""
     if not last_doc:
         state.chooser_all_items_loaded = True

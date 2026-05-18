@@ -55,7 +55,7 @@ class PageState:
     show_snackbar: bool = False
     snackbar_message: str = ""
     previous_media_item_id: str | None = None
-    prompt_templates: list[dict] = field(default_factory=list)  # pylint: disable=E3701:invalid-field-call
+    prompt_templates_json: str = "[]"
     selected_model: str = ""
 
     info_dialog_open: bool = False
@@ -90,12 +90,12 @@ def on_load(e: me.LoadEvent):
     state = me.state(PageState)
     if not state.selected_model:
         state.selected_model = cfg().GEMINI_WRITERS_WORKSHOP_MODEL_ID
-    if not state.prompt_templates:
+    if not state.prompt_templates_json or state.prompt_templates_json == "[]":
         templates = prompt_template_service.load_templates(
             config_path="config/text_prompt_templates.json",
             template_type="text",
         )
-        state.prompt_templates = [t.model_dump() for t in templates]
+        state.prompt_templates_json = json.dumps([t.model_dump(mode="json") for t in templates], default=str)
     yield
 
 
@@ -180,7 +180,7 @@ def on_save_template(label: str, key: str, category: str, prompt: str):
             template_type="text",
         )
 
-        state.prompt_templates = [t.model_dump() for t in templates]
+        state.prompt_templates_json = json.dumps([t.model_dump(mode="json") for t in templates], default=str)
 
         # Close dialog
 
@@ -210,9 +210,11 @@ CHIP_STYLE = me.Style(
 def _prompt_templates_ui():
     state = me.state(PageState)
 
+    prompt_templates = json.loads(state.prompt_templates_json) if state.prompt_templates_json else []
+
     # Group templates by category (case-insensitive)
     categories = {}
-    for t in state.prompt_templates:
+    for t in prompt_templates:
         category_key = t["category"].lower()
         if category_key not in categories:
             categories[category_key] = []

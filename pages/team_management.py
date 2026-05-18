@@ -14,6 +14,9 @@
 
 """Team management page."""
 
+import json
+from dataclasses import asdict
+
 import mesop as me
 
 from common.analytics import get_logger
@@ -52,10 +55,9 @@ def team_management_content() -> None:
         f"DEBUG: team_management_content entered. user_role={app_state.user_role}, email={app_state.user_email}",
     )
 
-    if not page_state.teams:
-        from dataclasses import asdict
+    if not page_state.teams_json or page_state.teams_json == "[]":
         teams = get_teams_for_user(app_state.user_email, app_state.user_role)
-        page_state.teams = [asdict(t) for t in teams]
+        page_state.teams_json = json.dumps([asdict(t) for t in teams], default=str)
 
     if app_state.user_role not in ["administrator", "manager"]:
         with me.box(style=me.Style(padding=me.Padding.all(24))):
@@ -131,8 +133,9 @@ def team_management_content() -> None:
                     ),
                 ):
                     # Use teams from state
+                    teams_list = json.loads(page_state.teams_json) if page_state.teams_json else []
                     team_options = [
-                        me.SelectOption(label=t["name"], value=t["id"]) for t in page_state.teams
+                        me.SelectOption(label=t["name"], value=t["id"]) for t in teams_list
                     ]
 
                     me.select(
@@ -253,10 +256,9 @@ def on_create_team_click(_: me.ClickEvent):  # noqa: ANN201
         )
         page_state.new_team_name = ""
         # Reload teams
-        from dataclasses import asdict
         teams = get_teams_for_user(app_state.user_email, app_state.user_role)
         logger.info(f"DEBUG: Fetched teams after creation: {[t.name for t in teams]}")
-        page_state.teams = [asdict(t) for t in teams]
+        page_state.teams_json = json.dumps([asdict(t) for t in teams], default=str)
     except Exception as ex:  # noqa: BLE001
         page_state.show_snackbar = True
         page_state.snackbar_message = f"Error creating team: {ex}"
@@ -320,10 +322,8 @@ def on_delete_team_click(e: me.ClickEvent):
         page_state.show_snackbar = True
         page_state.snackbar_message = "Team deleted successfully."
         # Reload teams
-        from dataclasses import asdict
-
         teams = get_teams_for_user(app_state.user_email, app_state.user_role)
-        page_state.teams = [asdict(t) for t in teams]
+        page_state.teams_json = json.dumps([asdict(t) for t in teams], default=str)
     except Exception as ex:  # noqa: BLE001
         page_state.show_snackbar = True
         page_state.snackbar_message = f"Error deleting team: {ex}"
