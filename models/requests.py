@@ -54,3 +54,6 @@ class VideoGenerationRequest(BaseModel):
     # For Video Extension
     video_input_gcs: str | None = None
     video_input_mime_type: str | None = None
+
+    # Branding Guidelines
+    team_id: str | None = None

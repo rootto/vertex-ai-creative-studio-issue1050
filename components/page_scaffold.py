@@ -46,6 +46,7 @@ def page_scaffold(page_name: str):
 
     # Allow login page to render without auth
     if page_name == "login" or is_logged_in():
+        app_state.has_redirected = False  # Reset redirect status
         sidenav("")
 
         with (
@@ -72,8 +73,10 @@ def page_scaffold(page_name: str):
         ):
             me.slot()
     else:
-        # Automatically redirect unauthenticated users to the login page
-        me.navigate("/login")
+        # Automatically redirect unauthenticated users to the login page exactly once
+        if not app_state.has_redirected:
+            app_state.has_redirected = True
+            me.navigate("/login")
         # Mesop requires me.slot() to be called in content components.
         # So we call it here but hide it!
         with me.box(style=me.Style(display="none")):

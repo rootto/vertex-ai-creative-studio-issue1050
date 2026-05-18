@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import asdict, field
 import json
-from typing import Generator
+from collections.abc import Generator
+from dataclasses import asdict
 
 import mesop as me
 from flask import request
@@ -38,6 +38,7 @@ class AppState:
     current_page: str = ""
     user_role: str = "contributor"
     managed_teams_json: str = "[]"
+    has_redirected: bool = False
 
     def __init__(self):
         """Initializes the AppState, reading user info from the request context."""

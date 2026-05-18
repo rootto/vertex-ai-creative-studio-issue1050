@@ -95,7 +95,9 @@ def on_veo_load(e: me.LoadEvent):
 
         guidelines.append(
             {
-                "team_name": team_label,
+                "team_id": team.id,
+                "team_name": team.name or f"Team ({team.id or 'Unnamed'})",
+                "team_label": team_label,
                 "content": content_str,
             },
         )
@@ -303,7 +305,7 @@ def veo_content(app_state: me.state):
                         ]
                         + [
                             me.SelectOption(
-                                label=g["team_name"],
+                                label=g["team_label"],
                                 value=g["content"],
                             )
                             for g in guidelines
@@ -409,8 +411,21 @@ def on_click_extend_video(e: me.ClickEvent):
     yield
 
     # --- Prepare Request Data ---
+    prompt_to_send = state.veo_prompt_input
+    team_id_to_send = None
+    if state.selected_brand_guideline and not state.selected_brand_guideline.startswith("No brand guidelines"):
+        selected_g = None
+        guidelines = json.loads(state.available_brand_guidelines_json) if state.available_brand_guidelines_json else []
+        for g in guidelines:
+            if g["content"] == state.selected_brand_guideline:
+                selected_g = g
+                break
+        if selected_g:
+            team_id_to_send = selected_g["team_id"]
+        prompt_to_send = f"{prompt_to_send}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
+
     request = VideoGenerationRequest(
-        prompt=state.veo_prompt_input,
+        prompt=prompt_to_send,
         model_version_id=state.veo_model,
         aspect_ratio=state.aspect_ratio,
         resolution=state.resolution,
@@ -421,6 +436,7 @@ def on_click_extend_video(e: me.ClickEvent):
         person_generation=state.person_generation,
         video_input_gcs=video_input_gcs,
         video_input_mime_type="video/mp4", # Assumed MP4
+        team_id=team_id_to_send,
     )
 
     # --- 1. Initiate Async Job ---
@@ -592,9 +608,17 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
     yield
 
     # --- Prepare Request Data ---
-    # (Logic copied from original to maintain parity)
     prompt_to_send = state.veo_prompt_input
+    team_id_to_send = None
     if state.selected_brand_guideline and not state.selected_brand_guideline.startswith("No brand guidelines"):
+        selected_g = None
+        guidelines = json.loads(state.available_brand_guidelines_json) if state.available_brand_guidelines_json else []
+        for g in guidelines:
+            if g["content"] == state.selected_brand_guideline:
+                selected_g = g
+                break
+        if selected_g:
+            team_id_to_send = selected_g["team_id"]
         prompt_to_send = f"{prompt_to_send}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
 
     request = VideoGenerationRequest(
@@ -628,6 +652,7 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
         )
         if state.veo_mode == "r2v" and state.r2v_style_image
         else None,
+        team_id=team_id_to_send,
     )
 
     # --- 1. Initiate Async Job ---

@@ -191,8 +191,21 @@ def create_initial_job(request: VideoGenerationRequest, user_email: str) -> str:
     elif request.reference_image_gcs:
         mode = "i2v"
 
+    team_id = getattr(request, "team_id", None)
+    team_name = None
+    if team_id:
+        from services.team_service import get_team
+        try:
+            team = get_team(team_id)
+            if team:
+                team_name = team.name
+        except Exception as ex:
+            logger.warning(f"Could not load team {team_id} for metadata tagging: {ex}")
+
     item = MediaItem(
         user_email=user_email,
+        team_id=team_id,
+        tags=[team_name] if team_name else [],
         timestamp=datetime.datetime.now(datetime.UTC),
         status="pending",
         prompt=request.prompt,
