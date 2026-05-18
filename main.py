@@ -143,15 +143,26 @@ async def add_global_csp(request: Request, call_next):
 @app.middleware("http")
 async def set_request_context(request: Request, call_next):
     session_id = request.cookies.get("session_id")
-    if not session_id:
-        session_id = str(uuid.uuid4())
-        user_email = "anonymous@google.com"
-    else:
+    user_email = None
+
+    # 1. Try to load from session cookie first
+    if session_id:
         session = get_session(session_id)
         if session:
             user_email = session.user_email
-        else:
-            user_email = "anonymous@google.com"
+
+    # 2. Fallback to checking X-Goog-Authenticated-User-Email header
+    if not user_email:
+        user_email = request.headers.get("X-Goog-Authenticated-User-Email")
+        if user_email and user_email.startswith("accounts.google.com:"):
+            user_email = user_email.split(":")[-1]
+
+    # 3. Fallback to default
+    if not user_email:
+        user_email = "anonymous@google.com"
+
+    if not session_id:
+        session_id = str(uuid.uuid4())
 
     request.scope["MESOP_USER_EMAIL"] = user_email
     request.scope["MESOP_SESSION_ID"] = session_id

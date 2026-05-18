@@ -33,7 +33,6 @@ def on_theme_load(e: me.WebEvent):
     yield
 
 
-from components.navigate_button.navigate_button import navigate_button
 
 
 @me.content_component
@@ -73,20 +72,8 @@ def page_scaffold(page_name: str):
         ):
             me.slot()
     else:
-        with me.box(
-            style=me.Style(
-                display="flex",
-                flex_direction="column",
-                align_items="center",
-                justify_content="center",
-                height="100vh",
-            ),
-        ):
-            me.text("Access Denied", type="headline-4")
-            me.text("Please sign in to access this page.")
-            with me.box(style=me.Style(margin=me.Margin(top=16))):
-                navigate_button(label="Go to Login", url="/login")
-
+        # Automatically redirect unauthenticated users to the login page
+        me.navigate("/login")
         # Mesop requires me.slot() to be called in content components.
         # So we call it here but hide it!
         with me.box(style=me.Style(display="none")):

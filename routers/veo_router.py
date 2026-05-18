@@ -13,7 +13,7 @@
 # limitations under the License.
 """Router for Veo video generation endpoints."""
 
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
 from common.metadata import get_media_item_by_id
@@ -54,11 +54,8 @@ async def generate_veo_async(
     """
     # Extract user email from the request scope, set by middleware
     user_email = req.scope.get("MESOP_USER_EMAIL")
-    if not user_email:
-        # Fallback or error if auth is strictly required.
-        # For now, we'll use a placeholder if missing to avoid hard crashes during dev,
-        # but in prod this should likely be a 401.
-        user_email = "unknown_user@example.com"
+    if not user_email or user_email == "anonymous@google.com":
+        raise HTTPException(status_code=401, detail="Unauthorized: Authentication required")
 
     # 1. Create the "Tracking Record" immediately
     job_id = create_initial_job(request, user_email)
