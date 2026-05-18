@@ -40,6 +40,7 @@ class State:
     media_items_json: str = "[]"
     show_only_my_items: bool = False
     media_type: list[str] = field(default_factory=lambda: ["images"])
+    selected_team_id: str = ""
 
 
 @me.component
@@ -72,6 +73,7 @@ def library_chooser_button(
             20,
             state.media_type,
             filter_by_user_email=user_email,
+            filter_by_team_id=state.selected_team_id if state.selected_team_id else None,
         )
 
         # Convert GCS URIs to display URLs using the centralized helper.
@@ -97,6 +99,11 @@ def library_chooser_button(
         state.show_library_dialog = True
         # Capture the media_type for this specific button click into the shared state
         state.media_type = media_type
+        yield from _fetch_and_update_items()
+
+    def on_change_team_filter(e: me.SelectSelectionChangeEvent):
+        """Handles changes to the Team filter dropdown."""
+        state.selected_team_id = e.value
         yield from _fetch_and_update_items()
 
     def on_toggle_my_items(e: me.SlideToggleChangeEvent):
@@ -158,13 +165,14 @@ def library_chooser_button(
                     flex_grow=1,
                 ),
             ):
-                # Header with title and toggle
+                # Header with title and filters
                 with me.box(
                     style=me.Style(
                         display="flex",
                         flex_direction="row",
                         justify_content="space-between",
                         align_items="center",
+                        width="100%",
                     ),
                 ):
                     # Dynamic title based on media type
@@ -180,11 +188,37 @@ def library_chooser_button(
                         f"Select {media_type_label} from Library",
                         type="headline-6",
                     )
-                    me.slide_toggle(
-                        label="Show only my items",
-                        checked=state.show_only_my_items,
-                        on_change=on_toggle_my_items,
-                    )
+
+                    with me.box(
+                        style=me.Style(
+                            display="flex",
+                            flex_direction="row",
+                            align_items="center",
+                            gap=16,
+                        ),
+                    ):
+                        # Team Filter Dropdown
+                        teams = json.loads(app_state.managed_teams_json) if app_state.managed_teams_json else []
+                        if teams:
+                            me.select(
+                                label="Filter by Team",
+                                options=[
+                                    me.SelectOption(label="All Teams", value=""),
+                                ]
+                                + [
+                                    me.SelectOption(label=t.get("name") or f"Team {t.get('id')}", value=t.get("id"))
+                                    for t in teams
+                                ],
+                                on_selection_change=on_change_team_filter,
+                                value=state.selected_team_id,
+                                style=me.Style(width="180px", margin=me.Margin(bottom=0)),
+                            )
+
+                        me.slide_toggle(
+                            label="Show only my items",
+                            checked=state.show_only_my_items,
+                            on_change=on_toggle_my_items,
+                        )
 
                 with me.box(style=me.Style(flex_grow=1, overflow_y="auto")):
                     if state.is_loading:

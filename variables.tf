@@ -114,3 +114,27 @@ variable "google_client_secret" {
   type        = string
   default     = ""
 }
+
+variable "gemini_tts_location" {
+  description = "Location for Gemini TTS resources"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "gemini_critique_model_id" {
+  description = "Gemini model ID to use for critique"
+  type        = string
+  default     = "gemini-2.5-flash"
+}
+
+variable "gemini_critique_location" {
+  description = "Location for Gemini critique resources"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "character_consistency_gemini_location" {
+  description = "Location for Character Consistency Gemini resources"
+  type        = string
+  default     = "us-central1"
+}

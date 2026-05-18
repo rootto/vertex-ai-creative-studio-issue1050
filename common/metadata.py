@@ -162,6 +162,15 @@ class MediaItem:
         if isinstance(self.grounding_info, dict):
             self.grounding_info = json.dumps(self.grounding_info)
 
+        # Automatically populate media_type if not set
+        if not self.media_type and self.mime_type:
+            if self.mime_type.startswith("image/"):
+                self.media_type = "images"
+            elif self.mime_type.startswith("video/"):
+                self.media_type = "videos"
+            elif self.mime_type.startswith("audio/"):
+                self.media_type = "audio"
+
 
 @dataclass
 class Team:
@@ -617,6 +626,7 @@ def get_media_for_page_optimized(
     type_filters: list[str],
     start_after=None,
     filter_by_user_email: str | None = None,
+    filter_by_team_id: str | None = None,
 ):
     """Fetches a paginated and filtered list of media items from Firestore
     using server-side pagination and filtering.
@@ -624,32 +634,19 @@ def get_media_for_page_optimized(
     try:
         query = db.collection(config.GENMEDIA_COLLECTION_NAME)
 
-        # Apply user email filter if provided
-        if filter_by_user_email:
+        # Apply team ID filter if provided (takes precedence over user email)
+        if filter_by_team_id:
+            query = query.where("team_id", "==", filter_by_team_id)
+        elif filter_by_user_email:
             query = query.where("user_email", "==", filter_by_user_email)
 
-        # Apply type filters using WHERE clauses
-        # Note: This requires Firestore indexes. For a single 'mime_type' startsWith,
-        # a single-field index on 'mime_type' might suffice. For combinations with
-        # sorting, a composite index is likely needed.
+        # Apply type filters using WHERE clauses on media_type
         if "videos" in type_filters:
-            query = query.where("mime_type", ">=", "video/").where(
-                "mime_type",
-                "<",
-                "video0",
-            )
+            query = query.where("media_type", "==", "videos")
         elif "images" in type_filters:
-            query = query.where("mime_type", ">=", "image/").where(
-                "mime_type",
-                "<",
-                "image0",
-            )
+            query = query.where("media_type", "==", "images")
         elif "music" in type_filters or "audio" in type_filters:
-            query = query.where("mime_type", ">=", "audio/").where(
-                "mime_type",
-                "<",
-                "audio0",
-            )
+            query = query.where("media_type", "==", "audio")
 
         # Always sort by timestamp
         query = query.order_by("timestamp", direction=firestore.Query.DESCENDING)
