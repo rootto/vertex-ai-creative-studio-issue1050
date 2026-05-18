@@ -13,19 +13,16 @@
 # limitations under the License.
 """Veo mesop UI page."""
 
-import datetime  # Required for timestamp
 import json
 import time
 
+import mesop as me
 import requests
 
-import mesop as me
-
 from common.analytics import log_ui_click, track_click, track_model_call
-from common.error_handling import AsyncVeoPollingFailedError, GenerationError
-from common.metadata import MediaItem, add_media_item_to_firestore
+from common.error_handling import AsyncVeoPollingFailedError
 from common.storage import store_to_gcs
-from common.utils import create_display_url, get_image_dimensions_from_base64
+from common.utils import create_display_url
 from components.dialog import dialog, dialog_actions
 from components.header import header
 from components.library.events import LibrarySelectionChangeEvent
@@ -36,15 +33,13 @@ from components.veo.veo_modes import veo_modes
 from components.veo.video_display import video_display
 from config.default import ABOUT_PAGE_CONTENT, Default
 from config.rewriters import VIDEO_REWRITER
-from config.veo_models import get_veo_model_config
+from config.veo_models import DEFAULT_VEO_VERSION_ID, get_veo_model_config
 from models.gemini import rewriter
 from models.model_setup import VeoModelSetup
 from models.requests import APIReferenceImage, VideoGenerationRequest
-from models.veo import generate_video
 from services.team_service import get_teams_for_user
 from state.state import AppState
 from state.veo_state import PageState
-from config.veo_models import get_veo_model_config, DEFAULT_VEO_VERSION_ID
 
 config = Default()
 
@@ -88,9 +83,16 @@ def on_veo_load(e: me.LoadEvent):
     )
     guidelines = []
     for team in teams:
-        content = team.extracted_text or team.branding_guideline.get("content")
-        content_str = content or "No brand guidelines configured for this team."
+        g_type = team.branding_guideline.get("type", "text")
+        if g_type == "pdf":
+            content_str = team.extracted_text or "Brand guidelines extraction in progress. Please check again in a few seconds."
+        else:
+            content_str = team.branding_guideline.get("content", "") or "No brand guidelines configured for this team."
+
         team_label = team.name or f"Team ({team.id or 'Unnamed'})"
+        if g_type == "pdf":
+            team_label = f"{team_label} (PDF Summary)"
+
         guidelines.append(
             {
                 "team_name": team_label,
@@ -287,7 +289,7 @@ def veo_content(app_state: me.state):
                         flex_basis="max(480px, calc(60% - 48px))",
                         display="flex",
                         flex_direction="column",
-                    )
+                    ),
                 ):
                     try:
                         guidelines = json.loads(state.available_brand_guidelines_json)
@@ -390,7 +392,7 @@ def on_click_extend_video(e: me.ClickEvent):
         state.show_error_dialog = True
         yield
         return
-    
+
     # Convert display URL back to GCS URI
     from common.utils import https_url_to_gcs_uri
     video_input_gcs = https_url_to_gcs_uri(video_to_extend_url)
@@ -425,7 +427,7 @@ def on_click_extend_video(e: me.ClickEvent):
     try:
         api_url = f"{config.API_BASE_URL}/api/veo/generate_async"
         headers = {"X-Goog-Authenticated-User-Email": app_state.user_email}
-        
+
         # Log analytics
         with track_model_call(
             model_name=model_config.model_name,
@@ -433,12 +435,12 @@ def on_click_extend_video(e: me.ClickEvent):
             duration_seconds=request.duration_seconds,
             aspect_ratio=request.aspect_ratio,
             video_count=request.video_count,
-            mode="extension", 
+            mode="extension",
         ):
             response = requests.post(api_url, json=request.model_dump(), headers=headers)
             response.raise_for_status()
             data = response.json()
-            
+
         state.current_job_id = data["job_id"]
         state.job_status = data["status"]
         yield
@@ -451,7 +453,7 @@ def on_click_extend_video(e: me.ClickEvent):
 
     # --- 2. Poll for Completion ---
     while state.job_status in ["pending", "processing", "created"]:
-        time.sleep(2) 
+        time.sleep(2)
         try:
             status_url = f"{config.API_BASE_URL}/api/veo/job/{state.current_job_id}"
             resp = requests.get(status_url)
@@ -464,11 +466,11 @@ def on_click_extend_video(e: me.ClickEvent):
                 state.result_gcs_uris = status_data.get("video_uris", [])
                 if not state.result_gcs_uris and status_data.get("video_uri"):
                      state.result_gcs_uris = [status_data["video_uri"]]
-                
+
                 state.result_display_urls = [create_display_url(uri) for uri in state.result_gcs_uris]
                 if state.result_display_urls:
                     state.selected_video_url = state.result_display_urls[0]
-                
+
                 end_time = time.time()
                 execution_time = end_time - start_time
                 state.timing = f"Extension time: {round(execution_time)} seconds"
@@ -482,7 +484,7 @@ def on_click_extend_video(e: me.ClickEvent):
                 state.is_loading = False
                 yield
                 break
-            
+
             yield
 
         except Exception as e:
@@ -616,13 +618,13 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
         r2v_references=[
             APIReferenceImage(gcs_uri=uri, mime_type=mime)
             for uri, mime in zip(
-                state.r2v_reference_images, state.r2v_reference_mime_types
+                state.r2v_reference_images, state.r2v_reference_mime_types,
             )
         ]
         if state.veo_mode == "r2v" and state.r2v_reference_images
         else None,
         r2v_style_image=APIReferenceImage(
-            gcs_uri=state.r2v_style_image, mime_type=state.r2v_style_image_mime_type
+            gcs_uri=state.r2v_style_image, mime_type=state.r2v_style_image_mime_type,
         )
         if state.veo_mode == "r2v" and state.r2v_style_image
         else None,
@@ -633,10 +635,10 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
         base_url = "http://localhost:8080" if "localhost" not in config.API_BASE_URL else config.API_BASE_URL
         api_url = f"{base_url}/api/veo/generate_async"
         headers = {"X-Goog-Authenticated-User-Email": app_state.user_email}
-        
+
         # Log the initial click/attempt
         model_name_for_analytics = get_veo_model_config(request.model_version_id).model_name
-        
+
         with track_model_call(
             model_name=model_name_for_analytics,
             prompt_length=len(request.prompt) if request.prompt else 0,
@@ -648,7 +650,7 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
             response = requests.post(api_url, json=request.model_dump(), headers=headers)
             response.raise_for_status()
             data = response.json()
-            
+
         state.current_job_id = data["job_id"]
         state.job_status = data["status"]
         yield
@@ -664,7 +666,7 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
     # or WebSockets if available. For now, this simple loop with yields works
     # within Mesop's generator-based event handlers to keep the UI responsive.
     while state.job_status in ["pending", "processing", "created"]:
-        time.sleep(2) 
+        time.sleep(2)
         try:
             base_url = "http://localhost:8080" if "localhost" not in config.API_BASE_URL else config.API_BASE_URL
             status_url = f"{base_url}/api/veo/job/{state.current_job_id}"
@@ -679,11 +681,11 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
                 # If only one URI is returned but we expected a list, handle it.
                 if not state.result_gcs_uris and status_data.get("video_uri"):
                      state.result_gcs_uris = [status_data["video_uri"]]
-                
+
                 state.result_display_urls = [create_display_url(uri) for uri in state.result_gcs_uris]
                 if state.result_display_urls:
                     state.selected_video_url = state.result_display_urls[0]
-                
+
                 end_time = time.time()
                 execution_time = end_time - start_time
                 state.timing = f"Generation time: {round(execution_time)} seconds"
@@ -698,7 +700,7 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
                 state.is_loading = False
                 yield
                 break
-            
+
             # Still polling...
             yield
 
@@ -752,7 +754,7 @@ def on_upload_image(e: me.UploadEvent):
     try:
         # Store the uploaded file to GCS
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue()
+            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
         )
         # Update the state with the new image details
         state.reference_image_gcs = gcs_path
@@ -771,7 +773,7 @@ def on_upload_last_image(e: me.UploadEvent):
     try:
         # Store the uploaded file to GCS
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue()
+            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
         )
         # Update the state with the new image details
         state.last_reference_image_gcs = gcs_path
@@ -794,7 +796,7 @@ def on_r2v_asset_add(e: me.UploadEvent):
 
     try:
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue()
+            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
         )
         state.r2v_reference_images.append(gcs_path)
         state.r2v_reference_mime_types.append(e.file.mime_type)
@@ -819,7 +821,7 @@ def on_r2v_style_add(e: me.UploadEvent):
     state = me.state(PageState)
     try:
         gcs_path = store_to_gcs(
-            "uploads", e.file.name, e.file.mime_type, e.file.getvalue()
+            "uploads", e.file.name, e.file.mime_type, e.file.getvalue(),
         )
         state.r2v_style_image = gcs_path
         state.r2v_style_image_mime_type = e.file.mime_type
@@ -840,7 +842,7 @@ def on_r2v_style_remove(e: me.ClickEvent):
 def on_veo_image_from_library(e: LibrarySelectionChangeEvent):
     """VEO image from library handler."""
     state = me.state(PageState)
-    
+
     # Helper to infer mime type from extension
     def infer_mime(uri: str) -> str:
         if uri.lower().endswith(".png"): return "image/png"

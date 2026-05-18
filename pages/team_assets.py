@@ -228,19 +228,6 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
                         ):
                             me.icon("clear")
 
-                        if (
-                            not selected_team.extracted_text
-                            and not page_state.is_extracting
-                        ):
-                            me.button(
-                                "Extract guidelines",
-                                on_click=on_extract_click,
-                                key=selected_team.id,
-                                type="raised",
-                            )
-
-                        if page_state.is_extracting:
-                            me.progress_spinner(diameter=24)
 
             me.button(
                 "Save",
@@ -433,25 +420,6 @@ def on_clear_pdf(_: me.ClickEvent):  # noqa: ANN201
     yield
 
 
-def on_extract_click(e: me.ClickEvent):  # noqa: ANN201
-    """Handle extract text click."""
-    team_id = e.key
-    state = me.state(PageState)
-    state.is_extracting = True
-    yield
-    try:
-        extracted_text = extract_branding_guidelines(state.pdf_gcs_uri)
-        set_branding_guideline(team_id, "pdf", state.pdf_gcs_uri, extracted_text)
-        state.show_snackbar = True
-        state.snackbar_message = "Guidelines extracted and saved successfully."
-    except Exception as ex:  # noqa: BLE001
-        state.show_snackbar = True
-        state.snackbar_message = f"Error extracting guidelines: {ex}"
-    finally:
-        state.is_extracting = False
-    yield
-
-
 def on_save_guidelines_click(e: me.ClickEvent):  # noqa: ANN201
     """Handle save guidelines click."""
     team_id = e.key
@@ -459,10 +427,23 @@ def on_save_guidelines_click(e: me.ClickEvent):  # noqa: ANN201
     try:
         if state.guideline_type == "text":
             set_branding_guideline(team_id, "text", state.guideline_text)
+            state.show_snackbar = True
+            state.snackbar_message = "Guidelines saved successfully."
         else:
             set_branding_guideline(team_id, "pdf", state.pdf_gcs_uri)
-        state.show_snackbar = True
-        state.snackbar_message = "Guidelines saved successfully."
+
+            # Start background thread to extract PDF text guidelines using Gemini
+            import threading
+            def run_extraction():
+                try:
+                    extracted_text = extract_branding_guidelines(state.pdf_gcs_uri)
+                    set_branding_guideline(team_id, "pdf", state.pdf_gcs_uri, extracted_text)
+                except Exception as ex:
+                    print(f"Error in background guideline extraction: {ex}")
+
+            threading.Thread(target=run_extraction).start()
+            state.show_snackbar = True
+            state.snackbar_message = "Guidelines saved successfully. PDF text extraction started in background."
     except Exception as ex:  # noqa: BLE001
         state.show_snackbar = True
         state.snackbar_message = f"Error saving guidelines: {ex}"

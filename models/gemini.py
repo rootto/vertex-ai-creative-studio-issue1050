@@ -112,7 +112,8 @@ def generate_image_from_prompt_and_images(
 
     parts = [types.Part.from_text(text=prompt)]
     for image_uri in images:
-        parts.append(types.Part.from_uri(file_uri=image_uri, mime_type="image/png"))
+        m_type = "application/pdf" if image_uri.lower().endswith(".pdf") else "image/png"
+        parts.append(types.Part.from_uri(file_uri=image_uri, mime_type=m_type))
 
     contents = [types.Content(role="user", parts=parts)]
 
