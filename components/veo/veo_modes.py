@@ -197,7 +197,7 @@ def _uploader_placeholder(
             justify_content="center",
             gap=12,
             opacity=0.5 if disabled else 1.0,
-            padding=me.Padding(horizontal=12),
+            padding=me.Padding(left=12, right=12),
         ),
     ):
         me.uploader(
