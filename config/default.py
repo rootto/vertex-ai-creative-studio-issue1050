@@ -75,11 +75,11 @@ class Default:
     PROJECT_ID: str = os.environ.get("PROJECT_ID")
     LOCATION: str = os.environ.get("LOCATION", "global")
     GA_MEASUREMENT_ID: str = os.environ.get("GA_MEASUREMENT_ID")
-    MODEL_ID: str = os.environ.get("MODEL_ID", "gemini-2.5-flash")
+    MODEL_ID: str = os.environ.get("MODEL_ID", "gemini-3-flash-preview")
     INIT_VERTEX: bool = True
     GEMINI_IMAGE_GEN_MODEL: str = os.environ.get(
         "GEMINI_IMAGE_GEN_MODEL",
-        "gemini-2.5-flash-image",
+        "gemini-3.1-flash-image-preview",
     )
     GEMINI_IMAGE_GEN_LOCATION: str = os.environ.get(
         "GEMINI_IMAGE_GEN_LOCATION",
@@ -91,7 +91,7 @@ class Default:
 
     GEMINI_AUDIO_ANALYSIS_MODEL_ID: str = os.environ.get(
         "GEMINI_AUDIO_ANALYSIS_MODEL_ID",
-        "gemini-2.5-flash",
+        "gemini-3-flash-preview",
     )
     GEMINI_WRITERS_WORKSHOP_MODEL_ID: str = os.environ.get(
         "GEMINI_WRITERS_WORKSHOP_MODEL_ID",
