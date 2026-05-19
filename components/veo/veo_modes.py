@@ -136,6 +136,8 @@ def _r2v_uploader(
                             index=i,
                             on_remove=on_r2v_asset_remove,
                             icon_size=16,
+                            width=150,
+                            height=150,
                         )
                     elif not asset_uploader_disabled and i == len(
                         state.r2v_reference_images,
@@ -161,6 +163,8 @@ def _r2v_uploader(
                             index=0,  # Only one style image
                             on_remove=on_r2v_style_remove,
                             icon_size=16,
+                            width=150,
+                            height=150,
                         )
                     else:
                         _uploader_placeholder(
@@ -181,8 +185,8 @@ def _uploader_placeholder(
     """A placeholder box with uploader and library chooser buttons."""
     with me.box(
         style=me.Style(
-            height=100,
-            width=360,
+            height=150,
+            width=150,
             border=me.Border.all(
                 me.BorderSide(
                     width=1,
@@ -192,12 +196,12 @@ def _uploader_placeholder(
             ),
             border_radius=8,
             display="flex",
-            flex_direction="row",
+            flex_direction="column",
             align_items="center",
             justify_content="center",
-            gap=12,
+            gap=6,
             opacity=0.5 if disabled else 1.0,
-            padding=me.Padding(left=12, right=12),
+            padding=me.Padding(all=8),
         ),
     ):
         me.uploader(
@@ -207,14 +211,20 @@ def _uploader_placeholder(
             key=f"{key_prefix}_uploader",
             disabled=disabled,
         )
-        me.text("or", style=me.Style(font_size="10pt", color=me.theme_var("outline")))
+        me.text("or", style=me.Style(font_size="9pt", color=me.theme_var("outline")))
         with me.box(style=me.Style(pointer_events="none" if disabled else "auto")):
             library_chooser_button(
                 key=f"{key_prefix}_library_chooser",
                 on_library_select=on_library_select,
-                button_label="Select from Library",
+                button_label="Select from\nLibrary",
                 button_type="stroked",
                 disabled=disabled,
+                style=me.Style(
+                    white_space="pre-line",
+                    line_height="1.2",
+                    font_size="10pt",
+                    padding=me.Padding(top=4, bottom=4, left=8, right=8),
+                ),
             )
 
 
@@ -223,8 +233,8 @@ def _empty_placeholder():
     """An empty, non-interactive placeholder box."""
     me.box(
         style=me.Style(
-            height=100,
-            width=360,
+            height=150,
+            width=150,
             border=me.Border.all(
                 me.BorderSide(width=1, style="dashed", color=me.theme_var("outline")),
             ),
@@ -254,6 +264,8 @@ def _image_uploader(
                     index=0,
                     on_remove=on_clear_first_image,
                     icon_size=16,
+                    width=150,
+                    height=150,
                 )
             else:
                 _uploader_placeholder(
@@ -273,6 +285,8 @@ def _image_uploader(
                         index=0,
                         on_remove=on_clear_last_image,
                         icon_size=16,
+                        width=150,
+                        height=150,
                     )
                 else:
                     _uploader_placeholder(

@@ -51,6 +51,7 @@ def library_chooser_button(
     key: str = "",
     media_type: list[str] | None = None,
     disabled: bool = False,
+    style: me.Style | None = None,
 ):
     """Render a button that opens a dialog to select media from the library."""
     state = me.state(State)
@@ -133,6 +134,7 @@ def library_chooser_button(
             type=button_type,
             key=key,
             disabled=disabled,
+            style=style,
         ),
         me.box(
             style=me.Style(

@@ -23,12 +23,14 @@ def image_thumbnail(
     index: int,
     on_remove: Callable,
     icon_size: int = 18,
+    width: int = 100,
+    height: int = 100,
 ):
     # Calculate the container dimension based on the icon size.
     # This creates a consistent 4px "padding" on all sides.
     box_dimension = icon_size + 8
 
-    with me.box(style=me.Style(position="relative", width=100, height=100)):
+    with me.box(style=me.Style(position="relative", width=width, height=height)):
         me.image(
             src=image_uri,
             style=me.Style(
