@@ -58,6 +58,9 @@ class Default:
     BUILD_DATE: str = ""
 
     APP_ENV: str = os.environ.get("APP_ENV", "")
+    TEAM_AND_BRANDING: bool = (
+        os.environ.get("TEAM_AND_BRANDING", "True").lower() == "true"
+    )
     API_BASE_URL: str = os.environ.get(
         "API_BASE_URL",
         f"http://localhost:{os.environ.get('PORT', '8080')}",

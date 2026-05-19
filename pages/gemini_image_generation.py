@@ -329,27 +329,29 @@ def gemini_image_gen_page_content():
                                 on_remove=on_remove_image,
                                 icon_size=18,
                             )
-                try:
-                    guidelines = json.loads(state.available_brand_guidelines_json)
-                except Exception:
-                    guidelines = []
+                from config.default import Default as cfg
+                if getattr(cfg(), "TEAM_AND_BRANDING", True):
+                    try:
+                        guidelines = json.loads(state.available_brand_guidelines_json)
+                    except Exception:
+                        guidelines = []
 
-                me.select(
-                    label="Add Brand Guidelines",
-                    options=[
-                        me.SelectOption(label="None", value=""),
-                    ]
-                    + [
-                        me.SelectOption(
-                            label=g["team_label"],
-                            value=g["content"],
-                        )
-                        for g in guidelines
-                    ],
-                    on_selection_change=on_brand_guideline_change,
-                    value=state.selected_brand_guideline,
-                    style=me.Style(width="100%", margin=me.Margin(bottom=16)),
-                )
+                    me.select(
+                        label="Add Brand Guidelines",
+                        options=[
+                            me.SelectOption(label="None", value=""),
+                        ]
+                        + [
+                            me.SelectOption(
+                                label=g["team_label"],
+                                value=g["content"],
+                            )
+                            for g in guidelines
+                        ],
+                        on_selection_change=on_brand_guideline_change,
+                        value=state.selected_brand_guideline,
+                        style=me.Style(width="100%", margin=me.Margin(bottom=16)),
+                    )
 
                 me.textarea(
                     label="Prompt",
@@ -1264,6 +1266,13 @@ def on_load(e: me.LoadEvent):
                 state.uploaded_image_display_urls.append(
                     create_display_url(final_gcs_uri),
                 )
+
+        from config.default import Default as cfg
+        if not getattr(cfg(), "TEAM_AND_BRANDING", True):
+            state.available_brand_guidelines_json = "[]"
+            state.initial_load_complete = True
+            yield
+            return
 
         app_state = me.state(AppState)
         assigned_only = app_state.user_role != "administrator"
