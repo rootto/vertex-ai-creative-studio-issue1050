@@ -182,7 +182,7 @@ def _uploader_placeholder(
     with me.box(
         style=me.Style(
             height=100,
-            width=100,
+            width=360,
             border=me.Border.all(
                 me.BorderSide(
                     width=1,
@@ -192,11 +192,12 @@ def _uploader_placeholder(
             ),
             border_radius=8,
             display="flex",
-            flex_direction="column",
+            flex_direction="row",
             align_items="center",
             justify_content="center",
-            gap=8,
+            gap=12,
             opacity=0.5 if disabled else 1.0,
+            padding=me.Padding(horizontal=12),
         ),
     ):
         me.uploader(
@@ -206,11 +207,14 @@ def _uploader_placeholder(
             key=f"{key_prefix}_uploader",
             disabled=disabled,
         )
+        me.text("or", style=me.Style(font_size="10pt", color=me.theme_var("outline")))
         with me.box(style=me.Style(pointer_events="none" if disabled else "auto")):
             library_chooser_button(
                 key=f"{key_prefix}_library_chooser",
                 on_library_select=on_library_select,
-                button_type="icon",
+                button_label="Select from Library",
+                button_type="stroked",
+                disabled=disabled,
             )
 
 
@@ -220,7 +224,7 @@ def _empty_placeholder():
     me.box(
         style=me.Style(
             height=100,
-            width=100,
+            width=360,
             border=me.Border.all(
                 me.BorderSide(width=1, style="dashed", color=me.theme_var("outline")),
             ),
