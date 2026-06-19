@@ -14,6 +14,7 @@
 """Gemini 2.5 Flash Image Generation - nano-banana."""
 
 import json
+import os
 import time
 from dataclasses import field
 
@@ -992,7 +993,7 @@ def on_suggest_transformations_click(e: me.ClickEvent):
         gcs_uri = f"gs://{state.generated_image_urls[0].replace('/media/', '')}"
         raw_transformations = generate_transformation_prompts(image_uris=[gcs_uri])
         state.suggested_transformations_json = json.dumps(
-            [t.model_dump() for t in raw_transformations]
+            [t.model_dump() for t in raw_transformations],
         )
     except Exception as ex:
         analytics_logger.error(f"Could not generate transformation prompts: {ex}")
@@ -1122,7 +1123,7 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
     team_id_to_log = None
     tags_to_log = []
     if state.selected_brand_guideline and not state.selected_brand_guideline.startswith(
-        "No brand guidelines"
+        "No brand guidelines",
     ):
         selected_g = None
         guidelines = (
@@ -1144,6 +1145,13 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
                 )
             elif selected_g["type"] == "pdf" and selected_g["content"]:
                 brand_pdf_uri = selected_g["content"]
+                pdf_name = os.path.basename(brand_pdf_uri)
+                pdf_instructions = (
+                    f"Treat the attached {pdf_name} strictly as a stylistic reference and conceptual guideline for colors, mood, and aesthetic. "
+                    f"CRITICAL: Do NOT directly copy, paste, or embed any pages, layouts, or text from the {pdf_name} into the final generated image as-is.\n"
+                    f"Exception: You may extract and incorporate existing images found within the {pdf_name} into your generation ONLY IF the main prompt explicitly instructs you to do so."
+                )
+                final_prompt = f"{final_prompt}\n\n{pdf_instructions}"
 
     all_input_uris = input_gcs_uris + ([brand_pdf_uri] if brand_pdf_uri else [])
 
