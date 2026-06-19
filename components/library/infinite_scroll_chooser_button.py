@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable, Optional
+from collections.abc import Callable
+from dataclasses import field
 
 import mesop as me
 
@@ -29,7 +30,7 @@ class State:
     show_dialog: bool = False
     active_chooser_key: str = ""
     is_loading: bool = False
-    media_items_json: str = ""
+    media_items: list[MediaItem] = field(default_factory=list)
     current_page: int = 1
     has_more_items: bool = True
 
@@ -37,7 +38,7 @@ class State:
 @me.component
 def infinite_scroll_chooser_button(
     on_library_select: Callable[[LibrarySelectionChangeEvent], None],
-    button_label: Optional[str] = None,
+    button_label: str | None = None,
     button_type: str = "stroked",
     key: str = "",
 ):
@@ -60,13 +61,7 @@ def infinite_scroll_chooser_button(
             ["images"],
             sort_by_timestamp=True,
         )
-        import json
-        from dataclasses import asdict
-
-        state.media_items_json = json.dumps(
-            [asdict(item) for item in items],
-            default=str,
-        )
+        state.media_items = items
         state.is_loading = False
         if not items:
             state.has_more_items = False
@@ -104,18 +99,20 @@ def infinite_scroll_chooser_button(
         state.show_dialog = False
         yield
 
-    with me.content_button(on_click=open_dialog, type=button_type, key=key):
-        with me.box(
+    with (
+        me.content_button(on_click=open_dialog, type=button_type, key=key),
+        me.box(
             style=me.Style(
                 display="flex",
                 flex_direction="row",
                 gap=8,
                 align_items="center",
             ),
-        ):
-            me.icon("photo_library")
-            if button_label:
-                me.text(button_label)
+        ),
+    ):
+        me.icon("photo_library")
+        if button_label:
+            me.text(button_label)
 
     dialog_style = me.Style(
         width="95vw",
@@ -124,82 +121,51 @@ def infinite_scroll_chooser_button(
         flex_direction="column",
     )
 
-    with dialog(is_open=state.show_dialog, dialog_style=dialog_style):
+    with (
+        dialog(is_open=state.show_dialog, dialog_style=dialog_style),
+        me.box(
+            style=me.Style(
+                display="flex", flex_direction="column", gap=16, flex_grow=1,
+            ),
+        ),
+    ):
+        me.text("Select an Image from Library", type="headline-6")
+        with me.box(style=me.Style(flex_grow=1, overflow_y="auto")):
+            if state.is_loading and not state.media_items:
+                with me.box(
+                    style=me.Style(
+                        display="flex",
+                        justify_content="center",
+                        align_items="center",
+                        height="100%",
+                    ),
+                ):
+                    me.progress_spinner()
+            else:
+                items_to_render = []
+                for item in state.media_items:
+                    if item.gcs_uris:
+                        for uri in item.gcs_uris:
+                            items_to_render.append({"uri": uri})
+                    elif item.gcsuri:
+                        items_to_render.append({"uri": item.gcsuri})
+
+                infinite_scroll_library(
+                    key=f"infinite_scroll_{state.active_chooser_key}",
+                    items=items_to_render,
+                    has_more_items=state.has_more_items,
+                    on_load_more=handle_load_more,
+                    on_image_selected=handle_image_selected,
+                )
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="column", gap=16, flex_grow=1
+                display="flex",
+                justify_content="flex-end",
+                margin=me.Margin(top=24),
             ),
         ):
-            me.text("Select an Image from Library", type="headline-6")
-            with me.box(style=me.Style(flex_grow=1, overflow_y="auto")):
-                if state.is_loading and not state.media_items:
-                    with me.box(
-                        style=me.Style(
-                            display="flex",
-                            justify_content="center",
-                            align_items="center",
-                            height="100%",
-                        ),
-                    ):
-                        me.progress_spinner()
-                else:
-                    items_to_render = []
-                    import json
-
-                    items_dicts = (
-                        json.loads(state.media_items_json)
-                        if state.media_items_json
-                        else []
-                    )
-                    media_items = []
-                    import datetime
-
-                    for d in items_dicts:
-                        valid_keys = MediaItem.__dataclass_fields__.keys()
-                        clean_d = {k: v for k, v in d.items() if k in valid_keys}
-                        if "timestamp" in clean_d and isinstance(
-                            clean_d["timestamp"],
-                            str,
-                        ):
-                            try:
-                                clean_d["timestamp"] = datetime.datetime.fromisoformat(
-                                    clean_d["timestamp"],
-                                )
-                            except ValueError:
-                                pass
-                        item = MediaItem(**clean_d)
-                    gcs_uri = (
-                        item.gcsuri
-                        if item.gcsuri
-                        else (item.gcs_uris[0] if item.gcs_uris else None)
-                    )
-                    from common.utils import create_display_url
-
-                    item.signed_url = create_display_url(gcs_uri) if gcs_uri else ""
-                    media_items.append(item)
-                    for item in media_items:
-                        if item.gcs_uris:
-                            for uri in item.gcs_uris:
-                                items_to_render.append({"uri": uri})
-                        elif item.gcsuri:
-                            items_to_render.append({"uri": item.gcsuri})
-
-                    infinite_scroll_library(
-                        key=f"infinite_scroll_{state.active_chooser_key}",
-                        items=items_to_render,
-                        has_more_items=state.has_more_items,
-                        on_load_more=handle_load_more,
-                        on_image_selected=handle_image_selected,
-                    )
-            with me.box(
-                style=me.Style(
-                    display="flex",
-                    justify_content="flex-end",
-                    margin=me.Margin(top=24),
-                ),
-            ):
-                me.button(
-                    "Cancel",
-                    on_click=lambda e: setattr(state, "show_dialog", False),
-                    type="stroked",
-                )
+            me.button(
+                "Cancel",
+                on_click=lambda e: setattr(state, "show_dialog", False),
+                type="stroked",
+            )

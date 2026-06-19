@@ -20,9 +20,8 @@ import uuid
 
 import google.auth
 import mesop as me
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.wsgi import WSGIMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -30,11 +29,9 @@ from google.auth import impersonated_credentials
 from google.cloud import storage
 from pydantic import BaseModel
 
-import pages.shop_the_look
 from app_factory import app
-from common.prompt_template_service import PromptTemplate
+from common.storage import get_session
 from common.utils import create_display_url
-from routers import veo_router
 from config import default as config
 from models.video_processing import convert_mp4_to_gif
 from pages import about as about_page
@@ -62,6 +59,7 @@ from pages import welcome as welcome_page
 from pages.edit_images import content as edit_images_content
 from pages.library_v2 import page as library_v2_page
 from pages.library_v3 import page as library_v3_page
+from pages.test_async_veo import page as test_async_veo_page
 from pages.test_character_consistency import page as test_character_consistency_page
 from pages.test_index import page as test_index_page
 from pages.test_infinite_scroll import test_infinite_scroll_page
@@ -70,13 +68,10 @@ from pages.test_pixie_compositor import test_pixie_compositor_page
 from pages.test_svg import test_svg_page
 from pages.test_uploader import test_uploader_page
 from pages.test_vto_prompt_generator import page as test_vto_prompt_generator_page
-from pages.test_async_veo import page as test_async_veo_page
-import pages.imagen_upscale
-import pages.storyboarder
-import pages.character_sheet
-import pages.brand_adherence
-from workflows.retro_games import page as retro_games
-from state.state import AppState
+from routers import (
+    asset_handler,  # Import asset handler
+    veo_router,
+)
 
 
 class UserInfo(BaseModel):
@@ -95,29 +90,9 @@ async def favicon():
 
 
 # Define allowed origins for CORS
-
-
-from starlette.middleware.base import BaseHTTPMiddleware
-
-class ForwardedHostMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        forwarded_host = request.headers.get("X-Forwarded-Host")
-        if forwarded_host:
-            # Overwrite the host so that Mesop's CSRF check matches the Origin header
-            request.scope["headers"] = [
-                (k, v) if k != b"host" else (k, forwarded_host.encode())
-                for k, v in request.scope["headers"]
-            ]
-        return await call_next(request)
-
-app.add_middleware(ForwardedHostMiddleware)
-
-app.add_middleware(
-    TrustedHostMiddleware, allowed_hosts=["*"]
-)
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=os.environ.get("CORS_ORIGIN_REGEX", r"https://.*|http://localhost:8080"),
+    allow_origin_regex=r"https://.*\.cloudshell\.dev|http://localhost:8080",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -169,7 +144,7 @@ def get_signed_url(gcs_uri: str):
             print(
                 "This error often occurs in a local development environment. "
                 "Please ensure you have authenticated with service account impersonation by running: "
-                "gcloud auth application-default login --impersonate-service-account=<YOUR_SERVICE_ACCOUNT_EMAIL>"
+                "gcloud auth application-default login --impersonate-service-account=<YOUR_SERVICE_ACCOUNT_EMAIL>",
             )
         return {"error": error_message}, 500
 
@@ -179,7 +154,7 @@ async def add_global_csp(request: Request, call_next):
     response = await call_next(request)
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://esm.sh https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://esm.sh https://cdn.jsdelivr.net https://accounts.google.com; "
         "connect-src 'self' https://esm.sh https://cdn.jsdelivr.net https://storage.cloud.google.com https://storage.googleapis.com https://*.googleusercontent.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com http://fonts.googleapis.com/; "
         "font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com http://fonts.googleapis.com;"
@@ -192,13 +167,25 @@ async def add_global_csp(request: Request, call_next):
 
 @app.middleware("http")
 async def set_request_context(request: Request, call_next):
-    user_email = request.headers.get("X-Goog-Authenticated-User-Email")
+    session_id = request.cookies.get("session_id")
+    user_email = None
+
+    # 1. Try to load from session cookie first
+    if session_id:
+        session = get_session(session_id)
+        if session:
+            user_email = session.user_email
+
+    # 2. Fallback to checking X-Goog-Authenticated-User-Email header
+    if not user_email:
+        user_email = request.headers.get("X-Goog-Authenticated-User-Email")
+        if user_email and user_email.startswith("accounts.google.com:"):
+            user_email = user_email.split(":")[-1]
+
+    # 3. Fallback to default
     if not user_email:
         user_email = "anonymous@google.com"
-    if user_email.startswith("accounts.google.com:"):
-        user_email = user_email.split(":")[-1]
 
-    session_id = request.cookies.get("session_id")
     if not session_id:
         session_id = str(uuid.uuid4())
 
@@ -211,32 +198,43 @@ async def set_request_context(request: Request, call_next):
 
     response = await call_next(request)
     response.set_cookie(
-        key="session_id", value=session_id, httponly=True, samesite="Lax"
+        key="session_id",
+        value=session_id,
+        httponly=True,
+        samesite="Lax",
     )
     return response
 
 
 # Test page routes are left as is, they don't need the scaffold
 me.page(path="/test_character_consistency", title="Test Character Consistency")(
-    test_character_consistency_page
+    test_character_consistency_page,
 )
 me.page(path="/test_index", title="Test Index")(test_index_page)
 me.page(path="/test_infinite_scroll", title="Test Infinite Scroll")(
-    test_infinite_scroll_page
+    test_infinite_scroll_page,
 )
 me.page(path="/test_pixie_compositor", title="Test Pixie Compositor")(
-    test_pixie_compositor_page
+    test_pixie_compositor_page,
 )
 me.page(path="/test_uploader", title="Test Uploader")(test_uploader_page)
 me.page(path="/test_vto_prompt_generator", title="Test VTO Prompt Generator")(
-    test_vto_prompt_generator_page
+    test_vto_prompt_generator_page,
 )
 me.page(path="/test_svg", title="Test SVG")(test_svg_page)
 me.page(path="/test_media_chooser", title="Test Media Chooser")(test_media_chooser_page)
 me.page(path="/test_async_veo", title="Test Async Veo")(test_async_veo_page)
 
 
+# Global storage client instance to reuse connections
+_proxy_storage_client = None
 
+
+def get_proxy_storage_client():
+    global _proxy_storage_client
+    if _proxy_storage_client is None:
+        _proxy_storage_client = storage.Client()
+    return _proxy_storage_client
 
 
 # Global storage client instance to reuse connections
@@ -308,18 +306,19 @@ app.mount(
             "app",
             "prod",
             "web_package",
-        )
+        ),
     ),
     name="static",
 )
 
 app.include_router(veo_router.router)
+app.include_router(asset_handler.router)
 
 
 app.mount(
     "/",
     WSGIMiddleware(
-        me.create_wsgi_app(debug_mode=os.environ.get("DEBUG_MODE", "") == "true")
+        me.create_wsgi_app(debug_mode=os.environ.get("DEBUG_MODE", "") == "true"),
     ),
 )
 

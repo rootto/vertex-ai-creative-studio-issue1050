@@ -53,7 +53,9 @@ class PageState:
     )  # "all", "images", "videos", "audio"
     error_filter: str = "all"  # "all", "no_errors", "only_errors"
     tour_dialog_active_tab: str = "details"
-    extend_dialog_state: VeoExtendDialogState = field(default_factory=VeoExtendDialogState)
+    extend_dialog_state: VeoExtendDialogState = field(
+        default_factory=VeoExtendDialogState,
+    )
 
 
 def on_load(e: me.LoadEvent):
@@ -230,7 +232,10 @@ def library_content():
                         thumbnail_url = create_display_url(item.thumbnail_uri)
 
                     # Determine the render type consistently
-                    render_type = get_media_type(mime_type=item.mime_type, url=https_url)
+                    render_type = get_media_type(
+                        mime_type=item.mime_type,
+                        url=https_url,
+                    )
 
                     display_url = https_url
                     display_type = render_type
@@ -277,8 +282,12 @@ def on_extend_click(e: me.WebEvent):
         # Open the extend dialog
         state.extend_dialog_state.is_open = True
         state.extend_dialog_state.input_video_uri = gcs_path
-        print(f"DEBUG: Set extend_dialog_state.is_open = {state.extend_dialog_state.is_open}")
-        print(f"DEBUG: Set extend_dialog_state.input_video_uri = {state.extend_dialog_state.input_video_uri}")
+        print(
+            f"DEBUG: Set extend_dialog_state.is_open = {state.extend_dialog_state.is_open}",
+        )
+        print(
+            f"DEBUG: Set extend_dialog_state.input_video_uri = {state.extend_dialog_state.input_video_uri}",
+        )
     yield
 
 
@@ -296,8 +305,7 @@ def on_close_extend_dialog(e: me.ClickEvent):
 
 @me.component
 def library_dialog(pagestate: PageState):
-    """Renders the details dialog. Fetches the item on-demand to avoid state issues.
-    """
+    """Renders the details dialog. Fetches the item on-demand to avoid state issues."""
     # The dialog is always in the DOM, just hidden/shown via is_open.
     # We only fetch and render the content if an item is selected.
     if pagestate.show_details_dialog and pagestate.selected_media_item_id:
@@ -375,6 +383,20 @@ def json_default_serializer(o):
     raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
 
 
+def dummy_handler(e: me.WebEvent):
+    pass
+
+
+def set_active_tab_details(e: me.ClickEvent):
+    pagestate = me.state(PageState)
+    pagestate.tour_dialog_active_tab = "details"
+
+
+def set_active_tab_raw(e: me.ClickEvent):
+    pagestate = me.state(PageState)
+    pagestate.tour_dialog_active_tab = "raw"
+
+
 @me.component
 def render_tour_detail_dialog(storyboard: dict):
     """Renders a dedicated dialog for viewing Interior Design Tours."""
@@ -388,13 +410,19 @@ def render_tour_detail_dialog(storyboard: dict):
 
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="row", gap=24, margin=me.Margin(top=16),
+                display="flex",
+                flex_direction="row",
+                gap=24,
+                margin=me.Margin(top=16),
             ),
         ):
             # Left Column: Video and Carousel
             with me.box(
                 style=me.Style(
-                    flex_grow=1, display="flex", flex_direction="column", gap=16,
+                    flex_grow=1,
+                    display="flex",
+                    flex_direction="column",
+                    gap=16,
                 ),
             ):
                 final_video_uri = storyboard.get("final_video_uri")
@@ -423,13 +451,16 @@ def render_tour_detail_dialog(storyboard: dict):
                                         item["generated_video_uri"],
                                     ),
                                     room_name=item["room_name"],
-                                    on_click=lambda e: None,
+                                    on_click=dummy_handler,
                                 )
 
             # Right Column: Metadata with Tabs
             with me.box(
                 style=me.Style(
-                    width=300, flex_shrink=0, max_height="80vh", overflow_y="auto",
+                    width=300,
+                    flex_shrink=0,
+                    max_height="80vh",
+                    overflow_y="auto",
                 ),
             ):
                 # Tab header
@@ -443,9 +474,7 @@ def render_tour_detail_dialog(storyboard: dict):
                     ),
                 ):
                     with me.content_button(
-                        on_click=lambda e: setattr(
-                            pagestate, "tour_dialog_active_tab", "details",
-                        ),
+                        on_click=set_active_tab_details,
                         style=me.Style(
                             border=me.Border.all(me.BorderSide(width=0)),
                             padding=me.Padding.all(0),
@@ -470,9 +499,7 @@ def render_tour_detail_dialog(storyboard: dict):
                             ),
                         )
                     with me.content_button(
-                        on_click=lambda e: setattr(
-                            pagestate, "tour_dialog_active_tab", "raw",
-                        ),
+                        on_click=set_active_tab_raw,
                         style=me.Style(
                             border=me.Border.all(me.BorderSide(width=0)),
                             padding=me.Padding.all(0),
@@ -549,7 +576,8 @@ def render_default_detail_dialog(item: MediaItem):
 
     # Determine the render type consistently
     render_type = get_media_type(
-        mime_type=item.mime_type, url=primary_urls[0] if primary_urls else "",
+        mime_type=item.mime_type,
+        url=primary_urls[0] if primary_urls else "",
     )
 
     # The main detail viewer now only shows the primary asset and metadata
@@ -560,7 +588,9 @@ def render_default_detail_dialog(item: MediaItem):
         metadata_json=json.dumps(metadata),
         id=item.id,
         raw_metadata_json=json.dumps(
-            asdict(item), indent=2, default=json_default_serializer,
+            asdict(item),
+            indent=2,
+            default=json_default_serializer,
         ),
         on_edit_click=handle_edit_click,
         on_veo_click=on_veo_click,
@@ -595,11 +625,7 @@ def render_default_detail_dialog(item: MediaItem):
         i2v_frames.append(item.last_reference_image)
     if i2v_frames:
         # Use a more specific title if it's interpolation
-        title = (
-            "Interpolation Frames"
-            if item.last_reference_image
-            else "Source Frame"
-        )
+        title = "Interpolation Frames" if item.last_reference_image else "Source Frame"
         _render_source_section(title, i2v_frames)
 
     # Virtual Try-On
@@ -659,7 +685,6 @@ def _render_source_section(title: str, uris: list[str]):
                 )
 
 
-
 def on_continue_styling_click(e: me.ClickEvent):
     """Navigates the user to the interior design page to continue styling."""
     storyboard_id = e.key
@@ -672,6 +697,7 @@ def on_continue_styling_click(e: me.ClickEvent):
         )
 
     yield
+
 
 def on_view_rotation_project_click(e: me.ClickEvent):
     """Navigates the user to the object rotation page to view a project."""

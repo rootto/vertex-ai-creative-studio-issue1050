@@ -63,6 +63,7 @@ module "project-services" {
     "cloudtasks.googleapis.com",
     "serviceusage.googleapis.com",
     "cloudresourcemanager.googleapis.com",
+    "identitytoolkit.googleapis.com",
   ]
 }
 
@@ -370,7 +371,7 @@ resource "google_firestore_index" "genmedia_user_email_timestamp" {
   }
 }
 
-resource "google_firestore_index" "genmedia_user_email_mime_type_timestamp" {
+resource "google_firestore_index" "genmedia_user_email_media_type_timestamp" {
   collection  = "genmedia"
   database    = google_firestore_database.create_studio_asset_metadata.name
   query_scope = "COLLECTION"
@@ -381,7 +382,28 @@ resource "google_firestore_index" "genmedia_user_email_mime_type_timestamp" {
   }
 
   fields {
-    field_path = "mime_type"
+    field_path = "media_type"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "timestamp"
+    order      = "DESCENDING"
+  }
+}
+
+resource "google_firestore_index" "genmedia_team_id_media_type_timestamp" {
+  collection  = "genmedia"
+  database    = google_firestore_database.create_studio_asset_metadata.name
+  query_scope = "COLLECTION"
+
+  fields {
+    field_path = "team_id"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "media_type"
     order      = "ASCENDING"
   }
 
@@ -455,9 +477,6 @@ resource "google_artifact_registry_repository" "creative_studio" {
   repository_id = "creative-studio"
   description   = "Docker repository for GenMedia Creative Studio related images"
   format        = "DOCKER"
-  vulnerability_scanning_config {
-    enablement_config = "INHERITED"
-  }
   depends_on = [null_resource.sleep]
 }
 
@@ -478,4 +497,19 @@ resource "google_cloud_run_service_iam_member" "build_service" {
   service  = google_cloud_run_v2_service.creative_studio.name
   role     = "roles/run.developer"
   member   = google_service_account.cloudbuild.member
+}
+
+resource "google_firestore_document" "initial_user" {
+  project     = var.project_id
+  database    = "create-studio-asset-metadata"
+  collection  = "users"
+  document_id = var.initial_user
+  fields      = <<EOF
+{
+  "email": { "stringValue": "${var.initial_user}" },
+  "role": { "stringValue": "administrator" }
+}
+EOF
+
+  depends_on = [google_firestore_database.create_studio_asset_metadata]
 }

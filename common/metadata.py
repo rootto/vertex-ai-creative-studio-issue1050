@@ -44,14 +44,13 @@ class MediaItem:
     )
     related_media_item_id: str | None = None  # For linking generation sequences
     user_email: str | None = None
+    team_id: str | None = None
     timestamp: datetime.datetime | None = None  # Store as datetime object
 
     # Common fields across media types
     prompt: str | None = None  # The final prompt used for generation
     original_prompt: str | None = None  # User's initial prompt if rewriting occurred
-    rewritten_prompt: str | None = (
-        None  # The prompt after any rewriter (Gemini, etc.)
-    )
+    rewritten_prompt: str | None = None  # The prompt after any rewriter (Gemini, etc.)
     model: str | None = (
         None  # Specific model ID used (e.g., "imagen-3.0-fast", "veo-2.0")
     )
@@ -83,9 +82,7 @@ class MediaItem:
     last_reference_image: str | None = None
     negative_prompt: str | None = None
     enhanced_prompt_used: bool = False
-    comment: str | None = (
-        None  # General comment field, e.g., for video generation type
-    )
+    comment: str | None = None  # General comment field, e.g., for video generation type
 
     # Image specific
     # aspect is shared with Video
@@ -95,6 +92,9 @@ class MediaItem:
     captions: list[str] = field(
         default_factory=list,
     )  # Captions or narrative text associated with generated images
+    tags: list[str] = field(
+        default_factory=list,
+    )  # For categorization and filtering
     negative_prompt: str | None = None
     num_images: int | None = None  # Number of images generated in a batch
     seed: int | None = (
@@ -110,7 +110,6 @@ class MediaItem:
     audio_analysis: str | None = (
         None  # Structured analysis from Gemini, stored as a JSON string
     )
-    generated_text: list[str] = field(default_factory=list)
 
     # This field is for loading raw data from Firestore, not for writing.
     # It helps in debugging and displaying all stored fields if needed.
@@ -152,10 +151,9 @@ class MediaItem:
     original_resolution: str | None = None
     upscale_factor: str | None = None
     image_size: str | None = None
-
-    # Feedback fields
-    feedback_vote: Optional[str] = None
-    feedback_comment: Optional[str] = None
+    feedback_vote: str | None = None
+    feedback_comment: str | None = None
+    signed_url: str | None = None
 
     def __post_init__(self):
         # Ensure audio_analysis is always a JSON string for state serialization.
@@ -164,6 +162,32 @@ class MediaItem:
             self.audio_analysis = json.dumps(self.audio_analysis)
         if isinstance(self.grounding_info, dict):
             self.grounding_info = json.dumps(self.grounding_info)
+
+        # Automatically populate media_type if not set
+        if not self.media_type and self.mime_type:
+            if self.mime_type.startswith("image/"):
+                self.media_type = "images"
+            elif self.mime_type.startswith("video/"):
+                self.media_type = "videos"
+            elif self.mime_type.startswith("audio/"):
+                self.media_type = "audio"
+
+
+@dataclass
+class Team:
+    """Represents a team in the application."""
+
+    id: str | None = None
+    name: str = ""
+    created_by: str | None = None
+    managers: list[str] = field(default_factory=list)
+    members: list[str] = field(default_factory=list)
+    asset_ids: list[str] = field(default_factory=list)
+    assets: list[MediaItem] = field(default_factory=list)
+    branding_guideline: dict = field(
+        default_factory=lambda: {"type": "text", "content": ""},
+    )
+    extracted_text: str | None = None
 
 
 def add_media_item_to_firestore(item: MediaItem):
@@ -312,6 +336,7 @@ def _create_media_item_from_dict(doc_id: str, raw_item_data: dict) -> MediaItem:
     media_item = MediaItem(
         id=doc_id,
         user_email=raw_item_data.get("user_email"),
+        team_id=raw_item_data.get("team_id"),
         timestamp=timestamp_iso_str,
         prompt=raw_item_data.get("prompt"),
         original_prompt=raw_item_data.get("original_prompt"),
@@ -321,11 +346,13 @@ def _create_media_item_from_dict(doc_id: str, raw_item_data: dict) -> MediaItem:
         mode=raw_item_data.get("mode"),
         generation_time=gen_time,
         status=raw_item_data.get(
-            "status", "complete",
+            "status",
+            "complete",
         ),  # Default to 'complete' for legacy items
         error_message=raw_item_data.get("error_message"),
         gcsuri=gcsuri,
         gcs_uris=raw_item_data.get("gcs_uris", []),
+        tags=raw_item_data.get("tags", []),
         source_images_gcs=raw_item_data.get("source_images_gcs", []),
         source_uris=raw_item_data.get("source_uris", []),
         thumbnail_uri=thumbnail,
@@ -344,8 +371,8 @@ def _create_media_item_from_dict(doc_id: str, raw_item_data: dict) -> MediaItem:
         critique=raw_item_data.get("critique"),
         grounding_info=raw_item_data.get("grounding_info"),
         audio_analysis=raw_item_data.get("audio_analysis"),
-        generated_text=raw_item_data.get("generated_text", []),
         media_type=raw_item_data.get("media_type"),
+        signed_url=raw_item_data.get("signed_url"),
         source_character_images=raw_item_data.get("source_character_images", []),
         character_description=raw_item_data.get("character_description"),
         imagen_prompt=raw_item_data.get("imagen_prompt"),
@@ -393,11 +420,11 @@ def get_media_item_by_id(
         return None
 
 
-def update_media_feedback(item_id: str, vote: str, comment: Optional[str] = None):
+def update_media_feedback(item_id: str, vote: str, comment: str | None = None):
     """Updates the feedback fields for a specific media item."""
     if not db:
         logger.warning(
-            "Firestore client (db) is not initialized. Cannot update media feedback."
+            "Firestore client (db) is not initialized. Cannot update media feedback.",
         )
         return
 
@@ -409,9 +436,7 @@ def update_media_feedback(item_id: str, vote: str, comment: Optional[str] = None
         doc_ref.update(update_data)
         logger.info(f"Successfully updated feedback for MediaItem with ID: {item_id}")
     except Exception as e:
-        logger.error(
-            f"Failed to update feedback for MediaItem {item_id}. Error: {e}"
-        )
+        logger.error(f"Failed to update feedback for MediaItem {item_id}. Error: {e}")
 
 
 def add_media_item(user_email: str, **kwargs):
@@ -454,7 +479,8 @@ def get_latest_videos(limit: int = 10):
 def get_total_media_count():
     """Get count of all media in firestore"""
     media_ref = db.collection(config.GENMEDIA_COLLECTION_NAME).order_by(
-        "timestamp", direction=firestore.Query.DESCENDING,
+        "timestamp",
+        direction=firestore.Query.DESCENDING,
     )
     count = len([doc.to_dict() for doc in media_ref.stream()])
     return count
@@ -491,7 +517,8 @@ def get_media_for_page(
     type_filters: list[str] | None = None,
     error_filter: str = "all",  # "all", "no_errors", "only_errors"
     sort_by_timestamp: bool = False,
-    filter_by_user_email: str | None = None,  # New parameter
+    filter_by_user_email: str | None = None,
+    team_id_filter: str | None = None,
 ) -> list[MediaItem]:
     """Fetches a paginated and filtered list of media items from Firestore.
 
@@ -539,15 +566,31 @@ def get_media_for_page(
 
             # Apply type filters
             passes_type_filter = False
-            if not type_filters or "all" in type_filters or ("videos" in type_filters and mime_type.startswith("video/")) or ("images" in type_filters and mime_type.startswith("image/")) or ("music" in type_filters and mime_type.startswith("audio/")):
+            if (
+                not type_filters
+                or "all" in type_filters
+                or ("videos" in type_filters and mime_type.startswith("video/"))
+                or ("images" in type_filters and mime_type.startswith("image/"))
+                or ("music" in type_filters and mime_type.startswith("audio/"))
+            ):
                 passes_type_filter = True
 
             if not passes_type_filter:
                 continue
 
+            # Apply team filter
+            if team_id_filter and team_id_filter != "all":
+                if raw_item_data.get("team_id") != team_id_filter:
+                    continue
+
+
             # Apply error filter
             passes_error_filter = False
-            if error_filter == "all" or (error_filter == "no_errors" and not error_message_present) or (error_filter == "only_errors" and error_message_present):
+            if (
+                error_filter == "all"
+                or (error_filter == "no_errors" and not error_message_present)
+                or (error_filter == "only_errors" and error_message_present)
+            ):
                 passes_error_filter = True
 
             if not passes_error_filter:
@@ -585,6 +628,7 @@ def get_media_for_page_optimized(
     type_filters: list[str],
     start_after=None,
     filter_by_user_email: str | None = None,
+    filter_by_team_id: str | None = None,
 ):
     """Fetches a paginated and filtered list of media items from Firestore
     using server-side pagination and filtering.
@@ -592,26 +636,19 @@ def get_media_for_page_optimized(
     try:
         query = db.collection(config.GENMEDIA_COLLECTION_NAME)
 
-        # Apply user email filter if provided
-        if filter_by_user_email:
+        # Apply team ID filter if provided (takes precedence over user email)
+        if filter_by_team_id:
+            query = query.where("team_id", "==", filter_by_team_id)
+        elif filter_by_user_email:
             query = query.where("user_email", "==", filter_by_user_email)
 
-        # Apply type filters using WHERE clauses
-        # Note: This requires Firestore indexes. For a single 'mime_type' startsWith,
-        # a single-field index on 'mime_type' might suffice. For combinations with
-        # sorting, a composite index is likely needed.
+        # Apply type filters using WHERE clauses on media_type
         if "videos" in type_filters:
-            query = query.where("mime_type", ">=", "video/").where(
-                "mime_type", "<", "video0",
-            )
+            query = query.where("media_type", "==", "videos")
         elif "images" in type_filters:
-            query = query.where("mime_type", ">=", "image/").where(
-                "mime_type", "<", "image0",
-            )
+            query = query.where("media_type", "==", "images")
         elif "music" in type_filters or "audio" in type_filters:
-            query = query.where("mime_type", ">=", "audio/").where(
-                "mime_type", "<", "audio0",
-            )
+            query = query.where("media_type", "==", "audio")
 
         # Always sort by timestamp
         query = query.order_by("timestamp", direction=firestore.Query.DESCENDING)
@@ -723,13 +760,19 @@ def get_media_for_page_optimized(
                     if raw_item_data.get("resolution") is not None
                     else None
                 ),
+                mime_type=(
+                    str(raw_item_data.get("mime_type"))
+                    if raw_item_data.get("mime_type") is not None
+                    else None
+                ),
                 media_type=(
                     str(raw_item_data.get("media_type"))
                     if raw_item_data.get("media_type") is not None
                     else None
                 ),
                 source_character_images=raw_item_data.get(
-                    "source_character_images", [],
+                    "source_character_images",
+                    [],
                 ),
                 character_description=(
                     str(raw_item_data.get("character_description"))
@@ -774,7 +817,9 @@ def get_media_for_page_optimized(
 
 
 def get_media_for_chooser(
-    media_type: str, page_size: int, start_after=None,
+    media_type: str,
+    page_size: int,
+    start_after=None,
 ) -> tuple[list[MediaItem], firestore.DocumentSnapshot | None]:
     """Fetches media items for the chooser, using a hybrid query strategy."""
     # TODO: This function uses two queries for backward compatibility (one for `media_type`

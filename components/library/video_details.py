@@ -191,5 +191,5 @@ def video_details(
 
             # Download button should download the selected video
             if selected_url:
-                filename = os.path.basename(selected_url.split("?")[0])
+                filename = os.path.basename(selected_url.split("?", maxsplit=1)[0])
                 download_button(url=selected_url, filename=filename)

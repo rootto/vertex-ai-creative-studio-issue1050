@@ -21,6 +21,7 @@ import mesop as me
 
 from common.analytics import track_click
 from common.metadata import MediaItem, add_media_item_to_firestore  # Updated import
+from common.utils import create_display_url
 from components.styles import _BOX_STYLE  # Import the style
 from config.default import Default
 from config.imagen_models import IMAGEN_MODELS, get_imagen_model_config
@@ -154,7 +155,7 @@ def on_click_generate_images(e: me.ClickEvent):
         return
 
     state.is_loading = True
-    state.image_gcs_uris = []  # Reset image output
+    state.image_output = []  # Reset image output
     state.image_commentary = ""
     state.error_message = ""  # Clear previous errors
     yield  # UI: Spinner ON, outputs cleared
@@ -174,17 +175,12 @@ def on_click_generate_images(e: me.ClickEvent):
 
         # Save both the permanent GCS URIs and the display URLs to the state.
         state.image_gcs_uris = new_image_uris
+        state.image_output = [create_display_url(uri) for uri in new_image_uris]
         state.is_loading = False
 
-        if state.image_gcs_uris:
+        if state.image_output:
             # Generate commentary in the background using the permanent GCS URIs
-            try:
-                state.image_commentary = generate_compliment(
-                    current_prompt, new_image_uris,
-                )
-            except Exception as e:
-                print(f"Warning: Image critique failed: {e}")
-                state.image_commentary = "Critique currently unavailable. Please try again later."
+            state.image_commentary = generate_compliment(current_prompt, new_image_uris)
 
         end_time = time.time()
         execution_time = end_time - start_time
@@ -200,7 +196,7 @@ def on_click_generate_images(e: me.ClickEvent):
 
         item = MediaItem(
             user_email=app_state.user_email or "local_user@example.com",
-            timestamp=datetime.datetime.now(datetime.timezone.utc),
+            timestamp=datetime.datetime.now(datetime.UTC),
             prompt=final_prompt_for_generation,  # The prompt actually used
             original_prompt=media_original_prompt,
             rewritten_prompt=media_rewritten_prompt,
@@ -224,7 +220,7 @@ def on_click_generate_images(e: me.ClickEvent):
         state.error_message = f"An unexpected error occurred: {ex!s}"
         item_with_error = MediaItem(
             user_email=app_state.user_email or "local_user@example.com",
-            timestamp=datetime.datetime.now(datetime.timezone.utc),
+            timestamp=datetime.datetime.now(datetime.UTC),
             prompt=current_prompt,  # Or state.image_prompt_input
             model=state.image_model_name,
             mime_type="image/png",
@@ -243,7 +239,7 @@ def on_click_generate_images(e: me.ClickEvent):
         print(f"Error during the image generation or critique process: {ex}")
         state.dialog_message = f"An unexpected error occurred: {ex!s}"
         state.show_dialog = True
-        state.image_gcs_uris = []
+        state.image_output = []
         state.is_loading = False
     yield
 
@@ -254,7 +250,8 @@ def random_prompt_generator(e: me.ClickEvent):
     state = me.state(PageState)
     try:
         with open(
-            app_config_instance.IMAGEN_PROMPTS_JSON, encoding="utf-8",
+            app_config_instance.IMAGEN_PROMPTS_JSON,
+            encoding="utf-8",
         ) as file:
             data = json.load(file)  # Use json.load for direct parsing
         prompts_list = data.get("imagen", [])
@@ -285,27 +282,12 @@ def random_prompt_generator(e: me.ClickEvent):
 
 
 @track_click(element_id="imagen_clear_button")
-def on_click_retry_critique(e: me.ClickEvent):
-    state = me.state(PageState)
-    if state.image_gcs_uris and state.image_prompt_input:
-        state.image_commentary = "Generating critique..."
-        yield
-        try:
-            state.image_commentary = generate_compliment(
-                state.image_prompt_input, state.image_gcs_uris,
-            )
-        except Exception as err:
-            print(f"Warning: Image critique failed on retry: {err}")
-            state.image_commentary = "Critique currently unavailable. Please try again later."
-        yield
-
-
 def on_click_clear_images(e: me.ClickEvent):
     """Clears image prompt, output, and related fields."""
     state = me.state(PageState)
     state.image_prompt_input = ""
     state.image_prompt_placeholder = ""  # Clear placeholder as well
-    state.image_gcs_uris = []  # Use assignment for list reset
+    state.image_output = []  # Use assignment for list reset
     state.image_gcs_uris = []
     state.image_commentary = ""
     state.image_negative_prompt_input = ""

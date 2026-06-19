@@ -90,11 +90,12 @@ def on_load(e: me.LoadEvent):
     state = me.state(PageState)
     if not state.selected_model:
         state.selected_model = cfg().GEMINI_WRITERS_WORKSHOP_MODEL_ID
-    if state.prompt_templates_json == "[]":
+    if not state.prompt_templates_json or state.prompt_templates_json == "[]":
         templates = prompt_template_service.load_templates(
-            config_path="config/text_prompt_templates.json", template_type="text",
+            config_path="config/text_prompt_templates.json",
+            template_type="text",
         )
-        state.prompt_templates_json = json.dumps([t.model_dump() for t in templates], default=str)
+        state.prompt_templates_json = json.dumps([t.model_dump(mode="json") for t in templates], default=str)
     yield
 
 
@@ -175,10 +176,11 @@ def on_save_template(label: str, key: str, category: str, prompt: str):
         # Reload templates
 
         templates = prompt_template_service.load_templates(
-            config_path="config/text_prompt_templates.json", template_type="text",
+            config_path="config/text_prompt_templates.json",
+            template_type="text",
         )
 
-        state.prompt_templates_json = json.dumps([t.model_dump() for t in templates], default=str)
+        state.prompt_templates_json = json.dumps([t.model_dump(mode="json") for t in templates], default=str)
 
         # Close dialog
 
@@ -207,7 +209,8 @@ CHIP_STYLE = me.Style(
 @me.component
 def _prompt_templates_ui():
     state = me.state(PageState)
-    prompt_templates = json.loads(state.prompt_templates_json)
+
+    prompt_templates = json.loads(state.prompt_templates_json) if state.prompt_templates_json else []
 
     # Group templates by category (case-insensitive)
     categories = {}
@@ -300,7 +303,9 @@ def gemini_writers_workshop_page_content():
         me.text(state.error_message, style=me.Style(margin=me.Margin(top=16)))
         with me.box(
             style=me.Style(
-                display="flex", justify_content="flex-end", margin=me.Margin(top=24),
+                display="flex",
+                justify_content="flex-end",
+                margin=me.Margin(top=24),
             ),
         ):
             me.button("Close", on_click=on_close_error_dialog, type="flat")
@@ -345,7 +350,8 @@ def gemini_writers_workshop_page_content():
                         label="Model",
                         options=[
                             me.SelectOption(
-                                label=f"Default ({cfg().MODEL_ID})", value=cfg().MODEL_ID,
+                                label=f"Default ({cfg().MODEL_ID})",
+                                value=cfg().MODEL_ID,
                             ),
                             me.SelectOption(
                                 label=f"Workshop ({cfg().GEMINI_WRITERS_WORKSHOP_MODEL_ID})",
@@ -418,24 +424,26 @@ def gemini_writers_workshop_page_content():
                         style=me.Style(margin=me.Margin(top=16)),
                     )
                 else:
-                    with me.box(
-                        style=me.Style(
-                            display="flex",
-                            flex_direction="column",
-                            align_items="center",
-                            justify_content="center",
-                            height="100%",
+                    with (
+                        me.box(
+                            style=me.Style(
+                                display="flex",
+                                flex_direction="column",
+                                align_items="center",
+                                justify_content="center",
+                                height="100%",
+                            ),
                         ),
-                    ):
-                        with me.box(
+                        me.box(
                             style=me.Style(
                                 opacity=0.2,
                                 width=128,
                                 height=128,
                                 color=me.theme_var("on-surface-variant"),
                             ),
-                        ):
-                            svg_icon(icon_name="spark")
+                        ),
+                    ):
+                        svg_icon(icon_name="spark")
 
 
 @me.component
@@ -590,17 +598,19 @@ def _generate_text_button():
     """Renders the main generate button and its loading state."""
     state = me.state(PageState)
     if state.is_generating:
-        with me.content_button(type="raised", disabled=True):
-            with me.box(
+        with (
+            me.content_button(type="raised", disabled=True),
+            me.box(
                 style=me.Style(
                     display="flex",
                     flex_direction="row",
                     align_items="center",
                     gap=8,
                 ),
-            ):
-                me.progress_spinner(diameter=20, stroke_width=3)
-                me.text("Generating Text...")
+            ),
+        ):
+            me.progress_spinner(diameter=20, stroke_width=3)
+            me.text("Generating Text...")
     else:
         me.button(
             "Generate Text",
@@ -617,7 +627,9 @@ def on_media_select(e: LibrarySelectionChangeEvent):
         state.uploaded_media_gcs_uris.append(gcs_uri)
         state.uploaded_media_display_urls.append(create_display_url(gcs_uri))
     else:
-        yield from show_snackbar(f"You can add a maximum of {MAX_MEDIA_ASSETS} media assets.")
+        yield from show_snackbar(
+            f"You can add a maximum of {MAX_MEDIA_ASSETS} media assets.",
+        )
     yield
 
 
@@ -703,9 +715,7 @@ def _generate_text_and_save(base_prompt: str, input_gcs_uris: list[str]):
     model_id = state.selected_model or cfg().GEMINI_WRITERS_WORKSHOP_MODEL_ID
 
     try:
-        with track_model_call(
-            model_name=model_id, prompt_length=len(base_prompt),
-        ):
+        with track_model_call(model_name=model_id, prompt_length=len(base_prompt)):
             text_result, execution_time = generate_text(
                 prompt=base_prompt,
                 images=input_gcs_uris,

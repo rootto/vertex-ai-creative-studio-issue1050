@@ -89,7 +89,6 @@ class RoomList(BaseModel):
 # Initialize client and default model ID for rewriter
 client = GeminiModelSetup.init()
 cfg = Default()  # Instantiate config
-cc_client = GeminiModelSetup.init(location=cfg.CHARACTER_CONSISTENCY_GEMINI_LOCATION)
 REWRITER_MODEL_ID = cfg.MODEL_ID  # Use default model from config for rewriter
 
 
@@ -100,39 +99,21 @@ def generate_image_from_prompt_and_images(
     gcs_folder: str = "generated_images",
     file_prefix: str = "image",
     candidate_count: int = 1,
-    image_size: Optional[str] = None,
+    image_size: str | None = None,
     use_search: bool = False,
     use_image_search: bool = False,
-    thinking_level: Optional[str] = None,
+    thinking_level: str | None = None,
     include_thoughts: bool = False,
-    model_name: Optional[str] = None,
-) -> tuple[list[str], float, list[str], Optional[dict[str, Any]], list[str]]:
+    model_name: str | None = None,
+) -> tuple[list[str], float, list[str], dict[str, Any] | None, list[str]]:
     """Generates images from a prompt and a list of images."""
     start_time = time.time()
-    if not model_name:
-        model_name = cfg.GEMINI_IMAGE_GEN_MODEL
+    active_model_name = model_name or cfg.GEMINI_IMAGE_GEN_MODEL
 
     parts = [types.Part.from_text(text=prompt)]
     for image_uri in images:
-        # More robust mime type detection
-        if any(
-            image_uri.lower().endswith(ext)
-            for ext in [".mp4", ".mov", ".avi", ".mkv", ".webm"]
-        ):
-            mime_type = "video/mp4"  # General video type
-        elif any(image_uri.lower().endswith(ext) for ext in [".wav", ".mp3", ".flac"]):
-            mime_type = "audio/wav"  # General audio type
-        elif any(
-            image_uri.lower().endswith(ext)
-            for ext in [".png", ".jpg", ".jpeg", ".webp", ".gif"]
-        ):
-            mime_type = "image/png"  # General image type
-        elif image_uri.lower().endswith(".pdf"):
-            mime_type = "application/pdf"
-        else:
-            # Fallback for unknown types
-            mime_type = "image/png"
-        parts.append(types.Part.from_uri(file_uri=image_uri, mime_type=mime_type))
+        m_type = "application/pdf" if image_uri.lower().endswith(".pdf") else "image/png"
+        parts.append(types.Part.from_uri(file_uri=image_uri, mime_type=m_type))
 
     contents = [types.Content(role="user", parts=parts)]
 
@@ -146,7 +127,7 @@ def generate_image_from_prompt_and_images(
     )
 
     analytics_logger.info(
-        f"Generating image with model: {model_name}, aspect_ratio: {aspect_ratio}, num_images: {len(images)}, image_size: {image_size}, use_search: {use_search}, use_image_search: {use_image_search}, thinking_level: {thinking_level}",
+        f"Generating image with model: {active_model_name}, aspect_ratio: {aspect_ratio}, num_images: {len(images)}, image_size: {image_size}, use_search: {use_search}, use_image_search: {use_image_search}, thinking_level: {thinking_level}",
     )
     for i, img in enumerate(images):
         analytics_logger.info(f"  Image {i}: {img}")
@@ -168,22 +149,20 @@ def generate_image_from_prompt_and_images(
 
     thinking_config = None
     if include_thoughts:
-        # For GenAI SDK, thinking is enabled by setting a budget.
-        # We'll use -1 (AUTOMATIC) to let the model decide, or a specific value.
         thinking_config = types.ThinkingConfig(
             include_thoughts=include_thoughts,
             thinking_budget=-1
             if thinking_level == "HIGH"
-            else 1024,  # Example mapping, adjust as needed
+            else 1024,
         )
 
     with track_model_call(
-        model_name=model_name,
+        model_name=active_model_name,
         aspect_ratio=aspect_ratio,
         num_images=len(images),
     ):
         response = client.models.generate_content(
-            model=model_name,
+            model=active_model_name,
             contents=contents,
             config=types.GenerateContentConfig(
                 response_modalities=["IMAGE", "TEXT"],
@@ -208,7 +187,6 @@ def generate_image_from_prompt_and_images(
         candidate = response.candidates[0]
         if candidate.grounding_metadata:
             try:
-                # google-genai types usually have model_dump()
                 grounding_info = candidate.grounding_metadata.model_dump()
             except Exception as e:
                 analytics_logger.warning(f"Failed to extract grounding metadata: {e}")
@@ -228,7 +206,6 @@ def generate_image_from_prompt_and_images(
                     current_text_buffer += part.text
 
                 if hasattr(part, "inline_data") and part.inline_data:
-                    # Default to "image/png" if mime_type is missing
                     mime_type = "image/png"
                     if (
                         hasattr(part.inline_data, "mime_type")
@@ -244,10 +221,8 @@ def generate_image_from_prompt_and_images(
                     gcs_uris.append(gcs_uri)
                     captions.append(current_text_buffer.strip())
                     all_thoughts.append(current_thought_buffer.strip())
-                    current_text_buffer = (
-                        ""  # Reset buffer after associating with an image
-                    )
-                    current_thought_buffer = ""  # Reset buffer
+                    current_text_buffer = ""
+                    current_thought_buffer = ""
     else:
         analytics_logger.warning("generate_image_from_prompt_and_images: no images")
     return gcs_uris, execution_time, captions, grounding_info, all_thoughts
@@ -336,7 +311,7 @@ def rewriter(original_prompt: str, rewriter_prompt: str) -> str:
 def analyze_audio_with_gemini(
     audio_uri: str,
     music_generation_prompt: str,
-) -> Optional[dict[str, any]]:
+) -> dict[str, any] | None:
     """Analyzes a given audio file URI against an original music generation prompt using Gemini.
 
     Args:
@@ -544,17 +519,16 @@ def image_critique(original_prompt: str, img_uris: list[str]) -> str:
     # Assuming it's a no-op or handled if telemetry is not configured for google-genai.
     with telemetry.tool_context_manager("creative-studio"):
         try:
-            critique_model_id = cfg.GEMINI_CRITIQUE_MODEL_ID
-            critique_location = cfg.GEMINI_CRITIQUE_LOCATION
-
+            # Use default model from config for critique, unless a specific one is configured
+            critique_model_id = (
+                cfg.MODEL_ID
+            )  # Or a specific cfg.GEMINI_CRITIQUE_MODEL_ID
             analytics_logger.info(
-                f"Sending critique request to Gemini model: {critique_model_id} in {critique_location} with {len(contents_payload)} parts.",
+                f"Sending critique request to Gemini model: {critique_model_id} with {len(contents_payload)} parts.",
             )
 
-            critique_client = GeminiModelSetup.init(location=critique_location)
-
             with track_model_call(model_name=critique_model_id, task="image_critique"):
-                response = critique_client.models.generate_content(
+                response = client.models.generate_content(
                     model=critique_model_id,
                     contents=contents_payload,
                     config=types.GenerateContentConfig(
@@ -680,7 +654,7 @@ def get_facial_composite_profile(image_bytes: bytes) -> FacialCompositeProfile:
         types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
     ]
     with track_model_call(model_name=model_name, task="get_facial_composite_profile"):
-        response = cc_client.models.generate_content(
+        response = client.models.generate_content(
             model=model_name,
             contents=profile_prompt_parts,
             config=profile_config,
@@ -711,7 +685,7 @@ def get_natural_language_description(profile: FacialCompositeProfile) -> str:
         model_name=model_name,
         task="get_natural_language_description",
     ):
-        response = cc_client.models.generate_content(
+        response = client.models.generate_content(
             model=model_name,
             contents=[description_prompt],
             config=description_config,
@@ -1001,10 +975,9 @@ def generate_transformation_prompts(image_uris: list[str]) -> list[Transformatio
     reraise=True,
 )
 def describe_image(image_uri: str) -> str:
-    """Generates a two-sentence description for a given media file."""
+    """Generates a two-sentence description for a given image."""
     model_name = cfg.MODEL_ID
     config = types.GenerateContentConfig(temperature=0.2)
-
     mime_type = "image/png"
     if image_uri.lower().endswith(".pdf"):
         mime_type = "application/pdf"
@@ -1190,7 +1163,7 @@ def generate_critique_questions(
 def generate_text(
     prompt: str,
     images: list[str],
-    model_name: Optional[str] = None,
+    model_name: str | None = None,
 ) -> tuple[str, float]:
     """Generates text from a prompt and a list of media files."""
     # print(f"Entering generate_text with prompt: {prompt} and {len(images)} images.")
@@ -1226,7 +1199,7 @@ def generate_text(
     contents = [types.Content(role="user", parts=parts)]
 
     client = GeminiModelSetup.init(
-        location=cfg.LOCATION,
+        location="global",
     )
 
     # print(f"Sending request to model: {model_name}")
@@ -1373,8 +1346,6 @@ def generate_storyboard_narrative(
         )
 
     return StoryboardNarrative.model_validate_json(response.text)
-
-
 class BestFrameTimestamp(BaseModel):
     timestamp_seconds: float = Field(
         ...,
@@ -1396,7 +1367,9 @@ def get_best_video_frame_timestamp(video_uri: str) -> float:
     try:
         video_part = types.Part.from_uri(file_uri=video_uri, mime_type="video/mp4")
     except Exception as e:
-        analytics_logger.error(f"Failed to create video Part from URI '{video_uri}': {e}")
+        analytics_logger.error(
+            f"Failed to create video Part from URI '{video_uri}': {e}",
+        )
         return 0.0
 
     prompt_text = "Analyze this video and identify the single frame that best represents the overall content, action, or most interesting visual moment. Return the exact timestamp in seconds."
@@ -1410,11 +1383,15 @@ def get_best_video_frame_timestamp(video_uri: str) -> float:
     try:
         with track_model_call(model_name=model_name, task="get_best_video_frame"):
             response = client.models.generate_content(
-                model=model_name, contents=[prompt_text, video_part], config=config
+                model=model_name,
+                contents=[prompt_text, video_part],
+                config=config,
             )
-        
+
         result = BestFrameTimestamp.model_validate_json(response.text)
-        analytics_logger.info(f"Gemini selected best frame at {result.timestamp_seconds}s")
+        analytics_logger.info(
+            f"Gemini selected best frame at {result.timestamp_seconds}s",
+        )
         return result.timestamp_seconds
     except Exception as e:
         analytics_logger.error(f"Error during Gemini best frame analysis: {e}")

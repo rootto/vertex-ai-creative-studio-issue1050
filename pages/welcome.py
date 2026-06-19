@@ -17,9 +17,9 @@ import json
 import mesop as me
 
 from common.analytics import log_page_view
-from components.welcome_hero.welcome_hero import welcome_hero
 from components.page_scaffold import on_theme_load
 from components.theme_manager.theme_manager import theme_manager
+from components.welcome_hero.welcome_hero import welcome_hero
 from state.state import AppState
 
 

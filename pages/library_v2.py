@@ -16,7 +16,6 @@
 import datetime
 import json
 from dataclasses import asdict, dataclass, field
-from typing import List, Optional
 
 import mesop as me
 
@@ -24,6 +23,7 @@ from common.analytics import log_ui_click
 from common.metadata import MediaItem, get_media_for_page, get_media_item_by_id
 from common.utils import create_display_url, https_url_to_gcs_uri
 from components.header import header
+from components.feedback.feedback import feedback
 from components.interior_design.storyboard_video_tile import storyboard_video_tile
 from components.library.image_details import CarouselState
 from components.lightbox_dialog.lightbox_dialog import lightbox_dialog
@@ -42,9 +42,9 @@ class PageState:
     """State for the library page."""
 
     is_loading: bool = True
-    media_items_json: str = ""
+    media_items: list[MediaItem] = field(default_factory=list)
     show_details_dialog: bool = False
-    selected_media_item_id: Optional[str] = None
+    selected_media_item_id: str | None = None
     initial_load_complete: bool = False
     current_page: int = 1
     all_items_loaded: bool = False
@@ -87,7 +87,7 @@ def _load_media(pagestate: PageState, is_filter_change: bool = False):
 
     if is_filter_change:
         pagestate.current_page = 1
-        pagestate.media_items_json = "[]"
+        pagestate.media_items = []
         pagestate.all_items_loaded = False
 
     pagestate.is_loading = True
@@ -104,22 +104,10 @@ def _load_media(pagestate: PageState, is_filter_change: bool = False):
 
     if not new_items:
         pagestate.all_items_loaded = True
+    elif is_filter_change:
+        pagestate.media_items = new_items
     else:
-        import json
-        from dataclasses import asdict
-
-        existing_items = []
-        if pagestate.media_items_json:
-            existing_items = json.loads(pagestate.media_items_json)
-
-        new_items_dicts = [asdict(item) for item in new_items]
-
-        if is_filter_change:
-            combined = new_items_dicts
-        else:
-            combined = existing_items + new_items_dicts
-
-        pagestate.media_items_json = json.dumps(combined, default=str)
+        pagestate.media_items.extend(new_items)
 
     pagestate.is_loading = False
     yield
@@ -225,46 +213,13 @@ def library_content():
                 width="100%",
             ),
         ):
-            if (
-                not pagestate.media_items_json or pagestate.media_items_json == "[]"
-            ) and not pagestate.is_loading:
+            if not pagestate.media_items and not pagestate.is_loading:
                 with me.box(
                     style=me.Style(padding=me.Padding.all(20), text_align="center"),
                 ):
                     me.text("No media items found for the selected filters.")
             else:
-                import json
-                import datetime
-                from common.metadata import MediaItem
-
-                items_dicts = (
-                    json.loads(pagestate.media_items_json)
-                    if pagestate.media_items_json
-                    else []
-                )
-                media_items = []
-                for d in items_dicts:
-                    valid_keys = MediaItem.__dataclass_fields__.keys()
-                    clean_d = {k: v for k, v in d.items() if k in valid_keys}
-                    if "timestamp" in clean_d and isinstance(clean_d["timestamp"], str):
-                        try:
-                            clean_d["timestamp"] = datetime.datetime.fromisoformat(
-                                clean_d["timestamp"]
-                            )
-                        except ValueError:
-                            pass
-                    item = MediaItem(**clean_d)
-                    gcs_uri = (
-                        item.gcsuri
-                        if item.gcsuri
-                        else (item.gcs_uris[0] if item.gcs_uris else None)
-                    )
-                    from common.utils import create_display_url
-
-                    item.signed_url = create_display_url(gcs_uri) if gcs_uri else ""
-                    media_items.append(item)
-
-                for item in media_items:
+                for item in pagestate.media_items:
                     gcs_uri = (
                         item.gcsuri
                         if item.gcsuri
@@ -644,6 +599,16 @@ def render_default_detail_dialog(item: MediaItem):
         on_extend_click=on_extend_click,
     )
 
+    if item.id:
+        with me.box(
+            style=me.Style(
+                margin=me.Margin(top=24),
+                display="flex",
+                justify_content="center",
+            ),
+        ):
+            feedback(media_item_id=item.id)
+
     # Add a button to link back to the object rotation page if applicable
     if item.object_rotation_project_id:
         with me.box(style=me.Style(margin=me.Margin(top=16))):
@@ -695,7 +660,7 @@ def render_default_detail_dialog(item: MediaItem):
 
 
 @me.component
-def _render_source_section(title: str, uris: List[str]):
+def _render_source_section(title: str, uris: list[str]):
     """Helper to render a titled section of source asset tiles."""
     if not uris:
         return

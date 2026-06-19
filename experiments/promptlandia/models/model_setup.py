@@ -18,11 +18,10 @@ It includes a class with a static method to initialize the `genai` client with
 the appropriate project ID, location, and model ID.
 """
 
-from typing import Optional
 from dotenv import load_dotenv
 from google import genai
-from config.default import Default
 
+from config.default import Default
 
 load_dotenv(override=True)
 
@@ -32,10 +31,9 @@ class ModelSetup:
 
     @staticmethod
     def init(
-        project_id: Optional[str] = None,
-        location: Optional[str] = None,
-        model_id: Optional[str] = None,
-        planning_model_id: Optional[str] = None,
+        project_id: str | None = None,
+        location: str | None = None,
+        model_id: str | None = None,
     ):
         """Initializes the generative AI client.
 
@@ -47,13 +45,13 @@ class ModelSetup:
             project_id: The Google Cloud project ID.
             location: The Google Cloud location to use for the model.
             model_id: The ID of the model to use.
-            planning_model_id: The ID of the model to use for planning.
 
         Returns:
-            A tuple containing the initialized `genai` client, the model ID, and the planning model ID.
+            A tuple containing the initialized `genai` client and the model ID.
 
         Raises:
             ValueError: If any of the required parameters are not set.
+
         """
         config = Default()
         if not project_id:
@@ -62,9 +60,6 @@ class ModelSetup:
             location = config.LOCATION
         if not model_id:
             model_id = config.MODEL_ID
-        if not planning_model_id:
-            planning_model_id = config.PLANNING_MODEL_ID or model_id
-
         if None in [project_id, location, model_id]:
             raise ValueError("All parameters must be set.")
         print(f"initiating genai client with {project_id} in {location}")
@@ -73,4 +68,4 @@ class ModelSetup:
             project=project_id,
             location=location,
         )
-        return client, model_id, planning_model_id
+        return client, model_id

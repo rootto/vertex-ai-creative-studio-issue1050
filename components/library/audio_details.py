@@ -42,17 +42,10 @@ def audio_details(item: MediaItem, on_click_permalink: Callable):
             overflow_y="auto",  # Scroll if content exceeds max height
         ),
     ):
-        if not item.error_message:
-            # Handle multiple audio tracks if present
-            audio_uris = (
-                item.gcs_uris
-                if item.gcs_uris
-                else ([item.gcsuri] if item.gcsuri else [])
+        if item_display_url and not item.error_message:
+            me.audio(
+                src=item_display_url,
             )
-            for uri in audio_uris:
-                display_url = gcs_uri_to_https_url(uri)
-                if display_url:
-                    me.audio(src=display_url)
 
         if item.error_message:
             me.text(
@@ -67,7 +60,7 @@ def audio_details(item: MediaItem, on_click_permalink: Callable):
                 ),
             )
 
-        me.text(f"Model: {item.model}")
+        me.text(f"Model: {item.raw_data['model']}")
         me.text(f'Prompt: "{item.prompt or "N/A"}"')
         if item.negative_prompt:
             me.text(f'Negative Prompt: "{item.negative_prompt}"')
@@ -119,17 +112,6 @@ def audio_details(item: MediaItem, on_click_permalink: Callable):
                     me.icon(icon="link")
                     me.text("permalink")
 
-            audio_uris = (
-                item.gcs_uris
-                if item.gcs_uris
-                else ([item.gcsuri] if item.gcsuri else [])
-            )
-            for i, uri in enumerate(audio_uris):
-                if uri:
-                    filename = os.path.basename(uri.split("?")[0])
-                    # Ensure unique keys for multiple buttons
-                    download_button(
-                        url=uri,
-                        filename=filename,
-                        key=f"{item.id}_download_{i}",
-                    )
+            if item.gcsuri:
+                filename = os.path.basename(item.gcsuri.split("?")[0])
+                download_button(url=item.gcsuri, filename=filename)

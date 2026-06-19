@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Callable
+from collections.abc import Callable
 
 import mesop as me
 
@@ -40,38 +40,40 @@ def library_dialog(
         flex_direction="column",
     )
 
-    with dialog(is_open=is_open, dialog_style=dialog_style):
+    with (
+        dialog(is_open=is_open, dialog_style=dialog_style),
+        me.box(
+            style=me.Style(
+                display="flex", flex_direction="column", gap=16, flex_grow=1,
+            ),
+        ),
+    ):
+        me.text("Select an Image from Library", type="headline-6")
+        with me.box(style=me.Style(flex_grow=1, overflow_y="auto")):
+            if is_loading:
+                with me.box(
+                    style=me.Style(
+                        display="flex",
+                        justify_content="center",
+                        align_items="center",
+                        height="100%",
+                    ),
+                ):
+                    me.progress_spinner()
+            else:
+                library_image_selector(
+                    on_select=on_select,
+                    media_items=media_items,
+                )
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="column", gap=16, flex_grow=1
+                display="flex",
+                justify_content="flex-end",
+                margin=me.Margin(top=24),
             ),
         ):
-            me.text("Select an Image from Library", type="headline-6")
-            with me.box(style=me.Style(flex_grow=1, overflow_y="auto")):
-                if is_loading:
-                    with me.box(
-                        style=me.Style(
-                            display="flex",
-                            justify_content="center",
-                            align_items="center",
-                            height="100%",
-                        ),
-                    ):
-                        me.progress_spinner()
-                else:
-                    library_image_selector(
-                        on_select=on_select,
-                        media_items=media_items,
-                    )
-            with me.box(
-                style=me.Style(
-                    display="flex",
-                    justify_content="flex-end",
-                    margin=me.Margin(top=24),
-                ),
-            ):
-                me.button(
-                    "Cancel",
-                    on_click=on_close,
-                    type="stroked",
-                )
+            me.button(
+                "Cancel",
+                on_click=on_close,
+                type="stroked",
+            )

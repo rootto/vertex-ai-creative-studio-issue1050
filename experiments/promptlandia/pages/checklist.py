@@ -13,17 +13,117 @@
 # limitations under the License.
 
 import json
-from typing import Optional
+from typing import Any
 
 import mesop as me
-from pydantic import ValidationError
+from models.parsers import parse_evaluation_markdown
+from models.prompts import PROMPT_HEALTH_CHECKLIST
+from pydantic import BaseModel, Field, ValidationError
 
 from components.header import header
-from services.checklist import PromptChecklist
-from models.checklist_models import (
-    IssueDetail,
-    ParsedChecklistResponse,
-)
+from models.gemini import gemini_generate_content
+
+
+# Pydantic Models for structured response
+class ChecklistItemDetail(BaseModel):
+    """Represents the details of a single checklist item."""
+
+    score: bool
+    explanation: str | None = None
+
+
+class IssueDetail(BaseModel):
+    """Represents the structured details of an identified issue."""
+
+    issue_name: str
+    location_in_prompt: str
+    rationale: str
+
+
+class CategoryData(BaseModel):
+    """Represents the data for a single category in the checklist."""
+
+    items: dict[str, bool] = Field(default_factory=dict)
+    details: dict[str, IssueDetail | str] | None = (
+        None  # Can hold structured issue details or simple string explanations
+    )
+    explanation: str | None = None  # For overall category explanation
+
+    @classmethod
+    def parse_category_data(cls, data: dict[str, Any]) -> "CategoryData":
+        """Parses a dictionary into a CategoryData object.
+
+        Args:
+            data: The dictionary to parse.
+
+        Returns:
+            A CategoryData object.
+
+        """
+        items = {}
+        details_dict = {}  # Initialize as an empty dict
+        category_explanation_str = None
+
+        if isinstance(data, dict):
+            # Correctly parse nested items
+            raw_items = data.get("items")
+            if isinstance(raw_items, dict):
+                for key, value in raw_items.items():
+                    if isinstance(value, bool):
+                        items[key] = value
+
+            raw_details = data.get("details")
+            if isinstance(raw_details, dict):
+                for key, value in raw_details.items():
+                    if isinstance(value, dict):
+                        try:
+                            # Attempt to parse as a structured IssueDetail
+                            details_dict[key] = IssueDetail(**value)
+                        except ValidationError:
+                            # If it fails, treat it as a plain string (or handle error appropriately)
+                            details_dict[key] = str(value)
+                    else:
+                        # Keep it as a string if it's not a dictionary
+                        details_dict[key] = str(value)
+
+            category_explanation_str = data.get("explanation")
+            if not isinstance(category_explanation_str, str):
+                category_explanation_str = None
+
+        return cls(
+            items=items,
+            details=details_dict if details_dict else None,
+            explanation=category_explanation_str,
+        )
+
+
+class ParsedChecklistResponse(BaseModel):
+    """Represents the entire checklist response."""
+
+    categories: dict[str, CategoryData] = Field(default_factory=dict)
+
+    @classmethod
+    def from_json_dict(cls, json_dict: dict[str, Any]) -> "ParsedChecklistResponse":
+        """Creates a ParsedChecklistResponse from a JSON dictionary.
+
+        Args:
+            json_dict: The JSON dictionary to parse.
+
+        Returns:
+            A ParsedChecklistResponse object.
+
+        """
+        parsed_categories = {}
+        for cat_name, cat_data in json_dict.items():
+            if isinstance(cat_data, dict):
+                parsed_categories[cat_name] = CategoryData.parse_category_data(cat_data)
+            else:
+                # Handle cases where a category might not be a dict as expected
+                print(
+                    f"Warning: Category '{cat_name}' data is not a dictionary, skipping.",
+                )
+                parsed_categories[cat_name] = CategoryData()  # empty category
+        return cls(categories=parsed_categories)
 
 
 @me.stateclass
@@ -36,8 +136,9 @@ class PageState:
     prompt_placeholder: str = ""
     prompt_response: str = ""  # Raw text from Gemini
     # Store the successfully parsed JSON as a string to avoid Mesop deserialization issues
-    parsed_response_json_str: Optional[str] = None
-    commentary_suffix: Optional[str] = None
+    parsed_response_json_str: str | None = None
+    # commentary_prefix: Optional[str] = None # No longer storing prefix
+    commentary_suffix: str | None = None
 
 
 def checklist_page_content(app_state: me.state):
@@ -45,6 +146,7 @@ def checklist_page_content(app_state: me.state):
 
     Args:
         app_state: The global application state.
+
     """
     state = me.state(PageState)
 
@@ -61,7 +163,7 @@ def checklist_page_content(app_state: me.state):
                 height="100%",
                 overflow_y="scroll",
                 margin=me.Margin(bottom=20),
-            )
+            ),
         ):
             with me.box(
                 style=me.Style(
@@ -69,11 +171,11 @@ def checklist_page_content(app_state: me.state):
                     padding=me.Padding(top=24, left=24, right=24, bottom=24),
                     display="flex",
                     flex_direction="column",
-                )
+                ),
             ):
                 header("Prompt Health Checklist", "fact_check")
                 me.text(
-                    "Receive a quick checkup of your prompt using the prompt health checklist"
+                    "Receive a quick checkup of your prompt using the prompt health checklist",
                 )
                 me.box(style=me.Style(height=16))
                 gemini_prompt_input()
@@ -85,7 +187,7 @@ def checklist_page_content(app_state: me.state):
                             display="grid",
                             justify_content="center",
                             justify_items="center",
-                        )
+                        ),
                     ):
                         me.progress_spinner()
                         me.text("Linting prompt...")
@@ -95,22 +197,24 @@ def checklist_page_content(app_state: me.state):
                         try:
                             raw_dict = json.loads(state.parsed_response_json_str)
                             pydantic_response = ParsedChecklistResponse.from_json_dict(
-                                raw_dict
+                                raw_dict,
                             )
+                            # me.text("Evaluation Results", style=me.Style(font_weight="bold", font_size=18, margin=me.Margin(bottom=12)))
                             render_pydantic_response(pydantic_response)
                         except (json.JSONDecodeError, ValidationError) as e:
                             me.text(
                                 "Error displaying structured results:",
                                 style=me.Style(color="red", font_weight="bold"),
                             )
-                            me.text(f"Details: {str(e)}")
+                            me.text(f"Details: {e!s}")
                             # If JSON parsing failed but we have a suffix, suffix will be shown below.
                             # If no suffix either, show the full raw response.
                             if not state.commentary_suffix:
                                 me.text(
                                     "Raw response:",
                                     style=me.Style(
-                                        font_weight="bold", margin=me.Margin(top=8)
+                                        font_weight="bold",
+                                        margin=me.Margin(top=8),
                                     ),
                                 )
                                 me.markdown(text=f"```\n{state.prompt_response}\n```")
@@ -118,15 +222,16 @@ def checklist_page_content(app_state: me.state):
                     # Display suffix commentary if it exists, in an expansion panel
                     if state.commentary_suffix and state.commentary_suffix.strip():
                         me.box(style=me.Style(height=28))
-                        with me.expansion_panel(
-                            title="View Additional Commentary", expanded=True
+                        with (
+                            me.expansion_panel(
+                                title="View Additional Commentary",
+                                expanded=True,
+                            ),
+                            me.box(style=me.Style(padding=me.Padding.all(16))),
                         ):
-                            with me.box(style=me.Style(padding=me.Padding.all(16))):
-                                me.markdown(state.commentary_suffix)
+                            me.markdown(state.commentary_suffix)
 
-                elif (
-                    state.prompt_response
-                ):  # Fallback for completely unparsable response (no JSON, no suffix extracted)
+                elif state.prompt_response:  # Fallback for completely unparsable response (no JSON, no suffix extracted)
                     me.text("Response", style=me.Style(font_weight="bold"))
                     me.box(style=me.Style(height=8))
                     with me.box(
@@ -139,7 +244,7 @@ def checklist_page_content(app_state: me.state):
                             background=BACKGROUND_COLOR,
                             border_radius=16,
                             padding=me.Padding.all(16),
-                        )
+                        ),
                     ):
                         me.markdown(text=f"```json\n{state.prompt_response}\n```")
 
@@ -150,6 +255,7 @@ def render_pydantic_response(response: ParsedChecklistResponse):
 
     Args:
         response: The parsed checklist response.
+
     """
     categories_with_issues = {}
     categories_without_issues = {}
@@ -165,13 +271,18 @@ def render_pydantic_response(response: ParsedChecklistResponse):
         me.text(
             f"Checklist found {len(categories_with_issues)} issues",
             style=me.Style(
-                font_weight="bold", font_size=18, margin=me.Margin(bottom=12)
+                font_weight="bold",
+                font_size=18,
+                margin=me.Margin(bottom=12),
             ),
         )
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="row", flex_wrap="wrap", gap=16
-            )
+                display="flex",
+                flex_direction="row",
+                flex_wrap="wrap",
+                gap=16,
+            ),
         ):
             for category_name, category_data in categories_with_issues.items():
                 # Each category is a flex item
@@ -182,12 +293,14 @@ def render_pydantic_response(response: ParsedChecklistResponse):
                         min_width="300px",  # Minimum width before wrapping
                         display="flex",
                         flex_direction="column",  # Content within category box is column
-                    )
+                    ),
                 ):
                     me.text(
                         category_name.replace("_", " ").title(),
                         style=me.Style(
-                            font_weight="bold", font_size=16, margin=me.Margin(bottom=8)
+                            font_weight="bold",
+                            font_size=16,
+                            margin=me.Margin(bottom=8),
                         ),
                     )
 
@@ -197,22 +310,24 @@ def render_pydantic_response(response: ParsedChecklistResponse):
                             border_radius=12,
                             padding=me.Padding.all(16),
                             height="100%",  # Make inner box fill the category card
-                        )
+                        ),
                     ):
                         item_count = len(category_data.items)
                         for i, (item_name, score) in enumerate(
-                            category_data.items.items()
+                            category_data.items.items(),
                         ):
                             with me.box(style=me.Style(margin=me.Margin(bottom=8))):
                                 with me.box(
                                     style=me.Style(
-                                        display="flex", align_items="center", gap=8
-                                    )
+                                        display="flex",
+                                        align_items="center",
+                                        gap=8,
+                                    ),
                                 ):
                                     me.icon(
                                         "flag" if score else "check_circle",
                                         style=me.Style(
-                                            color="red" if score else "green"
+                                            color="red" if score else "green",
                                         ),
                                     )
                                     me.text(
@@ -229,15 +344,15 @@ def render_pydantic_response(response: ParsedChecklistResponse):
                                     style=me.Style(
                                         font_size=13,
                                         margin=me.Margin(left=32, bottom=8),
-                                    )
+                                    ),
                                 ):
                                     if isinstance(detail, IssueDetail):
                                         me.markdown(f"**Issue:** {detail.issue_name}")
                                         me.markdown(
-                                            f"**Location:** {detail.location_in_prompt}"
+                                            f"**Location:** {detail.location_in_prompt}",
                                         )
                                         me.markdown(
-                                            f"**Rationale:** {detail.rationale}"
+                                            f"**Rationale:** {detail.rationale}",
                                         )
                                     else:
                                         # Fallback for plain string details
@@ -268,7 +383,9 @@ def render_pydantic_response(response: ParsedChecklistResponse):
         me.text(
             "The following checks passed without issues",
             style=me.Style(
-                font_weight="bold", font_size=18, margin=me.Margin(bottom=12)
+                font_weight="bold",
+                font_size=18,
+                margin=me.Margin(bottom=12),
             ),
         )
         with me.box(
@@ -276,7 +393,7 @@ def render_pydantic_response(response: ParsedChecklistResponse):
                 background=BACKGROUND_COLOR,
                 border_radius=12,
                 padding=me.Padding.all(16),
-            )
+            ),
         ):
             for category_name, category_data in categories_without_issues.items():
                 with me.box(
@@ -285,7 +402,7 @@ def render_pydantic_response(response: ParsedChecklistResponse):
                         align_items="center",
                         gap=8,
                         margin=me.Margin(bottom=8),
-                    )
+                    ),
                 ):
                     me.icon("check_circle", style=me.Style(color="green"))
                     me.text(
@@ -298,6 +415,7 @@ def render_pydantic_response(response: ParsedChecklistResponse):
 def gemini_prompt_input():
     """Renders the Gemini prompt input text area and buttons."""
     page_state = me.state(PageState)
+    # ... (rest of gemini_prompt_input is unchanged)
     with me.box(
         style=me.Style(
             border_radius=16,
@@ -305,12 +423,12 @@ def gemini_prompt_input():
             background=BACKGROUND_COLOR,
             display="flex",
             width="100%",
-        )
+        ),
     ):
         with me.box(
             style=me.Style(
                 flex_grow=1,
-            )
+            ),
         ):
             me.native_textarea(
                 autosize=True,
@@ -335,7 +453,7 @@ def gemini_prompt_input():
             style=me.Style(
                 display="flex",
                 flex_direction="column",
-            )
+            ),
         ):
             with me.content_button(type="icon", on_click=on_click_clear_prompt):
                 me.icon("clear")
@@ -348,6 +466,7 @@ def on_blur_prompt(e: me.InputBlurEvent):
 
     Args:
         e: The blur event.
+
     """
     me.state(PageState).prompt_input = e.value
 
@@ -360,6 +479,7 @@ def on_click_evaluate_prompt(e: me.ClickEvent):
 
     Args:
         e: The click event.
+
     """
     page_state = me.state(PageState)
 
@@ -374,48 +494,46 @@ def on_click_evaluate_prompt(e: me.ClickEvent):
     page_state.processing = True
     yield
 
+    response_text = gemini_generate_content(
+        system_prompt=PROMPT_HEALTH_CHECKLIST,
+        prompt=f"""# Prompt for Analysis\n<PROMPT>\n{page_state.prompt_input}\n</PROMPT>\n""",
+    )
+    page_state.prompt_response = (
+        response_text  # Store full raw response for potential fallback display
+    )
+
     try:
-        checklist_service = PromptChecklist()
-        structured_response, raw_text = checklist_service.evaluate_prompt(page_state.prompt_input)
-        page_state.prompt_response = raw_text
-
-        if structured_response:
-            # We need to convert the Pydantic model back to a dict for JSON serialization
-            # to store it in the Mesop state string.
-            # We also want to sort it as before.
-            parsed_data = structured_response.model_dump()["categories"]
-
+        parsed_data = parse_evaluation_markdown(response_text)
+        if parsed_data:
             # Sort the parsed data so that items with issues appear first
-            # Note: The structure of parsed_data matches what we had before because
-            # our Pydantic models mirror that structure.
             sorted_data = dict(
                 sorted(
                     parsed_data.items(),
                     key=lambda item: item[1]["items"].get("Issue Found", False),
                     reverse=True,
-                )
+                ),
             )
             page_state.parsed_response_json_str = json.dumps(sorted_data)
         else:
-            # If no structured response, treat the whole response as commentary.
-            page_state.commentary_suffix = raw_text.strip()
+            # If no data is parsed, treat the whole response as commentary.
+            page_state.commentary_suffix = response_text.strip()
 
     except Exception as e:
         print(f"Error processing response: {e}")
         # Fallback: treat the entire response as commentary if parsing fails.
-        # We might not have raw_text if evaluate_prompt failed early, so handle that.
-        page_state.prompt_response = page_state.prompt_response if page_state.prompt_response else f"Error: {e}"
-        page_state.commentary_suffix = page_state.prompt_response.strip()
+        page_state.commentary_suffix = response_text.strip()
         page_state.parsed_response_json_str = None
 
     page_state.processing = False
     yield
+
 
 def on_click_clear_prompt(e: me.ClickEvent):
     """Handles the click event for the clear prompt button.
 
     Args:
         e: The click event.
+
     """
     state = me.state(PageState)
     state.prompt_input = ""
@@ -424,4 +542,5 @@ def on_click_clear_prompt(e: me.ClickEvent):
     state.processing = False
     state.prompt_response = ""
     state.parsed_response_json_str = None
+    # state.commentary_prefix = None # Prefix is no longer stored
     state.commentary_suffix = None

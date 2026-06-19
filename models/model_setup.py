@@ -12,15 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+
+import vertexai
 from dotenv import load_dotenv
 from google import genai
 from google.cloud import aiplatform
 
 from config.default import Default
-
-import vertexai
-
 
 load_dotenv(override=True)
 
@@ -37,12 +35,11 @@ class VtoModelSetup:
 
     @staticmethod
     def init(
-        project_id: Optional[str] = None,
-        location: Optional[str] = None,
-        model_id: Optional[str] = None,
+        project_id: str | None = None,
+        location: str | None = None,
+        model_id: str | None = None,
     ):
-        """initializes vto model"""
-
+        """Initializes vto model"""
         config = Default()
 
         if not project_id:
@@ -82,12 +79,11 @@ class VeoModelSetup:
 
     @staticmethod
     def init(
-        project_id: Optional[str] = None,
-        location: Optional[str] = None,
-        model_id: Optional[str] = None,
+        project_id: str | None = None,
+        location: str | None = None,
+        model_id: str | None = None,
     ):
-        """initializes veo model"""
-
+        """Initializes veo model"""
         config = Default()
         if not project_id:
             project_id = config.VEO_PROJECT_ID
@@ -108,13 +104,13 @@ class VeoModelSetup:
 
 class GeminiModelSetup:
     """Gemini model setup"""
-    _clients = {}
 
     @staticmethod
     def init(
-        project_id: Optional[str] = None,
-        location: Optional[str] = None,
-        http_options: Optional[dict] = None,
+        project_id: str | None = None,
+        location: str | None = None,
+        http_options: dict | None = None,
+        # model_id is no longer used by init, client is configured generally
     ):
         """Init method for Gemini client. Model is specified at call time."""
         config = Default()
@@ -123,22 +119,14 @@ class GeminiModelSetup:
 
         if not effective_project_id or not effective_location:
             raise ValueError("Project ID and Location must be set for Gemini client.")
-            
-        # Create a cache key. Convert http_options dict to a sorted tuple of items for hashability.
-        http_options_key = tuple(sorted(http_options.items())) if http_options else None
-        cache_key = (effective_project_id, effective_location, http_options_key)
-        
-        if cache_key in GeminiModelSetup._clients:
-            return GeminiModelSetup._clients[cache_key]
 
         print(
-            f"Initiating Gemini client for project {effective_project_id} in {effective_location}"
+            f"Initiating Gemini client for project {effective_project_id} in {effective_location}",
         )
         client = genai.Client(
-            vertexai=config.INIT_VERTEX,
+            vertexai=config.INIT_VERTEX,  # This assumes vertexai backend is desired.
             project=effective_project_id,
             location=effective_location,
             http_options=http_options,
         )
-        GeminiModelSetup._clients[cache_key] = client
         return client

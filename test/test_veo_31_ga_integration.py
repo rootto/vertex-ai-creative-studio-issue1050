@@ -12,21 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import pytest
 import os
 import sys
-import time
-from unittest.mock import patch, MagicMock
+
+import pytest
 
 # Setup sys.path to allow imports from the parent directory.
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from models.veo import generate_video
-from models.requests import VideoGenerationRequest, APIReferenceImage
 from config.default import Default
-from config.veo_models import VEO_MODELS, get_veo_model_config
+from config.veo_models import get_veo_model_config
+from models.requests import APIReferenceImage, VideoGenerationRequest
+from models.veo import generate_video
 
 config = Default()
+
 
 def create_base_request(model_id):
     """Helper to create a valid request based on model config."""
@@ -40,8 +40,9 @@ def create_base_request(model_id):
         enhance_prompt=True,
         generate_audio=True if "3." in model_id else False,
         model_version_id=model_id,
-        person_generation="Allow (Adults only)"
+        person_generation="Allow (Adults only)",
     )
+
 
 @pytest.mark.integration
 def test_full_generation_4k():
@@ -49,15 +50,16 @@ def test_full_generation_4k():
     model_id = "3.1"
     req = create_base_request(model_id)
     req.resolution = "4k"
-    
+
     print(f"\nStarting 4K generation with {model_id}...")
     video_uris, resolution = generate_video(req)
-    
+
     assert video_uris
     assert len(video_uris) > 0
     assert video_uris[0].startswith("gs://")
     assert resolution == "4k"
     print(f"SUCCESS: 4K video generated at {video_uris[0]}")
+
 
 @pytest.mark.integration
 def test_full_generation_r2v_fast_preview():
@@ -67,17 +69,18 @@ def test_full_generation_r2v_fast_preview():
     req.r2v_references = [
         APIReferenceImage(
             gcs_uri="gs://cloud-samples-data/generative-ai/image/flowers.png",
-            mime_type="image/png"
-        )
+            mime_type="image/png",
+        ),
     ]
-    
+
     print(f"\nStarting R2V generation with {model_id}...")
     video_uris, resolution = generate_video(req)
-    
+
     assert video_uris
     assert len(video_uris) > 0
     assert video_uris[0].startswith("gs://")
     print(f"SUCCESS: R2V video generated at {video_uris[0]}")
+
 
 @pytest.mark.integration
 def test_full_generation_interpolation_all_models():
@@ -86,16 +89,19 @@ def test_full_generation_interpolation_all_models():
     req = create_base_request(model_id)
     req.reference_image_gcs = "gs://cloud-samples-data/generative-ai/image/flowers.png"
     req.reference_image_mime_type = "image/png"
-    req.last_reference_image_gcs = "gs://cloud-samples-data/generative-ai/image/daisy.jpg"
+    req.last_reference_image_gcs = (
+        "gs://cloud-samples-data/generative-ai/image/daisy.jpg"
+    )
     req.last_reference_image_mime_type = "image/jpeg"
-    
+
     print(f"\nStarting Interpolation with {model_id}...")
     video_uris, resolution = generate_video(req)
-    
+
     assert video_uris
     assert len(video_uris) > 0
     assert video_uris[0].startswith("gs://")
     print(f"SUCCESS: Interpolation video generated at {video_uris[0]}")
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-m", "integration", "-s"])

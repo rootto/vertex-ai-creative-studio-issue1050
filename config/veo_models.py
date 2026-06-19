@@ -12,18 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from dataclasses import dataclass
+
+DEFAULT_VEO_VERSION_ID = "3.1-fast"
 
 
 @dataclass
 class ModeOverride:
     """Defines specific overrides for a particular mode."""
 
-    supported_durations: Optional[List[int]] = None
-    default_duration: Optional[int] = None
+    supported_durations: list[int] | None = None
+    default_duration: int | None = None
     supports_style_reference: bool = True
-    supported_aspect_ratios: Optional[List[str]] = None
+    supported_aspect_ratios: list[str] | None = None
 
 
 @dataclass
@@ -33,9 +34,9 @@ class VeoModelConfig:
     version_id: str
     model_name: str
     display_name: str
-    supported_modes: List[str]
-    supported_aspect_ratios: List[str]
-    resolutions: List[str]
+    supported_modes: list[str]
+    supported_aspect_ratios: list[str]
+    resolutions: list[str]
     min_duration: int
     max_duration: int
     default_duration: int
@@ -44,14 +45,14 @@ class VeoModelConfig:
     supports_prompt_enhancement: bool
     requires_prompt_enhancement: bool = False
     default_prompt_enhancement: bool = True
-    supported_durations: Optional[List[int]] = None
-    mode_overrides: Optional[Dict[str, ModeOverride]] = None
+    supported_durations: list[int] | None = None
+    mode_overrides: dict[str, ModeOverride] | None = None
     supports_video_extension: bool = False
-    supported_extension_durations: Optional[List[int]] = None
+    supported_extension_durations: list[int] | None = None
 
 
 # This list is the single source of truth for all VEO model configurations.
-VEO_MODELS: List[VeoModelConfig] = [
+VEO_MODELS: list[VeoModelConfig] = [
     VeoModelConfig(
         version_id="2.0",
         model_name="veo-2.0-generate-001",
@@ -70,6 +71,24 @@ VEO_MODELS: List[VeoModelConfig] = [
         supported_extension_durations=[7],
     ),
     VeoModelConfig(
+        version_id="2.0-exp",
+        model_name="veo-2.0-generate-exp",
+        display_name="Veo 2.0 Exp",
+        supported_modes=["t2v", "i2v", "interpolation", "r2v"],
+        supported_aspect_ratios=["16:9", "9:16"],
+        resolutions=["720p"],
+        min_duration=5,
+        max_duration=8,
+        default_duration=5,
+        max_samples=4,
+        default_samples=1,
+        supports_prompt_enhancement=False,
+        default_prompt_enhancement=False,
+        mode_overrides={
+            "r2v": ModeOverride(supported_durations=[8], default_duration=8),
+        },
+    ),
+    VeoModelConfig(
         version_id="3.0",
         model_name="veo-3.0-generate-001",
         display_name="Veo 3.0",
@@ -85,7 +104,6 @@ VEO_MODELS: List[VeoModelConfig] = [
         requires_prompt_enhancement=True,
         default_prompt_enhancement=True,
         supported_durations=[4, 6, 8],
-
     ),
     VeoModelConfig(
         version_id="3.0-fast",
@@ -132,9 +150,9 @@ VEO_MODELS: List[VeoModelConfig] = [
         },
     ),
     VeoModelConfig(
-        version_id="3.1",
-        model_name="veo-3.1-generate-001",
-        display_name="Veo 3.1",
+        version_id="3.1-fast-preview",
+        model_name="veo-3.1-fast-generate-preview",
+        display_name="Veo 3.1 Fast Preview",
         supported_modes=["t2v", "i2v", "interpolation", "r2v"],
         supported_aspect_ratios=["16:9", "9:16"],
         resolutions=["720p", "1080p", "4k"],
@@ -159,12 +177,29 @@ VEO_MODELS: List[VeoModelConfig] = [
         },
     ),
     VeoModelConfig(
-        version_id="3.1-lite",
-        model_name="veo-3.1-lite-generate-001",
-        display_name="Veo 3.1 Lite",
+        version_id="3.1",
+        model_name="veo-3.1-generate-001",
+        display_name="Veo 3.1",
         supported_modes=["t2v", "i2v", "interpolation"],
         supported_aspect_ratios=["16:9", "9:16"],
-        resolutions=["720p", "1080p"],
+        resolutions=["720p", "1080p", "4k"],
+        min_duration=4,
+        max_duration=8,
+        default_duration=8,
+        max_samples=4,
+        default_samples=1,
+        supports_prompt_enhancement=True,
+        requires_prompt_enhancement=True,
+        default_prompt_enhancement=True,
+        supported_durations=[4, 6, 8],
+    ),
+    VeoModelConfig(
+        version_id="3.1-preview",
+        model_name="veo-3.1-generate-preview",
+        display_name="Veo 3.1 preview",
+        supported_modes=["t2v", "i2v", "interpolation", "r2v"],
+        supported_aspect_ratios=["16:9", "9:16"],
+        resolutions=["720p", "1080p", "4k"],
         min_duration=4,
         max_duration=8,
         default_duration=8,
@@ -176,29 +211,22 @@ VEO_MODELS: List[VeoModelConfig] = [
         supported_durations=[4, 6, 8],
         supports_video_extension=True,
         supported_extension_durations=[7],
+        mode_overrides={
+            "r2v": ModeOverride(
+                supported_durations=[8],
+                default_duration=8,
+                supports_style_reference=True,
+                supported_aspect_ratios=["16:9", "9:16"],
+            ),
+        },
     ),
 ]
 
+
 # Helper function to easily find a model's config by its version_id.
-def get_veo_model_config(version_id: str) -> Optional[VeoModelConfig]:
+def get_veo_model_config(version_id: str) -> VeoModelConfig | None:
     """Finds and returns the configuration for a given VEO model version_id."""
     for model in VEO_MODELS:
         if model.version_id == version_id:
             return model
     return None
-
-def get_models_by_mode(mode: str) -> List[VeoModelConfig]:
-    """Finds and returns all model configurations that support a specific mode."""
-    return [model for model in VEO_MODELS if mode in model.supported_modes]
-
-def get_version_id_by_model_name(model_name: str) -> Optional[str]:
-    """Finds the version_id corresponding to a specific model_name."""
-    for model in VEO_MODELS:
-        if model.model_name == model_name:
-            return model.version_id
-    return None
-
-from config.default import Default
-cfg = Default()
-# Resolve or fallback safely
-DEFAULT_VEO_VERSION_ID = get_version_id_by_model_name(cfg.DEFAULT_VEO_MODEL_NAME) or "3.1-fast"

@@ -12,13 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+from collections.abc import Callable
 from dataclasses import field
 from functools import partial
-from typing import Callable, Optional
 
 import mesop as me
 
-from common.metadata import MediaItem, get_media_for_page_optimized
+from common.metadata import (
+    _create_media_item_from_dict,
+    get_media_for_page_optimized,
+)
 from common.utils import create_display_url
 from components.dialog import dialog
 from components.library.events import LibrarySelectionChangeEvent
@@ -33,15 +37,16 @@ class State:
     show_library_dialog: bool = False
     active_chooser_key: str = ""
     is_loading: bool = False
-    media_items_json: str = ""
+    media_items_json: str = "[]"
     show_only_my_items: bool = False
     media_type: list[str] = field(default_factory=lambda: ["images"])
+    selected_team_id: str = ""
 
 
 @me.component
 def library_chooser_button(
     on_library_select: Callable[[LibrarySelectionChangeEvent], None],
-    button_label: Optional[str] = None,
+    button_label: str | None = None,
     button_type: str = "stroked",
     key: str = "",
     media_type: list[str] | None = None,
@@ -68,15 +73,20 @@ def library_chooser_button(
             20,
             state.media_type,
             filter_by_user_email=user_email,
+            filter_by_team_id=state.selected_team_id if state.selected_team_id else None,
         )
 
-        import json
+        # Convert GCS URIs to display URLs using the centralized helper.
+        for item in items:
+            gcs_uri = (
+                item.gcsuri
+                if item.gcsuri
+                else (item.gcs_uris[0] if item.gcs_uris else None)
+            )
+            item.signed_url = create_display_url(gcs_uri)
+
         from dataclasses import asdict
-
-        state.media_items_json = json.dumps(
-            [asdict(item) for item in items],
-            default=str,
-        )
+        state.media_items_json = json.dumps([asdict(item) for item in items], default=str)
         state.is_loading = False
         yield
 
@@ -89,6 +99,11 @@ def library_chooser_button(
         state.show_library_dialog = True
         # Capture the media_type for this specific button click into the shared state
         state.media_type = media_type
+        yield from _fetch_and_update_items()
+
+    def on_change_team_filter(e: me.SelectSelectionChangeEvent):
+        """Handles changes to the Team filter dropdown."""
+        state.selected_team_id = e.value
         yield from _fetch_and_update_items()
 
     def on_toggle_my_items(e: me.SlideToggleChangeEvent):
@@ -112,23 +127,33 @@ def library_chooser_button(
     elif "all" in current_media_type:
         icon_name = "perm_media"
 
-    with me.content_button(
-        on_click=partial(open_dialog, media_type=current_media_type),
-        type=button_type,
-        key=key,
-        disabled=disabled,
-    ):
-        with me.box(
+    with (
+        me.content_button(
+            on_click=partial(open_dialog, media_type=current_media_type),
+            type=button_type,
+            key=key,
+            disabled=disabled,
+        ),
+        me.box(
             style=me.Style(
                 display="flex",
                 flex_direction="row",
                 gap=8,
                 align_items="center",
             ),
-        ):
-            me.icon(icon_name)
-            if button_label:
-                me.text(button_label)
+        ),
+    ):
+        me.icon(icon_name)
+        if button_label:
+            with me.box(
+                style=me.Style(
+                    display="flex",
+                    flex_direction="column",
+                    align_items="flex-start",
+                ),
+            ):
+                for line in button_label.split("\n"):
+                    me.text(line, style=me.Style(font_size="9pt", line_height="1.1"))
 
     dialog_style = me.Style(
         width="65vw",
@@ -148,13 +173,14 @@ def library_chooser_button(
                     flex_grow=1,
                 ),
             ):
-                # Header with title and toggle
+                # Header with title and filters
                 with me.box(
                     style=me.Style(
                         display="flex",
                         flex_direction="row",
                         justify_content="space-between",
                         align_items="center",
+                        width="100%",
                     ),
                 ):
                     # Dynamic title based on media type
@@ -170,11 +196,37 @@ def library_chooser_button(
                         f"Select {media_type_label} from Library",
                         type="headline-6",
                     )
-                    me.slide_toggle(
-                        label="Show only my items",
-                        checked=state.show_only_my_items,
-                        on_change=on_toggle_my_items,
-                    )
+
+                    with me.box(
+                        style=me.Style(
+                            display="flex",
+                            flex_direction="row",
+                            align_items="center",
+                            gap=16,
+                        ),
+                    ):
+                        # Team Filter Dropdown
+                        teams = json.loads(app_state.managed_teams_json) if app_state.managed_teams_json else []
+                        if teams:
+                            me.select(
+                                label="Filter by Team",
+                                options=[
+                                    me.SelectOption(label="All Teams", value=""),
+                                ]
+                                + [
+                                    me.SelectOption(label=t.get("name") or f"Team {t.get('id')}", value=t.get("id"))
+                                    for t in teams
+                                ],
+                                on_selection_change=on_change_team_filter,
+                                value=state.selected_team_id,
+                                style=me.Style(width="180px", margin=me.Margin(bottom=0)),
+                            )
+
+                        me.slide_toggle(
+                            label="Show only my items",
+                            checked=state.show_only_my_items,
+                            on_change=on_toggle_my_items,
+                        )
 
                 with me.box(style=me.Style(flex_grow=1, overflow_y="auto")):
                     if state.is_loading:
@@ -188,34 +240,13 @@ def library_chooser_button(
                         ):
                             me.progress_spinner()
                     else:
-                        import json
-
-                        items_dicts = (
-                            json.loads(state.media_items_json)
-                            if state.media_items_json
-                            else []
-                        )
-                        media_items = []
-                        for d in items_dicts:
-                            # Safely ignore extra kwargs
-                            valid_keys = MediaItem.__dataclass_fields__.keys()
-                            clean_d = {k: v for k, v in d.items() if k in valid_keys}
-                            item = MediaItem(**clean_d)
-                            gcs_uri = (
-                                item.gcsuri
-                                if item.gcsuri
-                                else (item.gcs_uris[0] if item.gcs_uris else None)
-                            )
-                            from common.utils import create_display_url
-
-                            item.signed_url = (
-                                create_display_url(gcs_uri) if gcs_uri else ""
-                            )
-                            media_items.append(item)
-
+                        media_items_list = [
+                            _create_media_item_from_dict(item["id"], item)
+                            for item in json.loads(state.media_items_json)
+                        ] if state.media_items_json else []
                         library_image_selector(
                             on_select=on_select_from_library,
-                            media_items=media_items,
+                            media_items=media_items_list,
                         )
                 with me.box(
                     style=me.Style(

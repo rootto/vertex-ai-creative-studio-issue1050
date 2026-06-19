@@ -1,9 +1,8 @@
-"""
-Component for displaying a single video item in the storyboard.
-"""
+"""Component for displaying a single video item in the storyboard."""
+
+from collections.abc import Callable
 
 import mesop as me
-from typing import Callable
 
 from components.video_thumbnail.video_thumbnail import video_thumbnail
 
@@ -15,9 +14,7 @@ def storyboard_video_tile(
     on_click: Callable,
     key: str,
 ):
-    """
-    A tile for displaying a storyboard video item with a text overlay.
-    """
+    """A tile for displaying a storyboard video item with a text overlay."""
     with me.box(
         key=key,
         on_click=on_click,
@@ -31,7 +28,7 @@ def storyboard_video_tile(
     ):
         video_thumbnail(
             video_src=video_url,
-            selected=False, # Not used in this context, but required
+            selected=False,  # Not used in this context, but required
         )
         # Overlay for the room name
         with me.box(
@@ -43,7 +40,7 @@ def storyboard_video_tile(
                 background="rgba(0, 0, 0, 0.6)",
                 padding=me.Padding(top=4, bottom=4, left=8, right=8),
                 border_radius="0 0 8px 8px",
-            )
+            ),
         ):
             me.text(
                 room_name,

@@ -14,8 +14,9 @@
 
 """Configuration page for the application."""
 
+import json
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import mesop as me
 import pandas as pd
@@ -51,7 +52,9 @@ def _tab_group(tabs: list[Tab], on_tab_click: Callable, selected_tab_key: str):
             display="flex",
             border=me.Border(
                 bottom=me.BorderSide(
-                    width=1, style="solid", color=me.theme_var("outline-variant"),
+                    width=1,
+                    style="solid",
+                    color=me.theme_var("outline-variant"),
                 ),
             ),
         ),
@@ -107,14 +110,12 @@ def on_load(e: me.LoadEvent):
     state.is_loading = True
     yield
 
-    import json
-
     all_templates = prompt_template_service.load_all_templates()
-    templates = sorted(
-        [t.model_dump() for t in all_templates],
+    templates_list = sorted(
+        [t.model_dump(mode="json") for t in all_templates],
         key=lambda x: (x["category"], x["label"]),
     )
-    state.templates_json = json.dumps(templates, default=str)
+    state.templates_json = json.dumps(templates_list)
     state.is_loading = False
     yield
 
@@ -138,15 +139,13 @@ def on_update_template(template_id: str, updates: dict):
     state = me.state(PageState)
     try:
         prompt_template_service.update_template(template_id, updates)
-        import json
-
         # Reload all templates to reflect the change
         all_templates = prompt_template_service.load_all_templates()
-        templates = sorted(
-            [t.model_dump() for t in all_templates],
+        templates_list = sorted(
+            [t.model_dump(mode="json") for t in all_templates],
             key=lambda x: (x["category"], x["label"]),
         )
-        state.templates_json = json.dumps(templates, default=str)
+        state.templates_json = json.dumps(templates_list)
         # Close the dialog
         state.show_template_dialog = False
         state.selected_template_key = None
@@ -162,49 +161,45 @@ def page():
     state = me.state(PageState)
     app_state = me.state(AppState)
 
-    import json
-
-    templates = json.loads(state.templates_json) if state.templates_json else []
-
     # Find the template to display at render time
     selected_template = None
     if state.selected_template_key:
+        templates_list = json.loads(state.templates_json) if state.templates_json else []
         selected_template = next(
-            (t for t in templates if t["key"] == state.selected_template_key),
+            (t for t in templates_list if t["key"] == state.selected_template_key),
             None,
         )
 
-    with page_scaffold(page_name="config"):
-        with page_frame():
-            header("Configuration", icon="settings")
+    with page_scaffold(page_name="config"), page_frame():
+        header("Configuration", icon="settings")
 
-            tabs = [
-                Tab(key="details", label="Config Details", icon="list_alt"),
-                Tab(key="templates", label="Prompt Templates", icon="pattern"),
-            ]
-            _tab_group(
-                tabs=tabs,
-                on_tab_click=on_tab_change,
-                selected_tab_key=state.active_tab,
+        tabs = [
+            Tab(key="details", label="Config Details", icon="list_alt"),
+            Tab(key="templates", label="Prompt Templates", icon="pattern"),
+        ]
+        _tab_group(
+            tabs=tabs,
+            on_tab_click=on_tab_change,
+            selected_tab_key=state.active_tab,
+        )
+
+        if state.active_tab == "details":
+            _render_config_details_tab(app_state=app_state)
+        elif state.active_tab == "templates":
+            _render_prompt_templates_list(app_state=app_state)
+
+        # Conditionally render the dialog, passing the derived template dict
+        if state.show_template_dialog and selected_template:
+            is_editable = selected_template["attribution"] == app_state.user_email
+            prompt_template_form_dialog(
+                template=selected_template,
+                # Use the new mode parameter instead of is_editable
+                mode="edit" if is_editable else "view",
+                is_open=state.show_template_dialog,
+                on_close=on_close_dialog,
+                on_update=on_update_template,
+                on_save=None,  # Not used on this page
             )
-
-            if state.active_tab == "details":
-                _render_config_details_tab(app_state=app_state)
-            elif state.active_tab == "templates":
-                _render_prompt_templates_list(app_state=app_state)
-
-            # Conditionally render the dialog, passing the derived template dict
-            if state.show_template_dialog and selected_template:
-                is_editable = selected_template["attribution"] == app_state.user_email
-                prompt_template_form_dialog(
-                    template=selected_template,
-                    # Use the new mode parameter instead of is_editable
-                    mode="edit" if is_editable else "view",
-                    is_open=state.show_template_dialog,
-                    on_close=on_close_dialog,
-                    on_update=on_update_template,
-                    on_save=None,  # Not used on this page
-                )
 
 
 def get_config_table(app_state: AppState):
@@ -254,18 +249,6 @@ def get_config_table(app_state: AppState):
             config_data["Config"].append("Writers Workshop Model ID")
             config_data["Value"].append(writers_model)
 
-    if hasattr(Default, "GEMINI_CRITIQUE_MODEL_ID"):
-        config_data["Config"].append("Critique Model ID")
-        config_data["Value"].append(Default.GEMINI_CRITIQUE_MODEL_ID)
-        config_data["Config"].append("Critique Location")
-        config_data["Value"].append(Default.GEMINI_CRITIQUE_LOCATION)
-
-    if hasattr(Default, "CHARACTER_CONSISTENCY_GEMINI_MODEL"):
-        config_data["Config"].append("Character Consistency Gemini Model")
-        config_data["Value"].append(Default.CHARACTER_CONSISTENCY_GEMINI_MODEL)
-        config_data["Config"].append("Character Consistency Gemini Location")
-        config_data["Value"].append(Default.CHARACTER_CONSISTENCY_GEMINI_LOCATION)
-
     config_data["Config"].append("Application Version")
     config_data["Value"].append(f"{Default.VERSION} {Default.APP_ENV}")
 
@@ -303,6 +286,8 @@ def _render_prompt_templates_list(app_state: AppState):
         me.progress_spinner()
         return
 
+    templates_list = json.loads(state.templates_json) if state.templates_json else []
+
     with me.box(style=me.Style(padding=me.Padding(top=24, left=24, right=24))):
         me.text("Prompt Templates", type="headline-5")
         with me.box(style=me.Style(margin=me.Margin(top=16))):
@@ -315,7 +300,9 @@ def _render_prompt_templates_list(app_state: AppState):
                     padding=me.Padding(bottom=8),
                     border=me.Border(
                         bottom=me.BorderSide(
-                            width=1, style="solid", color=me.theme_var("outline"),
+                            width=1,
+                            style="solid",
+                            color=me.theme_var("outline"),
                         ),
                     ),
                 ),
@@ -327,12 +314,8 @@ def _render_prompt_templates_list(app_state: AppState):
                 me.text("Attribution", style=me.Style(font_weight="bold"))
                 me.text("Actions", style=me.Style(font_weight="bold"))
 
-            import json
-
-            templates = json.loads(state.templates_json) if state.templates_json else []
-
             # Data Rows
-            for template in templates:
+            for template in templates_list:
                 with me.box(
                     key=template["key"],
                     on_click=on_row_click,

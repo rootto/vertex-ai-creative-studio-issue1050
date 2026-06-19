@@ -16,8 +16,6 @@ from dataclasses import dataclass, field
 
 import mesop as me
 
-from config.imagen_models import IMAGEN_MODELS
-
 
 @dataclass
 @me.stateclass
@@ -25,7 +23,12 @@ class PageState:
     """Local Page State"""
 
     # Image generation model selection and output
-    image_gcs_uris: list[str] = field(default_factory=list) # This will hold the permanent GCS URIs
+    image_output: list[str] = field(
+        default_factory=list,
+    )  # This will hold the display URLs
+    image_gcs_uris: list[str] = field(
+        default_factory=list,
+    )  # This will hold the permanent GCS URIs
     image_commentary: str = ""
     image_model_name: str = "imagen-4.0-generate-001"
 
@@ -58,12 +61,5 @@ class PageState:
     image_lighting: str = "Golden hour"
     image_composition: str = "Wide angle"
     image_aspect_ratio: str = "1:1"
-
-    # Thinking and Search (for newer models like 3.1)
-    thinking_level: str = "HIGH"
-    include_thoughts: bool = False
-    use_image_search: bool = False
-    use_web_search: bool = False
-    thoughts: str = ""
 
     timing: str = ""  # For displaying generation time

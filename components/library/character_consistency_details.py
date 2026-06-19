@@ -14,7 +14,7 @@
 """Component for displaying character consistency details."""
 
 import os
-from typing import Callable
+from collections.abc import Callable
 
 import mesop as me
 

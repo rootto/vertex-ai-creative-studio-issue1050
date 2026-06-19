@@ -21,13 +21,16 @@ from config.veo_models import DEFAULT_VEO_VERSION_ID
 @me.stateclass
 class PageState:
     """Mesop Page State"""
-    
+
     # pylint: disable=E3701:invalid-field-call
 
     veo_model: str = DEFAULT_VEO_VERSION_ID
     veo_prompt_input: str = ""
     veo_prompt_placeholder: str = ""
     veo_prompt_textarea_key: int = 0
+
+    available_brand_guidelines_json: str = "[]"
+    selected_brand_guideline: str = ""
 
     veo_mode: str = "t2v"
 
@@ -76,7 +79,7 @@ class PageState:
 
     is_loading: bool = False
     is_converting_gif: bool = False
-    
+
     gif_url: str = ""
 
     show_error_dialog: bool = False
@@ -85,7 +88,7 @@ class PageState:
     result_display_urls: list[str] = field(default_factory=list)
     selected_video_url: str = ""
     timing: str
-    
+
     person_generation: str = "Allow (Adults only)"
 
     # Async Job Tracking

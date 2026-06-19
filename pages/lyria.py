@@ -11,38 +11,30 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Lyria mesop ui page"""
+"""Lyria 2 mesop ui page"""
 
 import datetime  # Required for timestamp
 import json
 import time
+from dataclasses import field
 
 import mesop as me
 
 from common.metadata import MediaItem, add_media_item_to_firestore  # Updated import
 from common.utils import create_display_url
-from components.content_credentials.content_credentials import (
-    content_credentials_viewer,
-)
 from components.dialog import dialog, dialog_actions
 from components.feedback.feedback import feedback
 from components.header import header
-from components.image_thumbnail import image_thumbnail
-from components.library.events import LibrarySelectionChangeEvent
-from components.library.library_chooser_button import library_chooser_button
-from components.lyria.audio_critic import audio_critic
-from components.lyria.technical_metrics import technical_metrics
 from components.page_scaffold import (
     page_frame,
     page_scaffold,
 )
+from components.pill import pill
 from config.default import ABOUT_PAGE_CONTENT, Default
-from config.lyria_models import LYRIA_MODELS, get_lyria_model_config
 from config.rewriters import MUSIC_REWRITER
 from models.audio_analysis import analyze_audio_file
 from models.gemini import analyze_audio_with_gemini, rewriter
 from models.lyria import generate_music_with_lyria
-from state.lyria_state import PageState
 from state.state import AppState
 
 cfg = Default()
@@ -56,6 +48,49 @@ def lyria_page():
         lyria_content(state)
 
 
+@me.stateclass
+class AudioMetricsState:
+    mean_pitch_hz: float = 0.0
+    pitch_std_hz: float = 0.0
+    pitch_range_hz: float = 0.0
+    jitter_percent: float = 0.0
+    shimmer_db: float = 0.0
+    hnr_db: float = 0.0
+    estimated_tempo_bpm: float = 0.0
+    duration_sec: float = 0.0
+
+
+@me.stateclass
+class PageState:
+    """Local Page State"""
+
+    is_loading: bool = False  # Generic loading state for Lyria generation or Rewriter
+    is_analyzing: bool = False  # Specific loading state for Gemini analysis
+
+    loading_operation_message: str = ""  # Message to display during is_loading
+
+    music_prompt_input: str = ""
+    music_prompt_placeholder: str = ""
+    original_user_prompt: str = ""
+    music_prompt_textarea_key: int = 0
+    music_gcs_uri: str = ""
+    music_display_url: str = ""
+
+    timing: str = ""
+
+    show_error_dialog: bool = False
+    error_message: str = ""
+
+    audio_analysis_result_json: str | None = None
+    analysis_error_message: str = ""
+
+    info_dialog_open: bool = False
+
+    audio_metrics: AudioMetricsState = field(default_factory=AudioMetricsState)
+    has_audio_metrics: bool = False
+    current_media_item_id: str | None = None
+
+
 # Original box style
 _BOX_STYLE = me.Style(
     background=me.theme_var("background"),
@@ -66,16 +101,26 @@ _BOX_STYLE = me.Style(
     flex_direction="column",
 )
 
-
-# Combined style for the reference images display box
-_REFERENCE_IMAGES_BOX_STYLE = me.Style(
+# Combined style for the analysis display box
+_ANALYSIS_BOX_STYLE = me.Style(
     background=me.theme_var("background"),
     border_radius=12,
     box_shadow=("0 3px 1px -2px #0003, 0 2px 2px #00000024, 0 1px 5px #0000001f"),
     padding=me.Padding(top=16, left=16, right=16, bottom=16),
     display="flex",
     flex_direction="column",
-    margin=me.Margin(top=16, bottom=16),
+    margin=me.Margin(top=16),
+)
+
+# Combined style for the analysis error display box
+_ANALYSIS_ERROR_BOX_STYLE = me.Style(
+    background=me.theme_var("background"),
+    border_radius=12,
+    padding=me.Padding(top=16, left=16, right=16, bottom=16),
+    display="flex",
+    flex_direction="column",
+    margin=me.Margin(top=16),
+    border=me.Border.all(me.BorderSide(color=me.theme_var("error"), width=1)),
 )
 
 
@@ -86,16 +131,7 @@ def lyria_content(app_state: me.state):
     if pagestate.info_dialog_open:
         with dialog(is_open=pagestate.info_dialog_open):  # pylint: disable=not-context-manager
             me.text("About Lyria", type="headline-6")
-            me.markdown(
-                next(
-                    (
-                        s["description"]
-                        for s in ABOUT_PAGE_CONTENT.get("sections", [])
-                        if s.get("id") == "lyria"
-                    ),
-                    "",
-                ),
-            )
+            me.markdown(ABOUT_PAGE_CONTENT["sections"][2]["description"])
             me.divider()
             me.text("Current Settings", type="headline-6")
             me.text(f"Prompt: {pagestate.music_prompt_input}")
@@ -110,119 +146,13 @@ def lyria_content(app_state: me.state):
             on_info_click=open_info_dialog,
         )
 
-        # Model Selector
-        with me.box(style=me.Style(margin=me.Margin(bottom=16))):
-            me.select(
-                label="Model",
-                options=[
-                    me.SelectOption(label=m.display_name, value=m.version_id)
-                    for m in LYRIA_MODELS
-                ],
-                on_selection_change=on_lyria_model_change,
-                value=pagestate.selected_model_id,
-                style=me.Style(width=250),
+        with me.box(style=_BOX_STYLE):
+            me.text(
+                "Prompt for music generation",
+                style=me.Style(font_weight=500),
             )
-
-        model_config = get_lyria_model_config(pagestate.selected_model_id)
-
-        if model_config and model_config.max_samples > 1:
-            with me.box(style=me.Style(margin=me.Margin(bottom=16))):
-                me.select(
-                    label="Sample Count",
-                    options=[
-                        me.SelectOption(label=str(i), value=str(i))
-                        for i in range(1, model_config.max_samples + 1)
-                    ],
-                    on_selection_change=on_lyria_sample_count_change,
-                    value=str(pagestate.sample_count),
-                    style=me.Style(width=250),
-                )
-
-        _FLEX_BOX_STYLE = me.Style(
-            background=me.theme_var("background"),
-            border_radius=12,
-            box_shadow=(
-                "0 3px 1px -2px #0003, 0 2px 2px #00000024, 0 1px 5px #0000001f"
-            ),
-            padding=me.Padding(top=16, left=16, right=16, bottom=16),
-            display="flex",
-            flex_direction="column",
-            flex=1,
-        )
-
-        if model_config and model_config.supports_lyrics:
-            with me.box(
-                style=me.Style(
-                    display="flex",
-                    flex_direction="row",
-                    gap=16,
-                    width="100%",
-                ),
-            ):
-                with me.box(style=_FLEX_BOX_STYLE):
-                    me.text(
-                        "Prompt for music generation",
-                        style=me.Style(font_weight=500),
-                    )
-                    me.box(style=me.Style(height=16))
-                    subtle_lyria_input()
-                with me.box(style=_FLEX_BOX_STYLE):
-                    me.text("Lyrics (Optional)", style=me.Style(font_weight=500))
-                    me.box(style=me.Style(height=16))
-                    subtle_lyrics_input()
-        else:
-            with me.box(style=_BOX_STYLE):
-                me.text("Prompt for music generation", style=me.Style(font_weight=500))
-                me.box(style=me.Style(height=16))
-                subtle_lyria_input()
-
-        if model_config and model_config.supports_images:
-            with me.box(style=_REFERENCE_IMAGES_BOX_STYLE):
-                me.text("Reference Images", style=me.Style(font_weight=500))
-                me.box(style=me.Style(height=16))
-                with me.box(
-                    style=me.Style(
-                        display="flex",
-                        flex_direction="row",
-                        gap=16,
-                        margin=me.Margin(bottom=16),
-                        align_items="center",
-                    ),
-                ):
-                    me.uploader(
-                        label="Upload Image(s)",
-                        accepted_file_types=["image/jpeg", "image/png", "image/webp"],
-                        on_upload=on_upload_lyria_image,
-                        multiple=True,
-                        type="flat",
-                    )
-                    library_chooser_button(
-                        on_library_select=on_library_select,
-                        button_label="Choose from Library",
-                    )
-                    if pagestate.uploaded_image_gcs_uris:
-                        me.button(
-                            "Clear All",
-                            on_click=on_clear_lyria_image,
-                            type="stroked",
-                        )
-
-                if pagestate.uploaded_image_gcs_uris:
-                    with me.box(
-                        style=me.Style(
-                            display="flex",
-                            flex_wrap="wrap",
-                            gap=10,
-                            justify_content="flex-start",
-                        ),
-                    ):
-                        for i, uri in enumerate(pagestate.uploaded_image_display_urls):
-                            image_thumbnail(
-                                image_uri=uri,
-                                index=i,
-                                on_remove=on_remove_image,
-                                icon_size=18,
-                            )
+            me.box(style=me.Style(height=16))
+            subtle_lyria_input()
 
         me.box(style=me.Style(height=24))
 
@@ -250,33 +180,12 @@ def lyria_content(app_state: me.state):
         ):
             with me.box(
                 style=me.Style(
-                    display="flex",
-                    flex_direction="column",
-                    gap=16,
-                    align_items="center",
+                    display="grid",
+                    justify_content="center",
+                    justify_items="center",
                     margin=me.Margin(bottom=16),
                 ),
             ):
-                if len(pagestate.music_display_urls) > 1:
-                    with me.box(
-                        style=me.Style(
-                            display="flex",
-                            flex_direction="row",
-                            gap=16,
-                            align_items="center",
-                        ),
-                    ):
-                        me.select(
-                            label="Select Track",
-                            options=[
-                                me.SelectOption(label=f"Track {i+1}", value=str(i))
-                                for i in range(len(pagestate.music_display_urls))
-                            ],
-                            on_selection_change=on_track_selection_change,
-                            value=str(pagestate.selected_track_index),
-                            style=me.Style(width=250),
-                        )
-
                 current_audio_url = (
                     pagestate.music_display_urls[pagestate.selected_track_index]
                     if pagestate.selected_track_index
@@ -285,8 +194,14 @@ def lyria_content(app_state: me.state):
                 )
                 me.audio(src=current_audio_url)
 
-                if pagestate.current_media_item_id and not pagestate.is_loading and not pagestate.show_error_dialog:
-                    with me.box(style=me.Style(display="flex", justify_content="center", margin=me.Margin(top=8, bottom=16))):
+                if pagestate.current_media_item_id:
+                    with me.box(
+                        style=me.Style(
+                            display="flex",
+                            justify_content="center",
+                            margin=me.Margin(top=8, bottom=16),
+                        ),
+                    ):
                         feedback(media_item_id=pagestate.current_media_item_id)
 
                 if pagestate.c2pa_manifest_json:
@@ -321,9 +236,139 @@ def lyria_content(app_state: me.state):
                     style=me.Style(margin=me.Margin(top=8)),
                 )
 
-        audio_critic()
+        # Analysis Display Area
+        if (
+            pagestate.audio_analysis_result_json
+            and not pagestate.is_analyzing
+            and not pagestate.is_loading
+        ):
+            try:
+                analysis = json.loads(pagestate.audio_analysis_result_json)
+                with me.box(style=_ANALYSIS_BOX_STYLE):
+                    me.text(
+                        "Music Critic",
+                        type="headline-5",
+                        style=me.Style(margin=me.Margin(bottom=12)),
+                    )
+                    if analysis.get("genre-quality"):
+                        with me.box(style=me.Style(margin=me.Margin(bottom=10))):
+                            genre_list = analysis["genre-quality"]
 
-        technical_metrics()
+                            if isinstance(genre_list, list):
+                                with me.box(
+                                    style=me.Style(
+                                        display="flex",
+                                        flex_direction="row",
+                                        gap=5,
+                                        margin=me.Margin(bottom=5, top=10),
+                                    ),
+                                ):
+                                    # me.text(
+                                    #    "Genres / Qualities:",
+                                    #    style=me.Style(font_weight=450),
+                                    # )
+                                    for item in genre_list:
+                                        pill(item, pill_type="genre")
+                            else:
+                                me.text(str(genre_list))
+
+                    with me.box(
+                        style=me.Style(
+                            margin=me.Margin(bottom=10),
+                            display="flex",
+                            flex_direction="row",
+                            gap=5,
+                        ),
+                    ):
+                        if analysis.get("audio-analysis"):
+                            with me.box(
+                                style=me.Style(
+                                    flex=1,
+                                    margin=me.Margin(bottom=10),
+                                    padding=me.Padding(right=10),
+                                ),
+                            ):
+                                me.text(
+                                    "Description",
+                                    style=me.Style(font_weight="bold"),
+                                )
+                                me.markdown(analysis["audio-analysis"])
+
+                        if analysis.get("prompt-alignment"):
+                            with me.box(
+                                style=me.Style(
+                                    flex=1,
+                                    margin=me.Margin(bottom=10),
+                                    padding=me.Padding(left=10),
+                                ),
+                            ):
+                                me.text(
+                                    "Prompt Alignment",
+                                    style=me.Style(font_weight="bold"),
+                                )
+                                me.markdown(analysis["prompt-alignment"])
+
+            except json.JSONDecodeError:
+                with me.box(style=_ANALYSIS_ERROR_BOX_STYLE):
+                    me.text(
+                        "Audio Analysis Failed",
+                        type="headline-6",
+                        style=me.Style(
+                            color=me.theme_var("error"),
+                            margin=me.Margin(bottom=12),
+                        ),
+                    )
+                    me.text("Error: Could not display analysis data (invalid format).")
+
+        # Analysis Error Display
+        elif (
+            pagestate.analysis_error_message
+            and not pagestate.is_analyzing
+            and not pagestate.is_loading
+        ):
+            with me.box(style=_ANALYSIS_ERROR_BOX_STYLE):
+                me.text(
+                    "Audio Analysis Failed",
+                    type="headline-6",
+                    style=me.Style(
+                        color=me.theme_var("error"),
+                        margin=me.Margin(bottom=12),
+                    ),
+                )
+                me.text(pagestate.analysis_error_message)
+
+        # Technical Metrics Display
+        if (
+            pagestate.has_audio_metrics
+            and not pagestate.is_analyzing
+            and not pagestate.is_loading
+        ):
+            with (
+                me.box(style=_ANALYSIS_BOX_STYLE),
+                me.expansion_panel(
+                    title="Technical Audio Metrics",
+                    icon="graphic_eq",
+                ),
+            ):
+                metrics = pagestate.audio_metrics
+                with me.box(
+                    style=me.Style(
+                        display="grid",
+                        grid_template_columns="1fr 1fr",
+                        gap=16,
+                        padding=me.Padding.all(16),
+                    ),
+                ):
+                    me.text(
+                        f"Duration: {metrics.duration_sec:.2f}s",
+                        style=me.Style(font_weight="bold"),
+                    )
+                    me.text(
+                        f"Tempo: {metrics.estimated_tempo_bpm:.1f} BPM",
+                        style=me.Style(font_weight="bold"),
+                    )
+                    me.text(f"Mean Pitch: {metrics.mean_pitch_hz:.1f} Hz")
+                    me.text(f"Pitch Range: {metrics.pitch_range_hz:.1f} Hz")
 
         # Error Dialog for Generation Errors (Lyria errors)
         with dialog(is_open=pagestate.show_error_dialog):  # pylint: disable=not-context-manager
@@ -367,7 +412,6 @@ def subtle_lyria_input():
                     background=me.theme_var("secondary-container"),
                     outline="none",
                     width="100%",
-                    max_height=300,
                     overflow_y="auto",
                     border=me.Border.all(me.BorderSide(style="none")),
                     color=me.theme_var("foreground"),
@@ -385,175 +429,38 @@ def subtle_lyria_input():
                 padding=me.Padding(left=16, right=16, bottom=16),
             ),
         ):
-            with me.content_button(
-                type="icon",
-                on_click=on_click_lyria,
-                disabled=pagestate.is_loading or pagestate.is_analyzing,
-            ):
-                with me.box(style=icon_style):
-                    me.icon("music_note")
-                    me.text("Generate Audio")
-            me.box(style=me.Style(height=5))
-            with me.content_button(
-                type="icon",
-                on_click=on_click_lyria_rewriter,
-                disabled=pagestate.is_loading or pagestate.is_analyzing,
-            ):
-                with me.box(style=icon_style):
-                    me.icon("auto_awesome")
-                    me.text("Rewrite")
-            me.box(style=me.Style(height=5))
-            with me.content_button(
-                type="icon",
-                on_click=clear_music,
-                disabled=pagestate.is_loading or pagestate.is_analyzing,
-            ):
-                with me.box(style=icon_style):
-                    me.icon("clear")
-                    me.text("Clear")
-
-
-@me.component
-def subtle_lyrics_input():
-    """Lyria lyrics input component"""
-    pagestate = me.state(PageState)
-    icon_style = me.Style(
-        display="flex",
-        flex_direction="column",
-        gap=2,
-        font_size=10,
-        align_items="center",
-    )
-    with me.box(
-        style=me.Style(
-            border_radius=16,
-            padding=me.Padding.all(8),
-            background=me.theme_var("secondary-container"),
-            display="flex",
-            width="100%",
-        ),
-    ):
-        with me.box(style=me.Style(flex_grow=1)):
-            me.native_textarea(
-                autosize=True,
-                min_rows=8,
-                placeholder="Enter lyrics here...",
-                style=me.Style(
-                    padding=me.Padding(top=16, left=16, right=16, bottom=16),
-                    background=me.theme_var("secondary-container"),
-                    outline="none",
-                    width="100%",
-                    max_height=300,
-                    overflow_y="auto",
-                    border=me.Border.all(me.BorderSide(style="none")),
-                    color=me.theme_var("foreground"),
-                    flex_grow=1,
+            with (
+                me.content_button(
+                    type="icon",
+                    on_click=on_click_lyria,
+                    disabled=pagestate.is_loading or pagestate.is_analyzing,
                 ),
-                on_blur=on_blur_lyria_lyrics,
-                value=pagestate.lyrics_placeholder,
-            )
-        with me.box(
-            style=me.Style(
-                display="flex",
-                flex_direction="column",
-                gap=10,
-                padding=me.Padding(left=16, right=16, bottom=16),
-            ),
-        ):
-            with me.content_button(
-                type="icon",
-                on_click=on_click_lyria_lyrics_generate,
-                disabled=pagestate.is_generating_lyrics or pagestate.is_loading,
+                me.box(style=icon_style),
             ):
-                with me.box(style=icon_style):
-                    me.icon("auto_awesome")
-                    me.text("Generate")
-
-
-def on_lyria_model_change(e: me.SelectSelectionChangeEvent):
-    state = me.state(PageState)
-    state.selected_model_id = e.value
-    # Reset lyrics and images if switching to a model that doesn't support them
-    model_config = get_lyria_model_config(e.value)
-    if model_config and not model_config.supports_lyrics:
-        state.lyrics_input = ""
-        state.lyrics_placeholder = ""
-    if model_config and not model_config.supports_images:
-        state.uploaded_image_gcs_uris = []
-    state.uploaded_image_mime_types = []
-    state.uploaded_image_display_urls = []
-
-
-def on_blur_lyria_lyrics(e: me.InputBlurEvent):
-    state = me.state(PageState)
-    state.lyrics_input = e.value
-    state.lyrics_placeholder = e.value
-
-
-def on_clear_lyria_image(e: me.ClickEvent):
-    state = me.state(PageState)
-    state.uploaded_image_gcs_uris = []
-    state.uploaded_image_mime_types = []
-    state.uploaded_image_display_urls = []
-
-
-def on_library_select(e: LibrarySelectionChangeEvent):
-    state = me.state(PageState)
-    # We could restrict max images based on Lyria config here if needed, but for now we'll just append
-    state.uploaded_image_gcs_uris.append(e.gcs_uri)
-
-    # MIME type is hard to guess from just GCS URI in this event,
-    # but we can assume jpeg or png based on extension or fallback to jpeg.
-    ext = e.gcs_uri.split(".")[-1].lower() if "." in e.gcs_uri else "jpeg"
-    mime_type = f"image/{ext}" if ext in ["png", "webp"] else "image/jpeg"
-    state.uploaded_image_mime_types.append(mime_type)
-
-    from common.utils import create_display_url
-
-    state.uploaded_image_display_urls.append(create_display_url(e.gcs_uri))
-    yield
-
-
-def on_remove_image(e: me.ClickEvent):
-    state = me.state(PageState)
-    index_to_remove = int(e.key)
-
-    if 0 <= index_to_remove < len(state.uploaded_image_gcs_uris):
-        state.uploaded_image_gcs_uris.pop(index_to_remove)
-        state.uploaded_image_mime_types.pop(index_to_remove)
-        state.uploaded_image_display_urls.pop(index_to_remove)
-    yield
-
-
-def on_upload_lyria_image(e: me.UploadEvent):
-    state = me.state(PageState)
-    if not e.files:
-        return
-    import shortuuid
-
-    from common.storage import store_to_gcs
-    from common.utils import create_display_url
-    from config.default import Default
-
-    cfg = Default()
-
-    for file in e.files:
-        mime_type = file.mime_type
-        ext = "jpg" if "jpeg" in mime_type else "png"
-        file_name = f"lyria_image_{shortuuid.uuid()}.{ext}"
-
-        # Store to GCS
-        gcs_uri = store_to_gcs(
-            "images",
-            file_name,
-            mime_type,
-            file.getvalue(),
-            False,
-            bucket_name=cfg.MEDIA_BUCKET,
-        )
-        state.uploaded_image_gcs_uris.append(gcs_uri)
-        state.uploaded_image_mime_types.append(mime_type)
-        state.uploaded_image_display_urls.append(create_display_url(gcs_uri))
+                me.icon("music_note")
+                me.text("Generate Audio")
+            me.box(style=me.Style(height=5))
+            with (
+                me.content_button(
+                    type="icon",
+                    on_click=on_click_lyria_rewriter,
+                    disabled=pagestate.is_loading or pagestate.is_analyzing,
+                ),
+                me.box(style=icon_style),
+            ):
+                me.icon("auto_awesome")
+                me.text("Rewrite")
+            me.box(style=me.Style(height=5))
+            with (
+                me.content_button(
+                    type="icon",
+                    on_click=clear_music,
+                    disabled=pagestate.is_loading or pagestate.is_analyzing,
+                ),
+                me.box(style=icon_style),
+            ):
+                me.icon("clear")
+                me.text("Clear")
 
 
 def on_blur_lyria_prompt(e: me.InputBlurEvent):
@@ -624,9 +531,7 @@ def on_click_lyria(e: me.ClickEvent):
     state.analysis_error_message = ""
     yield
 
-    print(
-        f"Let's make music with: {prompt_for_api} (Model: {state.selected_model_id}, Samples: {state.sample_count}, Images: {len(state.uploaded_image_gcs_uris)})",
-    )
+    print(f"Let's make music with: {prompt_for_api}")
     if state.original_user_prompt and state.original_user_prompt != prompt_for_api:
         print(f"Original user prompt was: {state.original_user_prompt}")
 
@@ -637,34 +542,12 @@ def on_click_lyria(e: me.ClickEvent):
     analysis_dict_for_metadata = None
 
     try:
-        destination_blob_paths, c2pa_data, text_outputs = generate_music_with_lyria(
-            prompt=prompt_for_api,
-            model_name=get_lyria_model_config(state.selected_model_id).model_name,
-            lyrics=state.lyrics_input,
-            image_gcs_uri=state.uploaded_image_gcs_uris[0]
-            if state.uploaded_image_gcs_uris
-            else None,
-            image_mime_type=state.uploaded_image_mime_types[0]
-            if state.uploaded_image_mime_types
-            else None,
-            sample_count=state.sample_count,
-        )
-        if c2pa_data:
-            state.c2pa_manifest_json = (
-                json.dumps(c2pa_data) if isinstance(c2pa_data, dict) else c2pa_data
-            )
+        destination_blob_path = generate_music_with_lyria(prompt_for_api)
+        gcs_uri_for_analysis_and_metadata = destination_blob_path
+        state.music_gcs_uri = destination_blob_path
+        state.music_display_url = create_display_url(destination_blob_path)
 
-        state.music_gcs_uris = destination_blob_paths
-        state.music_display_urls = [
-            create_display_url(p) for p in destination_blob_paths
-        ]
-
-        # Use the first one for analysis and metadata for now
-        gcs_uri_for_analysis_and_metadata = (
-            destination_blob_paths[0] if destination_blob_paths else ""
-        )
-
-        print(f"Music generated: {state.music_display_urls}")
+        print(f"Music generated: {state.music_display_url}")
         generated_successfully = True
     except Exception as err:
         print(f"Error during music generation: {err}")
@@ -752,14 +635,15 @@ def on_click_lyria(e: me.ClickEvent):
             rewritten_prompt=logged_rewritten_prompt
             if logged_rewritten_prompt
             else None,
-            model=get_lyria_model_config(state.selected_model_id).model_name,
+            model=cfg.LYRIA_MODEL_VERSION,
             mime_type="audio/wav",  # Lyria generates WAV
             generation_time=execution_time,
             error_message=lyria_error_message_for_metadata
             if lyria_error_message_for_metadata
             else None,
-            gcs_uris=state.music_gcs_uris if generated_successfully else [],
-            generated_text=state.generated_text if generated_successfully else [],
+            gcsuri=gcs_uri_for_analysis_and_metadata
+            if generated_successfully and gcs_uri_for_analysis_and_metadata
+            else None,
             audio_analysis=json.dumps(analysis_dict_for_metadata)
             if analysis_dict_for_metadata
             else None,
@@ -777,10 +661,8 @@ def clear_music(e: me.ClickEvent):
     state.music_prompt_placeholder = ""
     state.original_user_prompt = ""
     state.music_prompt_textarea_key += 1
-    state.music_gcs_uris = []
-    state.music_display_urls = []
-    state.selected_track_index = 0
-    state.generated_text = []
+    state.music_gcs_uri = ""
+    state.music_display_url = ""
     state.is_loading = False
     state.is_analyzing = False
     state.show_error_dialog = False
@@ -800,6 +682,7 @@ def clear_music(e: me.ClickEvent):
     state.audio_metrics.hnr_db = 0.0
     state.audio_metrics.estimated_tempo_bpm = 0.0
     state.audio_metrics.duration_sec = 0.0
+    state.current_media_item_id = None
     yield
 
 
@@ -822,65 +705,3 @@ def close_info_dialog(e: me.ClickEvent):
     state = me.state(PageState)
     state.info_dialog_open = False
     yield
-
-
-def on_click_lyria_lyrics_generate(e: me.ClickEvent):
-    state = me.state(PageState)
-    prompt_to_use = state.music_prompt_input
-    if not prompt_to_use:
-        state.error_message = "Please enter a music prompt to generate lyrics from."
-        state.show_error_dialog = True
-        yield
-        return
-
-    state.is_generating_lyrics = True
-    yield
-
-    try:
-        from config.rewriters import LYRICS_GENERATOR
-        from models.gemini import rewriter
-
-        # Handle seed lyrics if the user already started typing something
-        seed_lyrics = state.lyrics_input.strip()
-
-        prompt_with_seed = LYRICS_GENERATOR.format(user_prompt=prompt_to_use)
-        if seed_lyrics:
-            prompt_with_seed += f"\n\nSeed Ideas/Partial Lyrics:\n{seed_lyrics}"
-
-        generated_lyrics = rewriter(
-            prompt_with_seed,
-            "",
-        )  # The rewriter function appends the second param to the first if it's not a template. Since we manually formatted it, we can just pass empty string for the template. Actually, `rewriter(user_prompt, system_prompt)` where system_prompt is the rule.
-
-        # Let's adjust how we use the rewriter. `rewriter(prompt, template)` does:
-        # prompt = template + "\n\n" + user_prompt if template is string.
-        # So we can pass prompt_to_use as the user_prompt, and build a custom template.
-
-        custom_template = LYRICS_GENERATOR
-        if seed_lyrics:
-            custom_template += f"\n\nSeed Ideas/Partial Lyrics:\n{seed_lyrics}"
-
-        generated_lyrics = rewriter(prompt_to_use, custom_template)
-
-        state.lyrics_input = generated_lyrics
-        state.lyrics_placeholder = generated_lyrics
-    except Exception as err:
-        print(f"Error during lyrics generation: {err}")
-        state.error_message = str(err)
-        state.show_error_dialog = True
-    finally:
-        state.is_generating_lyrics = False
-        yield
-
-
-def on_lyria_sample_count_change(e: me.SelectSelectionChangeEvent):
-    state = me.state(PageState)
-    state.sample_count = int(e.value)
-
-
-def on_track_selection_change(e: me.SelectSelectionChangeEvent):
-    state = me.state(PageState)
-    state.selected_track_index = int(e.value)
-
-    # Update analysis if available? We probably want to keep the analysis tied to the first track or explicitly run it again.
-    # For now, just change the active track.

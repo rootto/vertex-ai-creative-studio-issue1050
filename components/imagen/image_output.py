@@ -14,9 +14,7 @@
 
 import mesop as me
 
-from common.utils import create_display_url
 from components.edit_button.edit_button import edit_button
-from components.imagen.generation_controls import on_click_retry_critique
 from components.styles import _BOX_STYLE
 from components.svg_icon.svg_icon import svg_icon
 from components.veo_button.veo_button import veo_button
@@ -48,7 +46,7 @@ def image_output():
                     style=me.Style(margin=me.Margin(top=10)),
                 )
 
-        elif state.image_gcs_uris:
+        elif state.image_output:
             with me.box(
                 style=me.Style(
                     display="flex",
@@ -64,15 +62,17 @@ def image_output():
                         justify_content="center",
                     ),
                 ):
-                    for img_uri in state.image_gcs_uris:
+                    for img_uri in state.image_output:
                         if img_uri:
                             with me.box(
                                 style=me.Style(
-                                    display="flex", flex_direction="column", gap=8,
+                                    display="flex",
+                                    flex_direction="column",
+                                    gap=8,
                                 ),
                             ):
                                 me.image(
-                                    src=create_display_url(img_uri),
+                                    src=img_uri,
                                     style=me.Style(
                                         width="300px",
                                         height="300px",
@@ -130,16 +130,6 @@ def image_output():
                                 padding=me.Padding(left=15, right=15, bottom=15),
                             ),
                         )
-                        if (
-                            "unavailable" in state.image_commentary
-                            or "failed" in state.image_commentary
-                        ):
-                            me.button(
-                                "Retry Critique",
-                                on_click=on_click_retry_critique,
-                                type="stroked",
-                                style=me.Style(margin=me.Margin(left=15, bottom=15)),
-                            )
         else:
             me.text(
                 text="Generate some images to see them here!",

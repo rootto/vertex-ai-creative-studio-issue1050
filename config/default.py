@@ -15,7 +15,7 @@
 import json
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional, TypedDict
+from typing import TypedDict
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -35,18 +35,18 @@ class NavItem(BaseModel):
     id: int
     display: str
     icon: str
-    route: Optional[str] = None
-    group: Optional[str] = None
-    align: Optional[str] = None
-    feature_flag: Optional[str] = None
-    feature_flag_not: Optional[str] = None
-    description: Optional[str] = None
-    video_url: Optional[str] = None
-    video_object_position: Optional[str] = None
+    route: str | None = None
+    group: str | None = None
+    align: str | None = None
+    feature_flag: str | None = None
+    feature_flag_not: str | None = None
+    description: str | None = None
+    video_url: str | None = None
+    video_object_position: str | None = None
 
 
 class NavConfig(BaseModel):
-    pages: List[NavItem]
+    pages: list[NavItem]
 
 
 @dataclass
@@ -58,46 +58,44 @@ class Default:
     BUILD_DATE: str = ""
 
     APP_ENV: str = os.environ.get("APP_ENV", "")
+    TEAM_AND_BRANDING: bool = (
+        os.environ.get("TEAM_AND_BRANDING", "True").lower() == "true"
+    )
     API_BASE_URL: str = os.environ.get(
         "API_BASE_URL",
         f"http://localhost:{os.environ.get('PORT', '8080')}",
     )
 
     SERVICE_ACCOUNT_EMAIL: str = os.environ.get("SERVICE_ACCOUNT_EMAIL")
+    GOOGLE_CLIENT_ID: str = os.environ.get(
+        "GOOGLE_CLIENT_ID",
+        "863507536998-6rs80d2dae5bcalq3cj2oto7tnikt7b6.apps.googleusercontent.com",
+    )
     # Gemini
     PROJECT_ID: str = os.environ.get("PROJECT_ID")
-    LOCATION: str = os.environ.get("LOCATION", "us-central1")
-    GEMINI_TTS_LOCATION: str = os.environ.get("GEMINI_TTS_LOCATION", "global")
+    LOCATION: str = os.environ.get("LOCATION", "global")
     GA_MEASUREMENT_ID: str = os.environ.get("GA_MEASUREMENT_ID")
-    MODEL_ID: str = os.environ.get("MODEL_ID", "gemini-2.5-flash")
+    MODEL_ID: str = os.environ.get("MODEL_ID", "gemini-3-flash-preview")
     INIT_VERTEX: bool = True
     GEMINI_IMAGE_GEN_MODEL: str = os.environ.get(
         "GEMINI_IMAGE_GEN_MODEL",
-        "gemini-2.5-flash-image",
+        "gemini-3.1-flash-image-preview",
     )
     GEMINI_IMAGE_GEN_LOCATION: str = os.environ.get(
         "GEMINI_IMAGE_GEN_LOCATION",
         "global",
     )
-    GEMINI_IMAGE_GEN_API_BASE_URL: Optional[str] = os.environ.get(
+    GEMINI_IMAGE_GEN_API_BASE_URL: str | None = os.environ.get(
         "GEMINI_IMAGE_GEN_API_BASE_URL",
     )
 
     GEMINI_AUDIO_ANALYSIS_MODEL_ID: str = os.environ.get(
         "GEMINI_AUDIO_ANALYSIS_MODEL_ID",
-        "gemini-2.5-flash",
+        "gemini-3-flash-preview",
     )
     GEMINI_WRITERS_WORKSHOP_MODEL_ID: str = os.environ.get(
         "GEMINI_WRITERS_WORKSHOP_MODEL_ID",
         MODEL_ID,
-    )
-    GEMINI_CRITIQUE_MODEL_ID: str = os.environ.get(
-        "GEMINI_CRITIQUE_MODEL_ID",
-        "gemini-3-flash-preview",
-    )
-    GEMINI_CRITIQUE_LOCATION: str = os.environ.get(
-        "GEMINI_CRITIQUE_LOCATION",
-        "global",
     )
 
     # Collections
@@ -110,6 +108,14 @@ class Default:
         "SESSIONS_COLLECTION_NAME",
         "sessions",
     )
+    USERS_COLLECTION_NAME: str = os.environ.get(
+        "USERS_COLLECTION_NAME",
+        "users",
+    )
+    TEAMS_COLLECTION_NAME: str = os.environ.get(
+        "TEAMS_COLLECTION_NAME",
+        "teams",
+    )
 
     # storage
     GENMEDIA_BUCKET: str = os.environ.get("GENMEDIA_BUCKET", f"{PROJECT_ID}-assets")
@@ -121,23 +127,18 @@ class Default:
     LIBRARY_MEDIA_PER_PAGE: int = int(os.environ.get("LIBRARY_MEDIA_PER_PAGE", 15))
 
     # Veo
-    DEFAULT_VEO_MODEL_NAME: str = os.environ.get(
-        "DEFAULT_VEO_MODEL_NAME",
-        "veo-3.1-fast-generate-001",
-    )
-    VEO_LOCATION: str = os.environ.get("VEO_LOCATION", "us-central1")
-    PREVIEW_LOCATION: str = os.environ.get("PREVIEW_LOCATION", "global")
-
+    VEO_LOCATION: str = os.environ.get("VEO_LOCATION", "global")
+    PREVIEW_LOCATION: str = os.environ.get("PREVIEW_LOCATION", "us-central1")
     VEO_MODEL_ID: str = os.environ.get("VEO_MODEL_ID", "veo-3.1-fast-generate-001")
     VEO_PROJECT_ID: str = os.environ.get("VEO_PROJECT_ID", PROJECT_ID)
 
     VEO_EXP_MODEL_ID: str = os.environ.get(
         "VEO_EXP_MODEL_ID",
-        "veo-3.1-generate-001",
+        "veo-3.1-generate-preview",
     )
     VEO_EXP_FAST_MODEL_ID: str = os.environ.get(
         "VEO_EXP_FAST_MODEL_ID",
-        "veo-3.1-fast-generate-001",
+        "veo-3.1-fast-generate-preview",
     )
     VEO_EXP_PROJECT_ID: str = os.environ.get("VEO_EXP_PROJECT_ID", PROJECT_ID)
 
@@ -173,10 +174,6 @@ class Default:
         "CHARACTER_CONSISTENCY_GEMINI_MODEL",
         MODEL_ID,
     )
-    CHARACTER_CONSISTENCY_GEMINI_LOCATION: str = os.environ.get(
-        "CHARACTER_CONSISTENCY_GEMINI_LOCATION",
-        "global",
-    )
 
     # Lyria
     LYRIA_LOCATION: str = os.environ.get("LYRIA_LOCATION", "us-central1")
@@ -193,6 +190,10 @@ class Default:
     MODEL_IMAGEN4_FAST = "imagen-4.0-fast-generate-001"
     MODEL_IMAGEN4_ULTRA = "imagen-4.0-ultra-generate-001"
     MODEL_IMAGEN_EDITING = "imagen-3.0-capability-001"
+    MODEL_IMAGEN_PRODUCT_RECONTEXT: str = os.environ.get(
+        "MODEL_IMAGEN_PRODUCT_RECONTEXT",
+        "imagen-product-recontext-preview-06-30",
+    )
 
     IMAGEN_GENERATED_SUBFOLDER: str = os.environ.get(
         "IMAGEN_GENERATED_SUBFOLDER",
@@ -207,7 +208,6 @@ class Default:
 
     USE_MEDIA_PROXY: bool = os.environ.get("USE_MEDIA_PROXY", "true").lower() == "true"
 
-
     # Interior Design
     INTERIOR_DESIGN_VIDEO_MODEL: str = os.environ.get(
         "INTERIOR_DESIGN_VIDEO_MODEL", "veo-3.1-lite-generate-001"
@@ -219,8 +219,6 @@ class Default:
         "INTERIOR_DESIGN_VIDEO_DURATION", 6
     ))
 
-
-
     # Object Rotation
     OBJECT_ROTATION_VIDEO_MODEL: str = os.environ.get(
         "OBJECT_ROTATION_VIDEO_MODEL", "veo-3.1-generate-001"
@@ -228,7 +226,6 @@ class Default:
     OBJECT_ROTATION_IMAGE_MODEL: str = os.environ.get(
         "OBJECT_ROTATION_IMAGE_MODEL", "gemini-2.5-flash-image"
     )
-
     image_modifiers: list[str] = field(
         default_factory=lambda: [
             "aspect_ratio",
@@ -250,18 +247,6 @@ def get_config_path(rel_path: str) -> str:
     return rel_path
 
 
-import importlib.metadata
-
-
-def load_package_version():
-    try:
-        Default.VERSION = importlib.metadata.version(
-            "vertex-ai-genmedia-creative-studio",
-        )
-    except importlib.metadata.PackageNotFoundError:
-        pass  # Keep default
-
-
 def load_build_info():
     """Loads build information from config/build.json if it exists."""
     path = get_config_path("config/build.json")
@@ -275,7 +260,6 @@ def load_build_info():
             pass
 
 
-load_package_version()
 load_build_info()
 
 

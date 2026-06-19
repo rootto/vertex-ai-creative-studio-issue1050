@@ -178,10 +178,37 @@
       "description": "Create 360-degree product videos from a single image."
     },
     {
+      "id": 62,
+      "display": "Brand Adherence",
+      "icon": "verified",
+      "route": "/brand_adherence",
+      "group": "workflows",
+      "feature_flag": "TEAM_AND_BRANDING",
+      "description": "Generate on-brand images using PDF guidelines."
+    },
+    {
+      "id": 65,
+      "display": "Team Management",
+      "icon": "group",
+      "route": "/team_management",
+      "group": "studio",
+      "feature_flag": "TEAM_AND_BRANDING",
+      "description": "Manage teams and branding guidelines."
+    },
+    {
+      "id": 66,
+      "display": "Team Assets",
+      "icon": "folder_shared",
+      "route": "/team_assets",
+      "group": "studio",
+      "feature_flag": "TEAM_AND_BRANDING",
+      "description": "Manage assets for your teams."
+    },
+    {
       "id": 70,
       "display": "Library",
       "icon": "perm_media",
-      "route": "/library_v3",
+      "route": "/library_v4",
       "group": "studio",
       "description": "Browse your generated media."
     },

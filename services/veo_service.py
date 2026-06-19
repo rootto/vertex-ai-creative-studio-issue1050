@@ -17,6 +17,7 @@ import datetime
 import logging
 import threading
 
+from common.error_handling import GenerationError
 from common.metadata import (
     MediaItem,
     add_media_item_to_firestore,
@@ -56,7 +57,9 @@ def run_thumbnail_job(job_id: str, video_uri: str) -> None:
 
 
 def process_veo_generation_task(
-    job_id: str, request_data: VideoGenerationRequest, user_email: str,
+    job_id: str,
+    request_data: VideoGenerationRequest,
+    user_email: str,
 ) -> None:
     """Processes Veo video generation.
 
@@ -80,9 +83,13 @@ def process_veo_generation_task(
                 # (which is just the extension amount)
                 # So we inspect the actual generated file to get the true total duration.
                 actual_duration = get_video_duration(video_uris[0])
-                logger.info(f"Corrected duration for extended video: {actual_duration}s")
+                logger.info(
+                    f"Corrected duration for extended video: {actual_duration}s",
+                )
             except Exception:
-                logger.warning(f"Could not verify duration of extended video for job {job_id}")
+                logger.warning(
+                    f"Could not verify duration of extended video for job {job_id}",
+                )
 
         _complete_job(job_id, video_uris, resolution, duration=actual_duration)
         logger.info(f"Background task for job {job_id} completed successfully.")
@@ -103,6 +110,9 @@ def process_veo_generation_task(
                     daemon=True,
                 ).start()
 
+    except GenerationError as ge:
+        logger.warning(f"GenerationError for job {job_id}: {ge}")
+        _fail_job(job_id, str(ge))
     except Exception:
         logger.exception(f"Background task for job {job_id} failed")
         _fail_job(job_id, "Generation failed. Please try again.")
@@ -183,8 +193,21 @@ def create_initial_job(request: VideoGenerationRequest, user_email: str) -> str:
     elif request.reference_image_gcs:
         mode = "i2v"
 
+    team_id = getattr(request, "team_id", None)
+    team_name = None
+    if team_id:
+        from services.team_service import get_team
+        try:
+            team = get_team(team_id)
+            if team:
+                team_name = team.name
+        except Exception as ex:
+            logger.warning(f"Could not load team {team_id} for metadata tagging: {ex}")
+
     item = MediaItem(
         user_email=user_email,
+        team_id=team_id,
+        tags=[team_name] if team_name else [],
         timestamp=datetime.datetime.now(datetime.UTC),
         status="pending",
         prompt=request.prompt,

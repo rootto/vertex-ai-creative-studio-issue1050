@@ -30,8 +30,8 @@ virtual_try_on_response = client.models.recontext_image(
             ProductImage(
                 product_image=Image(
                     gcs_uri=CLOTHING_IMAGE_GCS_URI,
-                )
-            )
+                ),
+            ),
         ],
     ),
     config=RecontextImageConfig(
@@ -42,7 +42,6 @@ virtual_try_on_response = client.models.recontext_image(
 )
 
 image = virtual_try_on_response.generated_images[0].image
-
 
 
 # class RecontextImageSource(_common.BaseModel):
@@ -61,7 +60,6 @@ image = virtual_try_on_response.generated_images[0].image
 #   product_images: Optional[list[ProductImage]] = Field(
 #       default=None, description="""A list of product images."""
 #   )
-
 
 
 # class RecontextImageConfig(_common.BaseModel):

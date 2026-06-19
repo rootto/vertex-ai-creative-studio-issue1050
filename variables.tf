@@ -57,7 +57,7 @@ variable "model_id" {
 variable "veo_model_id" {
   description = "Veo model ID to use for video generation"
   type        = string
-  default     = "veo-3.1-fast-generate-001"
+  default     = "veo-3.0-generate-001"
 }
 
 variable "veo_location" {
@@ -69,7 +69,7 @@ variable "veo_location" {
 variable "veo_exp_model_id" {
   description = "Experimental Veo model ID to use for video generation"
   type        = string
-  default     = "veo-3.1-generate-001"
+  default     = "veo-3.0-generate-preview"
 }
 
 variable "lyria_model_id" {
@@ -109,27 +109,38 @@ variable "sleep_time" {
   default     = 45
 }
 
-variable "gemini_critique_model_id" {
-  description = "Gemini model ID to use for Imagen critiques"
+variable "google_client_id" {
+  description = "Google OAuth Client ID for Identity Platform"
   type        = string
-  default     = "gemini-3-flash-preview"
+  default     = ""
+}
+
+variable "google_client_secret" {
+  description = "Google OAuth Client Secret for Identity Platform"
+  type        = string
+  default     = ""
+}
+
+variable "gemini_tts_location" {
+  description = "Location for Gemini TTS resources"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "gemini_critique_model_id" {
+  description = "Gemini model ID to use for critique"
+  type        = string
+  default     = "gemini-2.5-flash"
 }
 
 variable "gemini_critique_location" {
-  description = "Location for the Gemini critique model"
+  description = "Location for Gemini critique resources"
   type        = string
-  default     = "global"
+  default     = "us-central1"
 }
-
 
 variable "character_consistency_gemini_location" {
-  description = "Location for the Gemini character consistency model"
+  description = "Location for Character Consistency Gemini resources"
   type        = string
-  default     = "global"
-}
-
-
-variable "gemini_tts_location" {
-  description = "Location for the Gemini TTS model"
-  default     = "global"
+  default     = "us-central1"
 }
