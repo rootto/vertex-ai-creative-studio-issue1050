@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from google.auth import impersonated_credentials
 from google.cloud import storage
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app_factory import app
 from common.storage import get_session
@@ -46,12 +47,18 @@ from pages import guideline_analysis as guideline_analysis_page
 from pages import home as home_page
 from pages import imagen as imagen_page
 from pages import interior_design_v2 as interior_design_page
+from pages import library_v4 as library_v4_page
+from pages import login as login_page
 from pages import lyria as lyria_page
 from pages import object_rotation as object_rotation_page
 from pages import pixie_compositor as pixie_compositor_page
 from pages import portraits as motion_portraits
+from pages import recontextualize as recontextualize_page
 from pages import selfie as selfie_page
 from pages import starter_pack as starter_pack_page
+from pages import storyboarder as storyboarder_page
+from pages import team_assets as team_assets_page
+from pages import team_management as team_management_page
 from pages import test_proxy_caching as test_proxy_caching_page
 from pages import veo
 from pages import vto as vto_page
@@ -97,6 +104,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class HostMiddleware(BaseHTTPMiddleware):
+    """Middleware to rewrite Host header to match X-Forwarded-Host.
+
+    Required to bypass Mesop strict Origin validation/CSRF under proxies.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        forwarded_host = request.headers.get("x-forwarded-host")
+        if forwarded_host:
+            new_headers = []
+            for k, v in request.scope["headers"]:
+                if k == b"host":
+                    new_headers.append((b"host", forwarded_host.encode("latin1")))
+                else:
+                    new_headers.append((k, v))
+            request.scope["headers"] = new_headers
+        return await call_next(request)
+
+
+app.add_middleware(HostMiddleware)
 
 
 @app.get("/api/convert_to_gif")
@@ -224,17 +253,6 @@ me.page(path="/test_vto_prompt_generator", title="Test VTO Prompt Generator")(
 me.page(path="/test_svg", title="Test SVG")(test_svg_page)
 me.page(path="/test_media_chooser", title="Test Media Chooser")(test_media_chooser_page)
 me.page(path="/test_async_veo", title="Test Async Veo")(test_async_veo_page)
-
-
-# Global storage client instance to reuse connections
-_proxy_storage_client = None
-
-
-def get_proxy_storage_client():
-    global _proxy_storage_client
-    if _proxy_storage_client is None:
-        _proxy_storage_client = storage.Client()
-    return _proxy_storage_client
 
 
 # Global storage client instance to reuse connections

@@ -21,6 +21,4 @@ RUN uv sync
 # Make port 8080 available to the world outside this container
 EXPOSE 8080
 
-# Define the command to run the app using gunicorn
-# This is taken from the Procfile
-CMD ["/app/.venv/bin/gunicorn", "--bind", ":8080", "--workers", "1", "--threads", "8", "--timeout", "0", "--forwarded-allow-ips", "*", "-k", "uvicorn.workers.UvicornWorker", "main:app"]
+CMD ["/app/.venv/bin/gunicorn", "--bind", ":8080", "--workers", "1", "--threads", "8", "--timeout", "0", "--forwarded-allow-ips", "*", "--access-logfile", "-", "-k", "uvicorn.workers.UvicornWorker", "main:app"]
