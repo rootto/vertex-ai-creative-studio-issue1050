@@ -25,7 +25,6 @@ from . import (
     gemini_writers_workshop,
     guideline_analysis,
     home,
-    imagen,
     imagen_upscale,
     interior_design_v2,
     library_v2,

@@ -73,16 +73,7 @@
       "video_url": "https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/lyria_realtime_header.mp4",
       "video_object_position": "bottom"
     },
-    {
-      "id": 22,
-      "display": "Imagen",
-      "icon": "image",
-      "route": "/imagen",
-      "group": "foundation",
-      "mode": "image",
-      "description": "Generate images from text prompts using Imagen.",
-      "video_url": "https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/imagen__page_cover.mp4"
-    },
+
     {
       "id": 24,
       "display": "Edit Images",
