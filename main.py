@@ -50,9 +50,9 @@ from pages import lyria as lyria_page
 from pages import object_rotation as object_rotation_page
 from pages import pixie_compositor as pixie_compositor_page
 from pages import portraits as motion_portraits
+from pages import selfie as selfie_page
 from pages import starter_pack as starter_pack_page
 from pages import test_proxy_caching as test_proxy_caching_page
-from pages import selfie as selfie_page
 from pages import veo
 from pages import vto as vto_page
 from pages import welcome as welcome_page
@@ -240,11 +240,13 @@ def get_proxy_storage_client():
 # Global storage client instance to reuse connections
 _proxy_storage_client = None
 
+
 def get_proxy_storage_client():
     global _proxy_storage_client
     if _proxy_storage_client is None:
         _proxy_storage_client = storage.Client()
     return _proxy_storage_client
+
 
 # Add a new endpoint to proxy GCS media for better caching.
 @app.get("/media/{bucket_name}/{object_path:path}")

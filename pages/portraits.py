@@ -42,7 +42,6 @@ from components.page_scaffold import (
     page_frame,
     page_scaffold,
 )
-from components.feedback.feedback import feedback
 from components.selfie_camera.selfie_camera import selfie_camera
 from config.default import Default
 from models.model_setup import GeminiModelSetup, VeoModelSetup

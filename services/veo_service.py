@@ -175,9 +175,7 @@ def _fail_job(job_id: str, error_message: str) -> None:
 def create_initial_job(request: VideoGenerationRequest, user_email: str) -> str:
     """Creates the initial 'pending' MediaItem in Firestore and returns its ID."""
     model_config = get_veo_model_config(request.model_version_id)
-    model_name = (
-        model_config.model_name if model_config else request.model_version_id
-    )
+    model_name = model_config.model_name if model_config else request.model_version_id
 
     # Infer mode
     mode = "t2v"
@@ -197,6 +195,7 @@ def create_initial_job(request: VideoGenerationRequest, user_email: str) -> str:
     team_name = None
     if team_id:
         from services.team_service import get_team
+
         try:
             team = get_team(team_id)
             if team:

@@ -80,7 +80,6 @@ def create_display_url(gcs_uri: str) -> str:
         return f"/media/{proxy_path}"
 
 
-
 def extract_username(email_string: str | None) -> str:
     """Extracts the username from an email-like string.
 

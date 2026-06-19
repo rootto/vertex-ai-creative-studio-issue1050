@@ -16,7 +16,7 @@
 import json
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 import requests
 from google.cloud.aiplatform import telemetry
@@ -112,7 +112,9 @@ def generate_image_from_prompt_and_images(
 
     parts = [types.Part.from_text(text=prompt)]
     for image_uri in images:
-        m_type = "application/pdf" if image_uri.lower().endswith(".pdf") else "image/png"
+        m_type = (
+            "application/pdf" if image_uri.lower().endswith(".pdf") else "image/png"
+        )
         parts.append(types.Part.from_uri(file_uri=image_uri, mime_type=m_type))
 
     contents = [types.Content(role="user", parts=parts)]
@@ -151,9 +153,7 @@ def generate_image_from_prompt_and_images(
     if include_thoughts:
         thinking_config = types.ThinkingConfig(
             include_thoughts=include_thoughts,
-            thinking_budget=-1
-            if thinking_level == "HIGH"
-            else 1024,
+            thinking_budget=-1 if thinking_level == "HIGH" else 1024,
         )
 
     with track_model_call(
@@ -1284,10 +1284,12 @@ def evaluate_tts_audio(
 
 class StoryboardScene(BaseModel):
     scene_number: int = Field(
-        ..., description="The sequence number of this scene, 1 to 4.",
+        ...,
+        description="The sequence number of this scene, 1 to 4.",
     )
     narrative: str = Field(
-        ..., description="The detailed narrative story event for this scene.",
+        ...,
+        description="The detailed narrative story event for this scene.",
     )
     image_prompt: str = Field(
         ...,
@@ -1301,7 +1303,8 @@ class StoryboardScene(BaseModel):
 
 class StoryboardNarrative(BaseModel):
     overall_story: str = Field(
-        ..., description="The overall coherent story narrative combining all scenes.",
+        ...,
+        description="The overall coherent story narrative combining all scenes.",
     )
     scenes: list[StoryboardScene] = Field(
         ...,
@@ -1346,6 +1349,8 @@ def generate_storyboard_narrative(
         )
 
     return StoryboardNarrative.model_validate_json(response.text)
+
+
 class BestFrameTimestamp(BaseModel):
     timestamp_seconds: float = Field(
         ...,
@@ -1396,4 +1401,3 @@ def get_best_video_frame_timestamp(video_uri: str) -> float:
     except Exception as e:
         analytics_logger.error(f"Error during Gemini best frame analysis: {e}")
         return 0.0
-

@@ -35,12 +35,14 @@ def image_thumbnail(
                 style=me.Style(
                     width="100%",
                     height="100%",
-                    border=me.Border.all(me.BorderSide(style="dashed", color=me.theme_var("outline"))),
+                    border=me.Border.all(
+                        me.BorderSide(style="dashed", color=me.theme_var("outline"))
+                    ),
                     border_radius=8,
                     display="flex",
                     align_items="center",
                     justify_content="center",
-                )
+                ),
             ):
                 me.icon("article")
         elif any(
@@ -51,12 +53,14 @@ def image_thumbnail(
                 style=me.Style(
                     width="100%",
                     height="100%",
-                    border=me.Border.all(me.BorderSide(style="dashed", color=me.theme_var("outline"))),
+                    border=me.Border.all(
+                        me.BorderSide(style="dashed", color=me.theme_var("outline"))
+                    ),
                     border_radius=8,
                     display="flex",
                     align_items="center",
                     justify_content="center",
-                )
+                ),
             ):
                 me.icon("movie")
         else:

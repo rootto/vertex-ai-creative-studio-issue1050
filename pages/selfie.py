@@ -23,7 +23,6 @@ from common.utils import create_display_url
 from components.feedback.feedback import feedback
 from components.page_scaffold import page_scaffold
 from components.selfie_camera.selfie_camera import selfie_camera
-from components.feedback.feedback import feedback
 from state.state import AppState
 
 

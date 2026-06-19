@@ -18,7 +18,6 @@ from dataclasses import dataclass
 
 import mesop as me
 
-from common.analytics import log_ui_click
 from common.metadata import get_media_item_by_id
 from common.utils import create_display_url
 from common.veo_utils import start_async_veo_job

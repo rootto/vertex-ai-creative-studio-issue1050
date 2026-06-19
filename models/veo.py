@@ -35,10 +35,15 @@ load_dotenv(override=True)
 
 _clients = {}
 
+
 def get_veo_client(model_name: str) -> genai.Client:
     """Get or create a genai.Client with the correct location based on the model name."""
-    location = config.PREVIEW_LOCATION if "preview" in model_name.lower() else config.VEO_LOCATION
-    
+    location = (
+        config.PREVIEW_LOCATION
+        if "preview" in model_name.lower()
+        else config.VEO_LOCATION
+    )
+
     if location not in _clients:
         _clients[location] = genai.Client(
             vertexai=True,
@@ -46,6 +51,7 @@ def get_veo_client(model_name: str) -> genai.Client:
             location=location,
         )
     return _clients[location]
+
 
 # Map for person generation options
 PERSON_GENERATION_MAP = {
