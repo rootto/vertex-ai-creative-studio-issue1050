@@ -74,6 +74,7 @@ export default defineConfig({
 							label: 'MCP GenMedia',
 							items: [
 								{ label: 'Overview', slug: 'experiments/mcp-genmedia' },
+								{ label: 'Host on Cloud Run', slug: 'experiments/mcp-genmedia/host-on-cloud-run' },
 								{
 									label: 'Servers',
 									items: [
@@ -88,11 +89,11 @@ export default defineConfig({
 								},
 								{
 									label: 'Skills',
-									autogenerate: { directory: 'experiments/mcp-genmedia/skills' }
+									items: [{ autogenerate: { directory: 'experiments/mcp-genmedia/skills' } }]
 								},
 								{
 									label: 'Sample Agents',
-									autogenerate: { directory: 'experiments/mcp-genmedia/agents' }
+									items: [{ autogenerate: { directory: 'experiments/mcp-genmedia/agents' } }]
 								}
 							]
 						}

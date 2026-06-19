@@ -28,12 +28,43 @@ from fastapi.staticfiles import StaticFiles
 from google.auth import impersonated_credentials
 from google.cloud import storage
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app_factory import app
 from common.storage import get_session
 from common.utils import create_display_url
 from config import default as config
 from models.video_processing import convert_mp4_to_gif
+from pages import about as about_page
+from pages import banana_studio as banana_studio_page
+from pages import character_consistency as character_consistency_page
+from pages import chirp_3hd as chirp_3hd_page
+from pages import config as config_page
+from pages import gemini_image_generation as gemini_image_generation_page
+from pages import gemini_tts as gemini_tts_page
+from pages import gemini_writers_workshop as gemini_writers_workshop_page
+from pages import guideline_analysis as guideline_analysis_page
+from pages import home as home_page
+from pages import interior_design_v2 as interior_design_page
+from pages import library_v4 as library_v4_page
+from pages import login as login_page
+from pages import lyria as lyria_page
+from pages import object_rotation as object_rotation_page
+from pages import pixie_compositor as pixie_compositor_page
+from pages import portraits as motion_portraits
+from pages import recontextualize as recontextualize_page
+from pages import selfie as selfie_page
+from pages import starter_pack as starter_pack_page
+from pages import storyboarder as storyboarder_page
+from pages import team_assets as team_assets_page
+from pages import team_management as team_management_page
+from pages import test_proxy_caching as test_proxy_caching_page
+from pages import veo
+from pages import vto as vto_page
+from pages import welcome as welcome_page
+from pages.edit_images import content as edit_images_content
+from pages.library_v2 import page as library_v2_page
+from pages.library_v3 import page as library_v3_page
 from pages.test_async_veo import page as test_async_veo_page
 from pages.test_character_consistency import page as test_character_consistency_page
 from pages.test_index import page as test_index_page
@@ -72,6 +103,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class HostMiddleware(BaseHTTPMiddleware):
+    """Middleware to rewrite Host header to match X-Forwarded-Host.
+
+    Required to bypass Mesop strict Origin validation/CSRF under proxies.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        forwarded_host = request.headers.get("x-forwarded-host")
+        if forwarded_host:
+            new_headers = []
+            for k, v in request.scope["headers"]:
+                if k == b"host":
+                    new_headers.append((b"host", forwarded_host.encode("latin1")))
+                else:
+                    new_headers.append((k, v))
+            request.scope["headers"] = new_headers
+        return await call_next(request)
+
+
+app.add_middleware(HostMiddleware)
 
 
 @app.get("/api/convert_to_gif")

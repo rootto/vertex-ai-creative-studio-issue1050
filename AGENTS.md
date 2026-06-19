@@ -80,6 +80,7 @@ When working with issues using the `bd` (beads) command-line tool, adhere to the
 *   **State Awareness:** When analyzing a bug or feature request, first run `bd ready` to check if there is already an existing, unblocked issue tracking the work. Do not create duplicate issues.
 *   **Atomic Updates:** When you complete a task or fix a bug, immediately close the corresponding issue (`bd close <id>`) in the same commit or PR as the fix. Do not leave issues dangling.
 *   **Clear Descriptions:** If you discover a new bug during your workflow that is out of scope for your current task, log it immediately using `bd create "Title" --type bug --priority <level>`. Ensure the description clearly outlines the reproduction steps and the context in which it was found.
+*   **Force-Syncing JSONL to Database:** In sandbox or CLI-restricted environments, the Beads auto-import process (which parses `.beads/issues.jsonl` on startup) only triggers if it detects the database is completely empty. If the database state falls out of sync with `.beads/issues.jsonl` due to consecutive automated writes or interrupted sessions, you must explicitly run `bd import` to sync the disk-based JSONL state back into the Dolt database. If you need to clean up or recover from a bad tracking state, you can surgically edit the `.beads/issues.jsonl` file directly on disk, and then execute `bd import` to cleanly refresh the tracking system.
 
 ## 🤖 GitHub Automation Agents
 

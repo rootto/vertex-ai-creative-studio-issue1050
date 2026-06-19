@@ -195,6 +195,7 @@ def create_initial_job(request: VideoGenerationRequest, user_email: str) -> str:
     team_name = None
     if team_id:
         from services.team_service import get_team
+
         try:
             team = get_team(team_id)
             if team:

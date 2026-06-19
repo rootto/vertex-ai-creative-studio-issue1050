@@ -177,6 +177,9 @@ def video_display(on_thumbnail_click: Callable, on_click_extend: Callable):
             if state.is_converting_gif:
                 with me.box(style=me.Style(display="flex", justify_content="center")):
                     me.progress_spinner()
+                    
+        with me.box(style=me.Style(width="100%", max_width="90vh", margin=me.Margin(left="auto", right="auto"))):
+            feedback(media_item_id=state.current_job_id)
 
         with me.box(
             style=me.Style(

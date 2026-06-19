@@ -32,7 +32,6 @@ from config.default import Default as cfg
 
 GCS_PUBLIC_URL_PREFIX = "https://storage.cloud.google.com/"
 
-
 _signed_url_cache = {}
 
 

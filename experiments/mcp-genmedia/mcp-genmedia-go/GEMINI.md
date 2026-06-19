@@ -209,6 +209,47 @@ Once complete, output a report with all prompts used for each model along with t
 
 All generated media will be saved to the GCS bucket `gs://genai-blackbelt-fishfooding-assets` and also downloaded locally to `/Users/ghchinoy/genmedia/genmedia_mcp_tool_test/tool_test_run`.
 
+### **Containerization & Cloud Run Deployment Rules**
+
+When containerizing or deploying MCP servers to Cloud Run, adhere to the following rules:
+
+1. **Go Workspace Bypassing in Docker**: 
+   When building a container for a single submodule in a Go workspace, do **not** copy the `go.work` or `go.work.sum` files to the container image. This triggers Go's workspace mode, which requires all submodules to be present in the build directory. Instead, compile using the `GOWORK=off` environment variable explicitly:
+   ```dockerfile
+   RUN CGO_ENABLED=0 GOOS=linux GOWORK=off go build -v -o /app/server-bin
+   ```
+   This ensures Go resolves the local `mcp-common` library using the relative `replace` directive in `go.mod` without loading other submodules.
+
+2. **Propagating Docker Build Arguments in Cloud Build**:
+   `gcloud builds submit --tag` does not support Docker `--build-arg` options. When submitting builds to Cloud Build that require compilation arguments (like `SERVER_NAME`), you must use a standard `cloudbuild.yaml` file with Substitutions (`--substitutions`):
+   ```bash
+   gcloud builds submit . \
+     --config=cloudbuild.yaml \
+     --substitutions=_IMAGE=IMAGE_TAG,_SERVER_NAME=SERVER_NAME
+   ```
+
+3. **Cloud Run Environment Configuration**:
+   Private Cloud Run containers do not automatically inject standard Google Cloud project metadata variables. If an MCP server initializes a Google client on startup, it will crash with a fatal error if these are missing. You **must** explicitly pass the target project and location during deployment using `--set-env-vars`:
+   ```bash
+   gcloud run deploy SERVER_NAME \
+     --set-env-vars GOOGLE_CLOUD_PROJECT=${PROJECT_ID},LOCATION=${REGION}
+     ...
+   ```
+
+4. **Testing Streamable HTTP and STDIO Locally**:
+   Before pushing, verify both the standard `stdio` interface and the newer `http` transport. A programmatic validation script is available at the workspace root:
+   ```bash
+   ./test-transport-handshake.sh [mcp-server-folder-name]
+   ```
+   This runs both standard inputs and local HTTP session handshake assertions.
+
+5. **Testing Private Cloud Run Deployments**:
+   To test a private Cloud Run endpoint locally without generating manual OAuth tokens, run the `gcloud` proxy helper:
+   ```bash
+   gcloud run services proxy [service-name] --region=[region] --port=9090
+   ```
+   Then run queries against `http://localhost:9090/mcp` (the proxy handles OIDC token acquisition and injection automatically).
+
 ## CI and Workflow Management
 
 ### **Version Sync**

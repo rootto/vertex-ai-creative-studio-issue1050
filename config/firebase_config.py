@@ -31,9 +31,19 @@ class FirebaseClient:
 
     def _initialize(self, database_id: str | None = None):
         try:
+            import os
+
             cred = credentials.ApplicationDefault()
-            firebase_admin.initialize_app(cred)
-            print(f"[FirebaseClient] - initiating firebase client with `{database_id}`")
+            project_id = os.environ.get("PROJECT_ID") or os.environ.get(
+                "GOOGLE_CLOUD_PROJECT",
+            )
+            options = {}
+            if project_id:
+                options["projectId"] = project_id
+            firebase_admin.initialize_app(cred, options)
+            print(
+                f"[FirebaseClient] - initiating firebase client with `{database_id}` on project `{project_id}`",
+            )
         except ValueError:
             print("[FirebaseClient] - Firebase already initialized.")
         self._client = firestore.client(database_id=database_id)

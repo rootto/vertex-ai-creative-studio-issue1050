@@ -12,6 +12,16 @@ When new code, features, or experiments are added, it's crucial to update the re
 4.  **Propose Changes:** Present the proposed documentation changes to the user for review and approval before applying them. Use markdown blocks to clearly show the additions or modifications.
 5.  **Apply Changes:** Use the `replace` or `write_file` tool to apply the approved changes.
 
+### Integrating External Agent Skills
+
+When importing, copying, or adding a new Agent Skill to the repository:
+
+1.  **Verify Structure**: Ensure the skill folder has a conforming `SKILL.md` file with YAML frontmatter at its root.
+2.  **Metadata Extraction**: Read the `SKILL.md` file to extract the `name`, `description`, and other relevant attributes from its YAML frontmatter.
+3.  **Synchronize READMEs**: Dynamically and consistently update both the main workspace `README.md` (or the component-level README) and the skills directory `README.md` with the extracted skill name and description to ensure discoverability.
+4.  **Issue Tracking**: Log the skill addition in the beads (`bd`) issue tracker by creating, claiming, and closing a dedicated issue for the work.
+
+
 ## 8. Mesop Development Practices
 
 ### Refactoring and State Management
@@ -23,6 +33,18 @@ When new code, features, or experiments are added, it's crucial to update the re
 ### Component Styling Gotchas
 *   **Button Types:** The `me.content_button` component strictly enforces the `type` argument as a literal: `'raised'`, `'flat'`, `'stroked'`, or `'icon'`. Using invalid MD3 concepts like `'tonal'` will cause a Pydantic `ValidationError` and crash the UI block.
 *   **Interactive Toggles:** When changing the background of a button dynamically (e.g., to indicate selection), ensure you also dynamically update the `color` property of its children (e.g., `me.theme_var("on-primary") if is_selected else me.theme_var("on-surface")`) so icons and text don't become invisible.
+*   **Consistent Workflow Page Layouts:** When designing multi-step generative workflows (like Storyboarder, Veo, or Interior Design), prefer a balanced two-column top row: placing the main story concept or text prompter in a wider left column (e.g., 60% width) and optional reference media uploaders/character setups in a narrower right column (e.g., 40% width). Nested configuration/settings selectors should reside below them inside a collapsible panel.
+*   **Divider Styling Constraint:** The `me.divider` component strictly rejects the `style` argument. To apply margins, padding, or custom alignment around a line divider, wrap `me.divider()` inside a styled `me.box`.
+*   **Auto-dismissing Snackbars:** Do not leave `state.show_snackbar = True` active indefinitely. Always implement a generator helper function to auto-dismiss snackbars:
+    ```python
+    def show_snackbar(state: PageState, message: str):
+        state.snackbar_message = message
+        state.show_snackbar = True
+        yield
+        time.sleep(3)
+        state.show_snackbar = False
+        yield
+    ```
 
 ### SDK Integration Nuances
 *   **Model Parameter Probing:** The `google-genai` SDK and Vertex AI backend can be incredibly strict. For example, `types.ImageConfig(image_size="512PX")` will fail validation; it must be `"512"`. `types.ThinkingConfig` expects `thinking_budget` (not `thinking_level`), and setting `include_thoughts=True` without a budget throws a `400 INVALID_ARGUMENT`. Always write a short `test_probe.py` script to verify exact SDK payload shapes before wiring them into the Mesop UI state.
@@ -70,6 +92,15 @@ Instead, you MUST:
 **CI Verification Scripts (mcptools):**
 If a Go application initializes network-dependent clients (like Google Cloud `genai.NewClient` or `texttospeech.NewClient`) on startup, it will hang indefinitely inside headless CI runners that lack ADC (Application Default Credentials). To allow tools like `mcptools` to verify the STDIO handshake in CI, you MUST make global client initialization non-fatal during `main()` and defer the strict credential check until the client is actually invoked inside the tool handler.
 
+**Monorepo Dependency Synchronization & Isolated CI:**
+When a shared internal library (e.g., `experiments/mcp-genmedia/mcp-common`) is updated in a multi-module repository, all dependent submodules must have their dependencies synchronized. 
+Even if local development runs successfully using `go.work`, CI pipelines often isolate modules by deleting `go.work` and running tests/linting within each module directory individually. 
+Therefore, you MUST run `go mod tidy` recursively across all submodules after any change to a shared internal package. Run a loop similar to this to ensure complete sync:
+```bash
+for d in mcp-*; do (cd "$d" && go mod tidy); done
+```
+This guarantees that every submodule's `go.sum` is fully updated and will compile cleanly in isolation under CI.
+
 ## 9. Linting and Code Quality
 
 ### Selective Linting
@@ -101,6 +132,10 @@ The project uses Starlight (Astro) for its primary documentation site, located i
 
 ### Modifying Starlight Documentation
 *   **Target Directory:** All Starlight markdown files reside in `docs-site/src/content/docs/`.
+*   **Mirrored Documentation Files (Crucial):** Certain key documentation files exist at both the root level and within the Starlight directory. When updating one, you MUST update its twin in tandem to prevent documentation drift:
+    *   `environment_variables.md` ↔ `docs-site/src/content/docs/core/installation/environment_variables.md`
+    *   `FAQ.md` ↔ `docs-site/src/content/docs/core/FAQ.md`
+    *   `developers_guide.md` ↔ `docs-site/src/content/docs/core/developers_guide.md`
 *   **Frontmatter Requirement:** Every markdown file within the Starlight content directory MUST have YAML frontmatter with a `title` attribute. Example:
     ```markdown
     ---

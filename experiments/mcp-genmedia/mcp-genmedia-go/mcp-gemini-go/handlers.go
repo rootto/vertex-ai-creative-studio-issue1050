@@ -120,7 +120,7 @@ func geminiGenerateContentHandler(client *genai.Client, ctx context.Context, req
 	// Check for optional Sherlog header
 	if resp.SDKHTTPResponse != nil && resp.SDKHTTPResponse.Headers != nil {
 		if link := resp.SDKHTTPResponse.Headers.Get("x-goog-sherlog-link"); link != "" {
-			responseText.WriteString(fmt.Sprintf("Optional header capture: %s\n\n", link))
+			fmt.Fprintf(&responseText, "Optional header capture: %s\n\n", link)
 		}
 	}
 	gentime := time.Now().Format("20060102150405")
@@ -171,6 +171,18 @@ func inferMimeType(path string) string {
 		return "image/gif"
 	case ".webp":
 		return "image/webp"
+	case ".pdf":
+		return "application/pdf"
+	case ".mp4":
+		return "video/mp4"
+	case ".mov":
+		return "video/quicktime"
+	case ".webm":
+		return "video/webm"
+	case ".avi":
+		return "video/x-msvideo"
+	case ".mkv":
+		return "video/x-matroska"
 	default:
 		// Defaulting to a common image type if extension is unknown, as the API might handle it.
 		// A more robust solution might involve reading file headers.

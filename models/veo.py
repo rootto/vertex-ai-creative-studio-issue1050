@@ -35,10 +35,15 @@ load_dotenv(override=True)
 
 _clients = {}
 
+
 def get_veo_client(model_name: str) -> genai.Client:
     """Get or create a genai.Client with the correct location based on the model name."""
-    location = config.PREVIEW_LOCATION if "preview" in model_name.lower() else config.VEO_LOCATION
-    
+    location = (
+        config.PREVIEW_LOCATION
+        if "preview" in model_name.lower()
+        else config.VEO_LOCATION
+    )
+
     if location not in _clients:
         _clients[location] = genai.Client(
             vertexai=True,
@@ -46,6 +51,7 @@ def get_veo_client(model_name: str) -> genai.Client:
             location=location,
         )
     return _clients[location]
+
 
 # Map for person generation options
 PERSON_GENERATION_MAP = {
@@ -211,14 +217,12 @@ def generate_video(request: VideoGenerationRequest) -> tuple[str, str]:
         if operation.error:
             error_details = str(operation.error)
             logger.info(f"Video generation failed with error: {error_details}")
-
             # Check for specific safety reasons
             from common.error_handling import get_safety_reason
 
             safety_reason = get_safety_reason(error_details)
             if safety_reason:
                 raise GenerationError(safety_reason)
-
             raise GenerationError(f"API Error: {error_details}")
 
         if operation.response:

@@ -53,7 +53,7 @@ class NavConfig(BaseModel):
 class Default:
     """Defaults class"""
 
-    VERSION: str = "1.4.0"  # vto GA
+    VERSION: str = "1.10.0"  # Fallback if package metadata is missing
     BUILD_COMMIT: str = ""
     BUILD_DATE: str = ""
 
@@ -208,6 +208,31 @@ class Default:
 
     USE_MEDIA_PROXY: bool = os.environ.get("USE_MEDIA_PROXY", "true").lower() == "true"
 
+    # Interior Design
+    INTERIOR_DESIGN_VIDEO_MODEL: str = os.environ.get(
+        "INTERIOR_DESIGN_VIDEO_MODEL",
+        "veo-3.1-lite-generate-001",
+    )
+    INTERIOR_DESIGN_IMAGE_MODEL: str = os.environ.get(
+        "INTERIOR_DESIGN_IMAGE_MODEL",
+        "gemini-3-pro-image",
+    )
+    INTERIOR_DESIGN_VIDEO_DURATION: int = int(
+        os.environ.get(
+            "INTERIOR_DESIGN_VIDEO_DURATION",
+            6,
+        )
+    )
+
+    # Object Rotation
+    OBJECT_ROTATION_VIDEO_MODEL: str = os.environ.get(
+        "OBJECT_ROTATION_VIDEO_MODEL",
+        "veo-3.1-generate-001",
+    )
+    OBJECT_ROTATION_IMAGE_MODEL: str = os.environ.get(
+        "OBJECT_ROTATION_IMAGE_MODEL",
+        "gemini-2.5-flash-image",
+    )
     image_modifiers: list[str] = field(
         default_factory=lambda: [
             "aspect_ratio",
@@ -238,7 +263,7 @@ def load_build_info():
                 data = json.load(f)
                 Default.BUILD_COMMIT = data.get("commit", "unknown")
                 Default.BUILD_DATE = data.get("date", "unknown")
-        except (FileNotFoundError, json.JSONDecodeError):
+        except FileNotFoundError, json.JSONDecodeError:
             pass
 
 
@@ -277,7 +302,7 @@ def load_about_page_config():
     try:
         with open(config_path) as f:
             content = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except FileNotFoundError, json.JSONDecodeError:
         return None
 
     # The rest of the function that processes GCS URLs remains the same

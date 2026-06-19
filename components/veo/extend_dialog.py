@@ -314,7 +314,6 @@ def on_extend_click(e: me.ClickEvent):
                 state.error_message = f"Job {state.job_id} not found."
                 yield
                 break
-
             state.job_status = item.status
 
             if state.job_status == "complete":

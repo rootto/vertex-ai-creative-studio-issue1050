@@ -55,3 +55,4 @@ class PageState:
 
     audio_metrics: AudioMetricsState = field(default_factory=AudioMetricsState)
     has_audio_metrics: bool = False
+    current_media_item_id: Optional[str] = None

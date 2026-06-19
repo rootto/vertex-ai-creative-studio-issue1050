@@ -174,7 +174,7 @@ def lyria_content(app_state: me.state):
 
         # Audio Player - Show if URI exists AND primary loading is done
         if (
-            pagestate.music_display_url
+            pagestate.music_display_urls
             and not pagestate.is_loading  # Check generic loading
             and not pagestate.show_error_dialog
         ):
@@ -186,17 +186,39 @@ def lyria_content(app_state: me.state):
                     margin=me.Margin(bottom=16),
                 ),
             ):
-                me.audio(src=pagestate.music_display_url)
+                current_audio_url = (
+                    pagestate.music_display_urls[pagestate.selected_track_index]
+                    if pagestate.selected_track_index
+                    < len(pagestate.music_display_urls)
+                    else pagestate.music_display_urls[0]
+                )
+                me.audio(src=current_audio_url)
 
-            if pagestate.current_media_item_id:
-                with me.box(
-                    style=me.Style(
-                        display="flex",
-                        justify_content="center",
-                        margin=me.Margin(top=8, bottom=16),
-                    ),
-                ):
-                    feedback(media_item_id=pagestate.current_media_item_id)
+                if pagestate.current_media_item_id:
+                    with me.box(
+                        style=me.Style(
+                            display="flex",
+                            justify_content="center",
+                            margin=me.Margin(top=8, bottom=16),
+                        ),
+                    ):
+                        feedback(media_item_id=pagestate.current_media_item_id)
+
+                if pagestate.c2pa_manifest_json:
+                    with me.box(style=me.Style(margin=me.Margin(top=16))):
+                        content_credentials_viewer(
+                            manifest=pagestate.c2pa_manifest_json,
+                        )
+
+                if pagestate.generated_text:
+                    with me.box(style=me.Style(margin=me.Margin(top=16), width="100%")):
+                        with me.expansion_panel(
+                            title="Generated Text Outputs",
+                            icon="notes",
+                        ):
+                            for text_output in pagestate.generated_text:
+                                me.markdown(text_output)
+                                me.divider()
 
         # Gemini Analysis Loading Indicator - Show if analyzing AND primary loading is done
         if pagestate.is_analyzing and not pagestate.is_loading:
@@ -650,6 +672,7 @@ def clear_music(e: me.ClickEvent):
     state.analysis_error_message = ""
     state.loading_operation_message = ""  # Clear loading message
     state.has_audio_metrics = False
+    state.current_media_item_id = None
     # Reset metrics
     state.audio_metrics.mean_pitch_hz = 0.0
     state.audio_metrics.pitch_std_hz = 0.0

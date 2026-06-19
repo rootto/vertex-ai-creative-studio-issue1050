@@ -55,7 +55,9 @@ async def generate_veo_async(
     # Extract user email from the request scope, set by middleware
     user_email = req.scope.get("MESOP_USER_EMAIL")
     if not user_email or user_email == "anonymous@google.com":
-        raise HTTPException(status_code=401, detail="Unauthorized: Authentication required")
+        raise HTTPException(
+            status_code=401, detail="Unauthorized: Authentication required"
+        )
 
     # 1. Create the "Tracking Record" immediately
     job_id = create_initial_job(request, user_email)

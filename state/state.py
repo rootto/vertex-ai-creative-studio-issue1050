@@ -63,24 +63,32 @@ class AppState:
                 self.session_id = session_id
 
         # Fallback to IAP headers if not found via custom session
-        elif "HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL" in request.environ:
-            user_email = request.environ["HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL"]
-            if user_email.startswith("accounts.google.com:"):
-                user_email = user_email.split(":")[-1]
-            self.user_email = user_email
-            self.session_id = request.environ.get("MESOP_SESSION_ID", "")
-        elif "MESOP_USER_EMAIL" in request.environ:
-            self.user_email = request.environ["MESOP_USER_EMAIL"]
-            self.session_id = request.environ["MESOP_SESSION_ID"]
+        if self.user_email == "anonymous@google.com":
+            if "HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL" in request.environ:
+                user_email = request.environ["HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL"]
+                if user_email.startswith("accounts.google.com:"):
+                    user_email = user_email.split(":")[-1]
+                self.user_email = user_email
+                self.session_id = request.environ.get(
+                    "MESOP_SESSION_ID", self.session_id,
+                )
+            elif "MESOP_USER_EMAIL" in request.environ:
+                self.user_email = request.environ["MESOP_USER_EMAIL"]
+                self.session_id = request.environ.get(
+                    "MESOP_SESSION_ID", self.session_id,
+                )
 
         # Bootstrap and fetch role/teams
         if self.user_email != "anonymous@google.com":
             bootstrap_first_user(self.user_email)
             self.user_role = get_user_role(self.user_email)
             teams = get_teams_for_user(self.user_email, self.user_role)
-            logger.info(f"DEBUG: AppState.__init__ fetched teams for user {self.user_email}: {[t.name for t in teams]}")
-            self.managed_teams_json = json.dumps([asdict(t) for t in teams], default=str)
-
+            logger.info(
+                f"DEBUG: AppState.__init__ fetched teams for user {self.user_email}: {[t.name for t in teams]}",
+            )
+            self.managed_teams_json = json.dumps(
+                [asdict(t) for t in teams], default=str,
+            )
 
 
 def theme_toggle_button():
@@ -187,7 +195,9 @@ def update_user_and_session_info(user_email: str, session_id: str) -> Generator:
         bootstrap_first_user(user_email)
         app_state.user_role = get_user_role(user_email)
         teams = get_teams_for_user(user_email, app_state.user_role)
-        app_state.managed_teams_json = json.dumps([asdict(t) for t in teams], default=str)
+        app_state.managed_teams_json = json.dumps(
+            [asdict(t) for t in teams], default=str,
+        )
     yield
 
 

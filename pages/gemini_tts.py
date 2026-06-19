@@ -32,6 +32,7 @@ from components.header import header
 from components.page_scaffold import page_frame, page_scaffold
 from components.pill import pill
 from components.snackbar import snackbar
+from components.feedback.feedback import feedback
 from config.gemini_tts import (
     GEMINI_TTS_LANGUAGES,
     GEMINI_TTS_MODEL_NAMES,
@@ -263,6 +264,10 @@ def gemini_tts_page_content():
                     me.text("Generating audio...")
                 elif state.audio_display_url:
                     me.audio(src=state.audio_display_url)
+                    
+                    if state.current_media_item_id:
+                        with me.box(style=me.Style(display="flex", justify_content="center", margin=me.Margin(top=16))):
+                            feedback(media_item_id=state.current_media_item_id)
 
                     if state.current_media_item_id:
                         with me.box(

@@ -463,7 +463,6 @@ def motion_portraits_content(app_state: me.state):
                             state.timing,
                             style=me.Style(margin=me.Margin(top=10), font_size="0.9em"),
                         )
-
                     me.button(
                         "Convert to GIF",
                         key=state.result_video_gcs_uri,
