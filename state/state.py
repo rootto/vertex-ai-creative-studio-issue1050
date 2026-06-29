@@ -22,7 +22,7 @@ from flask import request
 from common.analytics import get_logger
 from common.storage import get_session
 from services.team_service import get_teams_for_user
-from services.user_service import bootstrap_first_user, get_user_role
+from services.user_service import bootstrap_user, get_user_role
 
 logger = get_logger(__name__)
 
@@ -70,24 +70,27 @@ class AppState:
                     user_email = user_email.split(":")[-1]
                 self.user_email = user_email
                 self.session_id = request.environ.get(
-                    "MESOP_SESSION_ID", self.session_id,
+                    "MESOP_SESSION_ID",
+                    self.session_id,
                 )
             elif "MESOP_USER_EMAIL" in request.environ:
                 self.user_email = request.environ["MESOP_USER_EMAIL"]
                 self.session_id = request.environ.get(
-                    "MESOP_SESSION_ID", self.session_id,
+                    "MESOP_SESSION_ID",
+                    self.session_id,
                 )
 
         # Bootstrap and fetch role/teams
         if self.user_email != "anonymous@google.com":
-            bootstrap_first_user(self.user_email)
+            bootstrap_user(self.user_email)
             self.user_role = get_user_role(self.user_email)
             teams = get_teams_for_user(self.user_email, self.user_role)
             logger.info(
                 f"DEBUG: AppState.__init__ fetched teams for user {self.user_email}: {[t.name for t in teams]}",
             )
             self.managed_teams_json = json.dumps(
-                [asdict(t) for t in teams], default=str,
+                [asdict(t) for t in teams],
+                default=str,
             )
 
 
@@ -192,11 +195,12 @@ def update_user_and_session_info(user_email: str, session_id: str) -> Generator:
     app_state.session_id = session_id
 
     if user_email != "anonymous@google.com":
-        bootstrap_first_user(user_email)
+        bootstrap_user(user_email)
         app_state.user_role = get_user_role(user_email)
         teams = get_teams_for_user(user_email, app_state.user_role)
         app_state.managed_teams_json = json.dumps(
-            [asdict(t) for t in teams], default=str,
+            [asdict(t) for t in teams],
+            default=str,
         )
     yield
 

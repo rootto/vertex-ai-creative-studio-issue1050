@@ -17,6 +17,7 @@
 from common.analytics import get_logger
 from config.default import Default
 from config.firebase_config import FirebaseClient
+from services.team_service import create_team
 
 config = Default()
 db = FirebaseClient(database_id=config.GENMEDIA_FIREBASE_DB).get_client()
@@ -56,26 +57,34 @@ def set_user_role(email: str, role: str) -> None:
         raise
 
 
-def bootstrap_first_user(email: str) -> None:
-    """Bootstrap the first user as administrator if the collection is empty."""
+def bootstrap_user(email: str) -> None:
+    """Bootstrap a user upon their first login.
+
+    If the users collection is completely empty, the first user is bootstrapped as
+    an 'administrator'. Subsequent new users are bootstrapped as 'contributor'.
+    Every new user gets their own individual team 'Team <email>'.
+    """
     if not db:
         logger.warning("Firestore client is not initialized.")
         return
     try:
         users_ref = db.collection(config.USERS_COLLECTION_NAME)
-        docs = users_ref.limit(1).stream()
+        doc = users_ref.document(email).get()
 
-        # Convert stream to list to check if empty
-        doc_list = list(docs)
+        if not doc.exists:
+            # Check if this is the first user in the entire system
+            docs = users_ref.limit(1).stream()
+            doc_list = list(docs)
 
-        if not doc_list:
-            set_user_role(email, "administrator")
-            logger.info(f"Bootstrapped first user {email} as administrator")
-        else:
-            # If user doesn't exist, set default role
-            doc = users_ref.document(email).get()
-            if not doc.exists:
-                set_user_role(email, "contributor")
+            role = "administrator" if not doc_list else "contributor"
+            set_user_role(email, role)
+            logger.info(f"Bootstrapped new user {email} with role {role}")
+
+            # Create individual team for the new user
+            team_id = create_team(name=f"Team {email}", created_by=email)
+            logger.info(
+                f"Automatically created individual team 'Team {email}' (ID: {team_id}) for {email}",
+            )
     except Exception:
         logger.exception(f"Error bootstrapping user {email}")
         raise
