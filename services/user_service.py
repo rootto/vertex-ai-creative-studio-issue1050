@@ -58,11 +58,12 @@ def set_user_role(email: str, role: str) -> None:
 
 
 def bootstrap_user(email: str) -> None:
-    """Bootstrap a user upon their first login.
+    """Bootstrap a user upon login.
 
     If the users collection is completely empty, the first user is bootstrapped as
     an 'administrator'. Subsequent new users are bootstrapped as 'contributor'.
-    Every new user gets their own individual team 'Team <email>'.
+    Every user is checked to ensure they have their own individual team 'Team <email>'.
+    If it is missing, it is created.
     """
     if not db:
         logger.warning("Firestore client is not initialized.")
@@ -80,10 +81,15 @@ def bootstrap_user(email: str) -> None:
             set_user_role(email, role)
             logger.info(f"Bootstrapped new user {email} with role {role}")
 
-            # Create individual team for the new user
+        # Ensure the user has their personal team "Team <email>"
+        teams_ref = db.collection(config.TEAMS_COLLECTION_NAME)
+        personal_team_query = (
+            teams_ref.where("name", "==", f"Team {email}").limit(1).stream()
+        )
+        if not list(personal_team_query):
             team_id = create_team(name=f"Team {email}", created_by=email)
             logger.info(
-                f"Automatically created individual team 'Team {email}' (ID: {team_id}) for {email}",
+                f"Automatically created missing individual team 'Team {email}' (ID: {team_id}) for {email}",
             )
     except Exception:
         logger.exception(f"Error bootstrapping user {email}")

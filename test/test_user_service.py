@@ -41,7 +41,18 @@ def test_bootstrap_user_first_user(
     mock_users_ref = MagicMock()
     mock_doc_ref = MagicMock()
     mock_doc = MagicMock()
-    mock_db.collection.return_value = mock_users_ref
+    mock_teams_ref = MagicMock()
+
+    # Mock collection calls: users and teams
+    def collection_side_effect(name: str) -> MagicMock:
+        if name == config.USERS_COLLECTION_NAME:
+            return mock_users_ref
+        if name == config.TEAMS_COLLECTION_NAME:
+            return mock_teams_ref
+        return MagicMock()
+
+    mock_db.collection.side_effect = collection_side_effect
+
     mock_users_ref.document.return_value = mock_doc_ref
     mock_doc_ref.get.return_value = mock_doc
     mock_doc.exists = False  # User does not exist yet
@@ -49,13 +60,15 @@ def test_bootstrap_user_first_user(
     # Simulate empty users collection (first user ever)
     mock_users_ref.limit.return_value.stream.return_value = []
 
+    # Simulate missing team (query returns empty list)
+    mock_teams_ref.where.return_value.limit.return_value.stream.return_value = []
+
     email = "admin@example.com"
 
     # Act
     bootstrap_user(email)
 
     # Assert
-    mock_db.collection.assert_called_with(config.USERS_COLLECTION_NAME)
     mock_users_ref.document.assert_called_with(email)
     mock_set_user_role.assert_called_once_with(email, "administrator")
     mock_create_team.assert_called_once_with(
@@ -77,7 +90,17 @@ def test_bootstrap_user_subsequent_user(
     mock_users_ref = MagicMock()
     mock_doc_ref = MagicMock()
     mock_doc = MagicMock()
-    mock_db.collection.return_value = mock_users_ref
+    mock_teams_ref = MagicMock()
+
+    def collection_side_effect(name: str) -> MagicMock:
+        if name == config.USERS_COLLECTION_NAME:
+            return mock_users_ref
+        if name == config.TEAMS_COLLECTION_NAME:
+            return mock_teams_ref
+        return MagicMock()
+
+    mock_db.collection.side_effect = collection_side_effect
+
     mock_users_ref.document.return_value = mock_doc_ref
     mock_doc_ref.get.return_value = mock_doc
     mock_doc.exists = False  # User does not exist yet
@@ -85,13 +108,15 @@ def test_bootstrap_user_subsequent_user(
     # Simulate non-empty users collection (other users exist)
     mock_users_ref.limit.return_value.stream.return_value = [MagicMock()]
 
+    # Simulate missing team (query returns empty list)
+    mock_teams_ref.where.return_value.limit.return_value.stream.return_value = []
+
     email = "contributor@example.com"
 
     # Act
     bootstrap_user(email)
 
     # Assert
-    mock_db.collection.assert_called_with(config.USERS_COLLECTION_NAME)
     mock_users_ref.document.assert_called_with(email)
     mock_set_user_role.assert_called_once_with(email, "contributor")
     mock_create_team.assert_called_once_with(
@@ -103,20 +128,33 @@ def test_bootstrap_user_subsequent_user(
 @patch("services.user_service.db")
 @patch("services.user_service.create_team")
 @patch("services.user_service.set_user_role")
-def test_bootstrap_user_existing_user(
+def test_bootstrap_user_existing_user_missing_team(
     mock_set_user_role: MagicMock,
     mock_create_team: MagicMock,
     mock_db: MagicMock,
 ) -> None:
-    """Test that an existing user is not bootstrapped again and no team is created."""
+    """Test that an existing user gets their team created if it is missing."""
     # Arrange
     mock_users_ref = MagicMock()
     mock_doc_ref = MagicMock()
     mock_doc = MagicMock()
-    mock_db.collection.return_value = mock_users_ref
+    mock_teams_ref = MagicMock()
+
+    def collection_side_effect(name: str) -> MagicMock:
+        if name == config.USERS_COLLECTION_NAME:
+            return mock_users_ref
+        if name == config.TEAMS_COLLECTION_NAME:
+            return mock_teams_ref
+        return MagicMock()
+
+    mock_db.collection.side_effect = collection_side_effect
+
     mock_users_ref.document.return_value = mock_doc_ref
     mock_doc_ref.get.return_value = mock_doc
     mock_doc.exists = True  # User already exists
+
+    # Simulate missing team (query returns empty list)
+    mock_teams_ref.where.return_value.limit.return_value.stream.return_value = []
 
     email = "existing@example.com"
 
@@ -124,7 +162,53 @@ def test_bootstrap_user_existing_user(
     bootstrap_user(email)
 
     # Assert
-    mock_db.collection.assert_called_with(config.USERS_COLLECTION_NAME)
+    mock_users_ref.document.assert_called_with(email)
+    mock_set_user_role.assert_not_called()
+    mock_create_team.assert_called_once_with(
+        name=f"Team {email}",
+        created_by=email,
+    )
+
+
+@patch("services.user_service.db")
+@patch("services.user_service.create_team")
+@patch("services.user_service.set_user_role")
+def test_bootstrap_user_existing_user_has_team(
+    mock_set_user_role: MagicMock,
+    mock_create_team: MagicMock,
+    mock_db: MagicMock,
+) -> None:
+    """Test that an existing user does not get a new team if it already exists."""
+    # Arrange
+    mock_users_ref = MagicMock()
+    mock_doc_ref = MagicMock()
+    mock_doc = MagicMock()
+    mock_teams_ref = MagicMock()
+
+    def collection_side_effect(name: str) -> MagicMock:
+        if name == config.USERS_COLLECTION_NAME:
+            return mock_users_ref
+        if name == config.TEAMS_COLLECTION_NAME:
+            return mock_teams_ref
+        return MagicMock()
+
+    mock_db.collection.side_effect = collection_side_effect
+
+    mock_users_ref.document.return_value = mock_doc_ref
+    mock_doc_ref.get.return_value = mock_doc
+    mock_doc.exists = True  # User already exists
+
+    # Simulate existing team (query returns a list containing one team doc)
+    mock_teams_ref.where.return_value.limit.return_value.stream.return_value = [
+        MagicMock(),
+    ]
+
+    email = "existing@example.com"
+
+    # Act
+    bootstrap_user(email)
+
+    # Assert
     mock_users_ref.document.assert_called_with(email)
     mock_set_user_role.assert_not_called()
     mock_create_team.assert_not_called()
