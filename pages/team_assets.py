@@ -77,7 +77,12 @@ def team_assets_content() -> None:
     app_state = me.state(AppState)
     page_state = me.state(PageState)
 
-    if app_state.user_role not in ["administrator", "manager"]:
+    snackbar(is_visible=page_state.show_snackbar, label=page_state.snackbar_message)
+
+    teams = get_teams_for_user(app_state.user_email, app_state.user_role)
+    is_manager_of_any_team = any(app_state.user_email in t.managers for t in teams)
+
+    if app_state.user_role != "administrator" and not is_manager_of_any_team:
         with me.box(style=me.Style(padding=me.Padding.all(24))):
             me.text(
                 "You do not have permission to view this page.",
@@ -86,11 +91,8 @@ def team_assets_content() -> None:
             )
         return
 
-    snackbar(is_visible=page_state.show_snackbar, label=page_state.snackbar_message)
-
-    teams = get_teams_for_user(app_state.user_email, app_state.user_role)
-
     if not teams:
+
         with me.box(style=me.Style(padding=me.Padding.all(24))):
             me.text("You are not part of any teams.")
         return
