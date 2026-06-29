@@ -1,21 +1,45 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Login page for GenMedia Creative Studio."""
+
+from collections.abc import Generator
+
 import mesop as me
 
 from common.analytics import get_logger
 from common.auth import verify_google_id_token
 from common.storage import create_session
 from components.login_component.login_component import login_component
-from state.state import AppState, update_user_and_session_info
+from config.default import Default
+from state.state import AppState, is_logged_in, update_user_and_session_info
 
 logger = get_logger(__name__)
-from config.default import Default
 
 
 @me.stateclass
 class PageState:
-    pass
+    """State class for the login page."""
 
 
-def on_login(e: me.WebEvent):
+def on_load(_e: me.LoadEvent) -> None:
+    """Redirects the user to the welcome page if already logged in."""
+    if is_logged_in():
+        me.navigate("/welcome")
+
+
+def on_login(e: me.WebEvent) -> Generator[None]:
+    """Handle the login event by verifying the token and establishing a session."""
     logger.info(f"DEBUG: on_login entered. Event value: {e.value}")
     state = me.state(AppState)
     id_token_str = e.value["value"]
@@ -33,17 +57,23 @@ def on_login(e: me.WebEvent):
 
         # Navigate to welcome page
         me.navigate("/welcome")
-    except Exception as ex:
-        logger.error(f"Login failed: {ex}")
+    except Exception:
+        logger.exception("Login failed")
     yield
 
 
-def navigate_to_login(e: me.ClickEvent):
+def navigate_to_login(_e: me.ClickEvent) -> None:
+    """Navigate to the login page."""
     me.navigate("/login")
 
 
-@me.page(path="/login", title="Login - GenMedia Creative Studio")
-def page():
+@me.page(
+    path="/login",
+    title="Login - GenMedia Creative Studio",
+    on_load=on_load,
+)
+def page() -> None:
+    """Render the login page."""
     with me.box(
         style=me.Style(
             display="flex",
