@@ -16,10 +16,16 @@
 
 from dataclasses import asdict
 
+import uuid
+
 from google.cloud import firestore
 
 from common.analytics import get_logger
-from common.metadata import MediaItem, Team, _create_media_item_from_dict, get_media_item_by_id
+from common.metadata import (
+    MediaItem,
+    Team,
+    get_media_item_by_id,
+)
 from config.default import Default
 from config.firebase_config import FirebaseClient
 from models.gemini import generate_text
@@ -36,7 +42,13 @@ def create_team(name: str, created_by: str) -> str:
         return ""
     try:
         team_ref = db.collection(config.TEAMS_COLLECTION_NAME).document()
-        team = Team(id=team_ref.id, name=name, created_by=created_by, managers=[created_by], members=[created_by])
+        team = Team(
+            id=team_ref.id,
+            name=name,
+            created_by=created_by,
+            managers=[created_by],
+            members=[created_by],
+        )
         team_ref.set(asdict(team))
         logger.info(f"Created team {name} with ID {team_ref.id}")
         return team_ref.id
@@ -61,6 +73,24 @@ def get_team(team_id: str) -> Team | None:
                 assets.append(get_media_item_by_id(asset_id))
             data["assets"] = assets
             data["id"] = doc.id
+
+            # Handle legacy branding_guideline
+            if "branding_guidelines" not in data or not data["branding_guidelines"]:
+                legacy = data.get("branding_guideline")
+                if legacy and legacy.get("content"):
+                    data["branding_guidelines"] = [
+                        {
+                            "id": "legacy",
+                            "name": "Default Guideline",
+                            "type": legacy.get("type", "text"),
+                            "content": legacy.get("content", ""),
+                            "filename": legacy.get("filename", ""),
+                            "extracted_text": data.get("extracted_text", ""),
+                        },
+                    ]
+                else:
+                    data["branding_guidelines"] = []
+
             return Team(**data)
         return None
     except Exception as e:
@@ -101,6 +131,7 @@ def add_asset_to_team(team_id: str, media_item: MediaItem):
         logger.error(f"Error adding asset to team {team_id}: {e}")
         raise e
 
+
 def delete_team(team_id: str):
     """Delete a team."""
     try:
@@ -122,13 +153,78 @@ def remove_asset_from_team(team_id: str, asset_id: str):
         raise e
 
 
+def add_branding_guideline(  # noqa: PLR0913
+    team_id: str,
+    name: str,
+    guideline_type: str,
+    content: str,
+    filename: str = "",
+    extracted_text: str = "",
+) -> str:
+    """Add a new branding guideline to a team."""
+    guideline_id = str(uuid.uuid4())
+    guideline = {
+        "id": guideline_id,
+        "name": name,
+        "type": guideline_type,
+        "content": content,
+        "filename": filename,
+        "extracted_text": extracted_text,
+    }
+    try:
+        team_ref = db.collection(config.TEAMS_COLLECTION_NAME).document(team_id)
+        team_ref.update({"branding_guidelines": firestore.ArrayUnion([guideline])})
+        logger.info(
+            f"Added branding guideline '{name}' (ID: {guideline_id}) to team {team_id}",
+        )
+        return guideline_id
+    except Exception:
+        logger.exception(
+            f"Error adding branding guideline to team {team_id}",
+        )
+        raise
+
+
+def delete_branding_guideline(team_id: str, guideline_id: str) -> None:
+    """Delete a branding guideline from a team by ID."""
+    try:
+        team_ref = db.collection(config.TEAMS_COLLECTION_NAME).document(team_id)
+        team = get_team(team_id)
+        if not team:
+            raise ValueError(f"Team {team_id} not found")  # noqa: TRY003, TRY301
+
+        # Find the guideline to remove
+        guideline_to_remove = None
+        for g in team.branding_guidelines:
+            if g.get("id") == guideline_id:
+                guideline_to_remove = g
+                break
+
+        if guideline_to_remove:
+            team_ref.update(
+                {"branding_guidelines": firestore.ArrayRemove([guideline_to_remove])},
+            )
+            logger.info(
+                f"Deleted branding guideline {guideline_id} from team {team_id}",
+            )
+        else:
+            logger.warning(
+                f"Branding guideline {guideline_id} not found in team {team_id}",
+            )
+    except Exception:
+        logger.exception(
+            f"Error deleting branding guideline {guideline_id} from team {team_id}",
+        )
+        raise
+
+
 def set_branding_guideline(
     team_id: str,
     guideline_type: str,
     content: str,
     extracted_text: str = None,
 ):
-    """Set branding guidelines for a team."""
+    """Set branding guidelines for a team (deprecated, kept for compatibility)."""
     try:
         team_ref = db.collection(config.TEAMS_COLLECTION_NAME).document(team_id)
         update_data = {
@@ -160,7 +256,9 @@ def extract_branding_guidelines(pdf_gcs_uri: str) -> str:
 
 
 def get_teams_for_user(
-    email: str, role: str, assigned_only: bool = False,
+    email: str,
+    role: str,
+    assigned_only: bool = False,
 ) -> list[Team]:
     """Get teams for a user based on their role."""
     if not db:
@@ -202,6 +300,24 @@ def get_teams_for_user(
                 assets.append(get_media_item_by_id(asset_id))
             data["assets"] = assets
             data["id"] = doc.id
+
+            # Handle legacy branding_guideline
+            if "branding_guidelines" not in data or not data["branding_guidelines"]:
+                legacy = data.get("branding_guideline")
+                if legacy and legacy.get("content"):
+                    data["branding_guidelines"] = [
+                        {
+                            "id": "legacy",
+                            "name": "Default Guideline",
+                            "type": legacy.get("type", "text"),
+                            "content": legacy.get("content", ""),
+                            "filename": legacy.get("filename", ""),
+                            "extracted_text": data.get("extracted_text", ""),
+                        },
+                    ]
+                else:
+                    data["branding_guidelines"] = []
+
             teams.append(Team(**data))
         return teams
     except Exception as e:

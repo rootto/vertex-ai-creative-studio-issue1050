@@ -1330,26 +1330,33 @@ def on_load(e: me.LoadEvent):
         )
         guidelines = []
         for team in teams:
-            g_type = team.branding_guideline.get("type", "text")
-            g_content = team.branding_guideline.get("content", "")
-            g_extracted = team.extracted_text or ""
+            team_name = team.name or f"Team ({team.id or 'Unnamed'})"
+            for g in team.branding_guidelines:
+                g_id = g.get("id", "")
+                g_name = g.get("name", "Default Guideline")
+                g_type = g.get("type", "text")
+                g_content = g.get("content", "")
+                g_extracted = g.get("extracted_text") or ""
 
-            team_label = team.name or f"Team ({team.id or 'Unnamed'})"
-            if g_type == "pdf":
-                team_label = f"{team_label} (PDF)"
+                label = f"{team_name} - {g_name}"
+                if g_type == "pdf":
+                    label = f"{label} (PDF)"
 
-            guidelines.append(
-                {
-                    "team_id": team.id,
-                    "team_name": team.name or f"Team ({team.id or 'Unnamed'})",
-                    "team_label": team_label,
-                    "type": g_type,
-                    "content": g_content,
-                    "extracted_text": g_extracted,
-                },
-            )
+                guidelines.append(
+                    {
+                        "team_id": team.id,
+                        "team_name": team_name,
+                        "team_label": label,
+                        "id": g_id,
+                        "name": g_name,
+                        "type": g_type,
+                        "content": g_content,
+                        "extracted_text": g_extracted,
+                    },
+                )
         state.available_brand_guidelines_json = json.dumps(guidelines, default=str)
         state.initial_load_complete = True
+
     yield
 
 

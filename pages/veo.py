@@ -92,31 +92,38 @@ def on_veo_load(e: me.LoadEvent):
     )
     guidelines = []
     for team in teams:
-        g_type = team.branding_guideline.get("type", "text")
-        if g_type == "pdf":
-            content_str = (
-                team.extracted_text
-                or "Brand guidelines extraction in progress. Please check again in a few seconds."
-            )
-        else:
-            content_str = (
-                team.branding_guideline.get("content", "")
-                or "No brand guidelines configured for this team."
-            )
+        team_name = team.name or f"Team ({team.id or 'Unnamed'})"
+        for g in team.branding_guidelines:
+            g_id = g.get("id", "")
+            g_name = g.get("name", "Default Guideline")
+            g_type = g.get("type", "text")
+            if g_type == "pdf":
+                content_str = (
+                    g.get("extracted_text")
+                    or "Brand guidelines extraction in progress. Please check again in a few seconds."
+                )
+            else:
+                content_str = (
+                    g.get("content", "")
+                    or "No brand guidelines configured for this team."
+                )
 
-        team_label = team.name or f"Team ({team.id or 'Unnamed'})"
-        if g_type == "pdf":
-            team_label = f"{team_label} (PDF Summary)"
+            label = f"{team_name} - {g_name}"
+            if g_type == "pdf":
+                label = f"{label} (PDF Summary)"
 
-        guidelines.append(
-            {
-                "team_id": team.id,
-                "team_name": team.name or f"Team ({team.id or 'Unnamed'})",
-                "team_label": team_label,
-                "content": content_str,
-            },
-        )
+            guidelines.append(
+                {
+                    "team_id": team.id,
+                    "team_name": team_name,
+                    "team_label": label,
+                    "id": g_id,
+                    "name": g_name,
+                    "content": content_str,
+                },
+            )
     state.available_brand_guidelines_json = json.dumps(guidelines, default=str)
+
     yield
 
 
@@ -313,7 +320,7 @@ def veo_content(app_state: me.state):
                     if getattr(cfg(), "TEAM_AND_BRANDING", True):
                         try:
                             guidelines = json.loads(
-                                state.available_brand_guidelines_json
+                                state.available_brand_guidelines_json,
                             )
                         except Exception:
                             guidelines = []
@@ -439,7 +446,7 @@ def on_click_extend_video(e: me.ClickEvent):
     prompt_to_send = state.veo_prompt_input
     team_id_to_send = None
     if state.selected_brand_guideline and not state.selected_brand_guideline.startswith(
-        "No brand guidelines"
+        "No brand guidelines",
     ):
         selected_g = None
         guidelines = (
@@ -493,7 +500,7 @@ def on_click_extend_video(e: me.ClickEvent):
             mode="extension",
         ):
             response = requests.post(
-                api_url, json=request.model_dump(), headers=headers
+                api_url, json=request.model_dump(), headers=headers,
             )
             response.raise_for_status()
             data = response.json()
@@ -538,7 +545,7 @@ def on_click_extend_video(e: me.ClickEvent):
 
             elif state.job_status == "failed":
                 state.error_message = status_data.get(
-                    "error_message", "Unknown error during extension."
+                    "error_message", "Unknown error during extension.",
                 )
                 state.show_error_dialog = True
                 state.is_loading = False
@@ -655,7 +662,7 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
     prompt_to_send = state.veo_prompt_input
     team_id_to_send = None
     if state.selected_brand_guideline and not state.selected_brand_guideline.startswith(
-        "No brand guidelines"
+        "No brand guidelines",
     ):
         selected_g = None
         guidelines = (
@@ -722,7 +729,7 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
 
         # Log the initial click/attempt
         model_name_for_analytics = get_veo_model_config(
-            request.model_version_id
+            request.model_version_id,
         ).model_name
 
         with track_model_call(
@@ -734,7 +741,7 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
             mode=state.veo_mode,
         ):
             response = requests.post(
-                api_url, json=request.model_dump(), headers=headers
+                api_url, json=request.model_dump(), headers=headers,
             )
             response.raise_for_status()
             data = response.json()
@@ -789,7 +796,7 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
             elif state.job_status == "failed":
                 # Failure. Show error.
                 state.error_message = status_data.get(
-                    "error_message", "Unknown error during generation."
+                    "error_message", "Unknown error during generation.",
                 )
                 state.show_error_dialog = True
                 state.is_loading = False

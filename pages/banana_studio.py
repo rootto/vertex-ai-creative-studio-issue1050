@@ -536,7 +536,7 @@ def gemini_image_gen_page_content():
                 me.box(style=me.Style(height=8))
 
                 with me.box(
-                    style=me.Style(display="flex", flex_direction="row", gap=16)
+                    style=me.Style(display="flex", flex_direction="row", gap=16),
                 ):
                     me.select(
                         label="Aspect Ratio",
@@ -753,7 +753,7 @@ def gemini_image_gen_page_content():
 
                                 if state.generated_resolution:
                                     with me.box(
-                                        style=me.Style(margin=me.Margin(top=8))
+                                        style=me.Style(margin=me.Margin(top=8)),
                                     ):
                                         pill(
                                             label=f"Resolution: {state.generated_resolution}",
@@ -782,7 +782,7 @@ def gemini_image_gen_page_content():
                                             me.text("Evaluating generation...")
 
                                     elif state.selected_image_url in json.loads(
-                                        state.evaluations_json
+                                        state.evaluations_json,
                                     ):
                                         evaluation = json.loads(state.evaluations_json)[
                                             state.selected_image_url
@@ -1134,7 +1134,7 @@ def on_suggest_transformations_click(e: me.ClickEvent):
         raw_transformations = generate_transformation_prompts(image_uris=[gcs_uri])
         # Convert Pydantic objects to dicts for state
         state.suggested_transformations_json = json.dumps(
-            [t.model_dump() for t in raw_transformations]
+            [t.model_dump() for t in raw_transformations],
         )
     except Exception as ex:
         print(f"Could not generate transformation prompts: {ex}")
@@ -1152,7 +1152,7 @@ def on_image_action_click(e: me.ClickEvent):
 
     # Find the template that was clicked
     template = next(
-        (t for t in json.loads(state.prompt_templates_json) if t["key"] == e.key), None
+        (t for t in json.loads(state.prompt_templates_json) if t["key"] == e.key), None,
     )
 
     if not template:
@@ -1453,7 +1453,7 @@ def on_load(e: me.LoadEvent):
         )
         state.prompt_templates_json = json.dumps([t.model_dump() for t in templates])
         print(
-            f"Loaded {len(json.loads(state.prompt_templates_json))} image prompt templates."
+            f"Loaded {len(json.loads(state.prompt_templates_json))} image prompt templates.",
         )
 
     if not state.initial_load_complete:
@@ -1478,30 +1478,38 @@ def on_load(e: me.LoadEvent):
         )
         guidelines = []
         for team in teams:
-            g_type = team.branding_guideline.get("type", "text")
-            if g_type == "pdf":
-                content_str = (
-                    team.extracted_text or "Brand guidelines extraction in progress..."
-                )
-            else:
-                content_str = (
-                    team.branding_guideline.get("content", "")
-                    or "No brand guidelines configured for this team."
-                )
+            team_name = team.name or f"Team ({team.id or 'Unnamed'})"
+            for g in team.branding_guidelines:
+                g_id = g.get("id", "")
+                g_name = g.get("name", "Default Guideline")
+                g_type = g.get("type", "text")
+                if g_type == "pdf":
+                    content_str = (
+                        g.get("extracted_text")
+                        or "Brand guidelines extraction in progress..."
+                    )
+                else:
+                    content_str = (
+                        g.get("content", "")
+                        or "No brand guidelines configured for this team."
+                    )
 
-            team_label = team.name or f"Team ({team.id or 'Unnamed'})"
-            if g_type == "pdf":
-                team_label = f"{team_label} (PDF Summary)"
+                label = f"{team_name} - {g_name}"
+                if g_type == "pdf":
+                    label = f"{label} (PDF Summary)"
 
-            guidelines.append(
-                {
-                    "team_id": team.id,
-                    "team_name": team.name or f"Team ({team.id or 'Unnamed'})",
-                    "team_label": team_label,
-                    "content": content_str,
-                },
-            )
+                guidelines.append(
+                    {
+                        "team_id": team.id,
+                        "team_name": team_name,
+                        "team_label": label,
+                        "id": g_id,
+                        "name": g_name,
+                        "content": content_str,
+                    },
+                )
         state.available_brand_guidelines_json = json.dumps(guidelines, default=str)
+
         state.initial_load_complete = True
 
     yield

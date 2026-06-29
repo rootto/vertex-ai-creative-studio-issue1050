@@ -23,9 +23,11 @@ class PageState:
     show_snackbar: bool = False
     snackbar_message: str = ""
     is_uploading: bool = False
+    guideline_name: str = ""
     guideline_type: str = "text"  # "text" or "pdf"
     guideline_text: str = ""
     pdf_gcs_uri: str = ""
     pdf_filename: str = ""
     is_extracting: bool = False
     initial_load_complete: bool = False
+

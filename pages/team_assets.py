@@ -26,10 +26,11 @@ from components.page_scaffold import page_frame, page_scaffold
 from components.snackbar import snackbar
 from services.team_service import (
     add_asset_to_team,
+    add_branding_guideline,
+    delete_branding_guideline,
     extract_branding_guidelines,
     get_team,
     get_teams_for_user,
-    set_branding_guideline,
 )
 from state.state import AppState
 from state.team_assets_state import PageState
@@ -177,32 +178,84 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
     ):
         me.text("Branding Guidelines", type="headline-6")
 
+        # List existing guidelines
+        if selected_team.branding_guidelines:
+            with me.box(style=me.Style(margin=me.Margin(bottom=16))):
+                me.text("Existing Guidelines:", type="subtitle-1")
+                for g in selected_team.branding_guidelines:
+                    with me.box(
+                        style=me.Style(
+                            display="flex",
+                            flex_direction="row",
+                            align_items="center",
+                            gap=16,
+                            padding=me.Padding.symmetric(vertical=4),
+                        ),
+                    ):
+                        me.text(
+                            f"• {g.get('name')} ({g.get('type').upper()})",
+                            style=me.Style(flex_grow=1),
+                        )
+                        if g.get("type") == "pdf" and g.get("extracted_text"):
+                            with me.box(
+                                style=me.Style(
+                                    max_height=80,
+                                    overflow_y="auto",
+                                    font_size=12,
+                                    background=me.theme_var("secondary-container"),
+                                    padding=me.Padding.all(4),
+                                    border_radius=4,
+                                    width="50%",
+                                ),
+                            ):
+                                me.text(g.get("extracted_text"))
+
+        me.text(
+            "Add New Guideline",
+            type="subtitle-1",
+            style=me.Style(margin=me.Margin(top=16)),
+        )
+
         with me.box(
             style=me.Style(
                 display="flex",
-                flex_direction="row",
+                flex_direction="column",
                 gap=16,
-                align_items="center",
+                margin=me.Margin(top=8),
             ),
         ):
-            type_options = [
-                me.SelectOption(label="Free Text", value="text"),
-                me.SelectOption(label="PDF Upload", value="pdf"),
-            ]
-            me.select(
-                label="Type",
-                options=type_options,
-                on_selection_change=on_guideline_type_change,
-                value=page_state.guideline_type,
-                style=me.Style(width="150px"),
-            )
+            with me.box(
+                style=me.Style(
+                    display="flex",
+                    flex_direction="row",
+                    gap=16,
+                    align_items="center",
+                ),
+            ):
+                me.input(
+                    label="Guideline Name",
+                    value=page_state.guideline_name,
+                    on_blur=on_guideline_name_blur,
+                    style=me.Style(width="250px"),
+                )
+                type_options = [
+                    me.SelectOption(label="Free Text", value="text"),
+                    me.SelectOption(label="PDF Upload", value="pdf"),
+                ]
+                me.select(
+                    label="Type",
+                    options=type_options,
+                    on_selection_change=on_guideline_type_change,
+                    value=page_state.guideline_type,
+                    style=me.Style(width="150px"),
+                )
 
             if page_state.guideline_type == "text":
                 me.textarea(
                     label="Enter Guidelines",
                     value=page_state.guideline_text,
                     on_blur=on_guideline_text_blur,
-                    style=me.Style(flex_grow=1),
+                    style=me.Style(width="100%"),
                     rows=10,
                 )
             else:
@@ -212,7 +265,7 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
                         flex_direction="row",
                         gap=8,
                         align_items="center",
-                        flex_grow=1,
+                        width="100%",
                     ),
                 ):
                     me.uploader(
@@ -228,30 +281,13 @@ def branding_guidelines_section(selected_team: Team, page_state: PageState) -> N
                         ):
                             me.icon("clear")
 
-
             me.button(
-                "Save",
+                "Add Guideline",
                 on_click=on_save_guidelines_click,
                 key=selected_team.id,
                 type="raised",
+                style=me.Style(align_self="flex-start"),
             )
-
-        if selected_team.extracted_text:
-            with me.box(
-                style=me.Style(
-                    margin=me.Margin(top=8),
-                    padding=me.Padding.all(8),
-                    background=me.theme_var("secondary-container"),
-                    border_radius=4,
-                    height="300px",
-                    overflow_y="auto",
-                ),
-            ):
-                me.text(
-                    "Extracted Guidelines Summary:",
-                    type="subtitle-2",
-                )
-                me.text(selected_team.extracted_text)
 
 
 def assets_display_section(selected_team: Team) -> None:
@@ -315,9 +351,14 @@ def assets_display_section(selected_team: Team) -> None:
                             with me.content_button(
                                 on_click=on_delete_asset_click,
                                 key=f"{selected_team.id}:{asset.id}",
-                                style=me.Style(padding=me.Padding.all(0), min_width=24, height=24),
+                                style=me.Style(
+                                    padding=me.Padding.all(0), min_width=24, height=24,
+                                ),
                             ):
-                                me.icon("delete", style=me.Style(color=me.theme_var("error")))
+                                me.icon(
+                                    "delete",
+                                    style=me.Style(color=me.theme_var("error")),
+                                )
 
 
 def on_select_team_change(e: me.SelectSelectionChangeEvent) -> None:
@@ -420,33 +461,96 @@ def on_clear_pdf(_: me.ClickEvent):  # noqa: ANN201
     yield
 
 
+def on_guideline_name_blur(e: me.InputBlurEvent) -> None:
+    """Handle guideline name blur."""
+    state = me.state(PageState)
+    state.guideline_name = e.value
+
+
 def on_save_guidelines_click(e: me.ClickEvent):  # noqa: ANN201
     """Handle save guidelines click."""
     team_id = e.key
     state = me.state(PageState)
+    if not state.guideline_name.strip():
+        state.show_snackbar = True
+        state.snackbar_message = "Guideline name cannot be empty."
+        yield
+        return
+
     try:
         if state.guideline_type == "text":
-            set_branding_guideline(team_id, "text", state.guideline_text)
+            add_branding_guideline(
+                team_id,
+                state.guideline_name,
+                "text",
+                state.guideline_text,
+            )
             state.show_snackbar = True
-            state.snackbar_message = "Guidelines saved successfully."
+            state.snackbar_message = "Guideline added successfully."
+            state.guideline_name = ""
+            state.guideline_text = ""
         else:
-            set_branding_guideline(team_id, "pdf", state.pdf_gcs_uri)
+            # For PDF, we add it with empty extracted text first
+            guideline_id = add_branding_guideline(
+                team_id,
+                state.guideline_name,
+                "pdf",
+                state.pdf_gcs_uri,
+                filename=state.pdf_filename,
+            )
 
             # Start background thread to extract PDF text guidelines using Gemini
             import threading
+
             def run_extraction():
                 try:
                     extracted_text = extract_branding_guidelines(state.pdf_gcs_uri)
-                    set_branding_guideline(team_id, "pdf", state.pdf_gcs_uri, extracted_text)
+                    # We need to update the specific guideline inside the list.
+                    # A simple way is to delete the one we just added and add it back with extracted text,
+                    # or update it. To keep it simple, we can implement an update function if needed,
+                    # but let's just update the document in Firestore directly.
+                    from services.team_service import config, db
+
+                    team_ref = db.collection(config.TEAMS_COLLECTION_NAME).document(
+                        team_id,
+                    )
+                    team_doc = team_ref.get()
+                    if team_doc.exists:
+                        guidelines = team_doc.to_dict().get("branding_guidelines", [])
+                        for g in guidelines:
+                            if g.get("id") == guideline_id:
+                                g["extracted_text"] = extracted_text
+                                break
+                        team_ref.update({"branding_guidelines": guidelines})
                 except Exception as ex:
                     print(f"Error in background guideline extraction: {ex}")
 
             threading.Thread(target=run_extraction).start()
             state.show_snackbar = True
-            state.snackbar_message = "Guidelines saved successfully. PDF text extraction started in background."
+            state.snackbar_message = (
+                "Guideline added. PDF text extraction started in background."
+            )
+            state.guideline_name = ""
+            state.pdf_filename = ""
+            state.pdf_gcs_uri = ""
     except Exception as ex:  # noqa: BLE001
         state.show_snackbar = True
-        state.snackbar_message = f"Error saving guidelines: {ex}"
+        state.snackbar_message = f"Error adding guideline: {ex}"
+    yield
+
+
+def on_delete_guideline_click(e: me.ClickEvent):  # noqa: ANN201
+    """Handle delete guideline click."""
+    team_id, guideline_id = e.key.split(":")
+    try:
+        delete_branding_guideline(team_id, guideline_id)
+        state = me.state(PageState)
+        state.snackbar_message = "Guideline deleted successfully."
+        state.show_snackbar = True
+    except Exception as ex:  # noqa: BLE001
+        state = me.state(PageState)
+        state.snackbar_message = f"Error deleting guideline: {ex}"
+        state.show_snackbar = True
     yield
 
 

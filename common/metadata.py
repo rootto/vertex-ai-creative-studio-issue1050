@@ -187,6 +187,7 @@ class Team:
     branding_guideline: dict = field(
         default_factory=lambda: {"type": "text", "content": ""},
     )
+    branding_guidelines: list[dict] = field(default_factory=list)
     extracted_text: str | None = None
 
 
