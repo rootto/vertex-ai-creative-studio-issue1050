@@ -180,9 +180,6 @@ def gemini_omni_page() -> None:
                     elif state.generated_video_url:
                         me.video(
                             src=state.generated_video_url,
-                            controls=True,
-                            autoplay=True,
-                            loop=True,
                             style=me.Style(
                                 width="100%",
                                 max_height="400px",
