@@ -60,11 +60,12 @@ def generate_omni_video(
     edit_video_mime: str | None = None,
     edit_style_gcs: str | None = None,
     edit_style_mime: str | None = None,
-) -> tuple[str, str]:
+    previous_interaction_id: str | None = None,
+) -> tuple[str, str, str]:
     """Generate or edit a video using Gemini Omni Flash interactions API.
 
     Returns:
-        tuple[str, str]: (gcs_uri, display_url) of the generated video.
+        tuple[str, str, str]: (gcs_uri, display_url, interaction_id) of the generated video.
 
     """
     client = get_omni_client()
@@ -72,7 +73,13 @@ def generate_omni_video(
 
     try:
         # 1. Build input parts based on mode
-        if mode == "t2v":
+        if previous_interaction_id:
+            logger.info(
+                f"Subsequent edit/refinement turn referencing: {previous_interaction_id}",
+            )
+            input_parts.append({"type": "text", "text": prompt})
+
+        elif mode == "t2v":
             input_parts.append({"type": "text", "text": prompt})
 
         elif mode == "i2v":
@@ -162,13 +169,17 @@ def generate_omni_video(
         }
 
         logger.info(
-            f"Calling interactions.create with mode={mode}, aspect_ratio={aspect_ratio}",
+            f"Calling interactions.create with mode={mode}, aspect_ratio={aspect_ratio}, previous_interaction_id={previous_interaction_id}",
         )
-        interaction = client.interactions.create(
-            model="gemini-omni-flash-preview",
-            input=input_parts,
-            response_format=response_format,
-        )
+        kwargs = {
+            "model": "gemini-omni-flash-preview",
+            "input": input_parts,
+            "response_format": response_format,
+        }
+        if previous_interaction_id:
+            kwargs["previous_interaction_id"] = previous_interaction_id
+
+        interaction = client.interactions.create(**kwargs)
 
         # 3. Process outputs
         steps = _get_field(interaction, "steps") or []
@@ -218,8 +229,11 @@ def generate_omni_video(
             bucket_name=config.VIDEO_BUCKET,
         )
         display_url = create_display_url(gcs_uri)
-        logger.info(f"Stored Omni output to {gcs_uri}. Display URL: {display_url}")
-        return gcs_uri, display_url
+        interaction_id = _get_field(interaction, "id") or ""
+        logger.info(
+            f"Stored Omni output to {gcs_uri}. Display URL: {display_url}. Interaction ID: {interaction_id}",
+        )
+        return gcs_uri, display_url, interaction_id
 
     except Exception as e:
         logger.exception("Error during Gemini Omni video generation")
