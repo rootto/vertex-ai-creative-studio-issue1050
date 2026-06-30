@@ -13,6 +13,8 @@
 # limitations under the License.
 """Settings panel component for Gemini Omni."""
 
+from collections.abc import Callable
+
 import mesop as me
 
 from config.gemini_omni_models import GEMINI_OMNI_MODELS, get_omni_model_config
@@ -21,13 +23,12 @@ from state.gemini_omni_state import PageState
 
 @me.component
 def settings_panel(
-    on_mode_change,
-    on_model_change,
-    on_aspect_ratio_change,
-    on_duration_change,
-    on_generate_click,
+    on_mode_change: Callable,
+    on_model_change: Callable,
+    on_aspect_ratio_change: Callable,
+    on_generate_click: Callable,
 ) -> None:
-    """Renders the right-hand settings panel card for Gemini Omni."""
+    """Render the right-hand settings panel card for Gemini Omni."""
     state = me.state(PageState)
     model_config = get_omni_model_config(state.model_version)
 
@@ -44,20 +45,7 @@ def settings_panel(
             height="fit-content",
         ),
     ):
-        # 1. EAP Quota warning banner
-        with me.box(
-            style=me.Style(
-                background=me.theme_var("error-container"),
-                color=me.theme_var("on-error-container"),
-                padding=me.Padding.all(12),
-                border_radius=8,
-                font_size=12,
-                font_weight=500,
-            ),
-        ):
-            me.text("EAP Quota Limit: 3 QPM. Please run sparingly.")
-
-        # 2. Generation Mode select
+        # 1. Generation Mode select
         me.select(
             label="Generation Mode",
             appearance="outline",
@@ -72,7 +60,7 @@ def settings_panel(
             style=me.Style(width="100%"),
         )
 
-        # 3. Model select
+        # 2. Model select
         me.select(
             label="Model",
             appearance="outline",
@@ -85,7 +73,7 @@ def settings_panel(
             style=me.Style(width="100%"),
         )
 
-        # 4. Aspect Ratio select
+        # 3. Aspect Ratio select
         if model_config:
             me.select(
                 label="Aspect Ratio",
@@ -108,43 +96,7 @@ def settings_panel(
                 style=me.Style(width="100%"),
             )
 
-        # 5. Video Duration slider
-        if model_config:
-            with me.box(
-                style=me.Style(
-                    display="flex",
-                    flex_direction="column",
-                    gap=4,
-                    width="100%",
-                ),
-            ):
-                with me.box(
-                    style=me.Style(
-                        display="flex",
-                        justify_content="space-between",
-                        align_items="center",
-                        width="100%",
-                    ),
-                ):
-                    me.text(
-                        "Video Duration",
-                        style=me.Style(font_size=13, font_weight=500),
-                    )
-                    me.text(
-                        f"{state.duration}s",
-                        style=me.Style(font_size=13, font_weight=500),
-                    )
-
-                me.slider(
-                    min=model_config.min_duration,
-                    max=model_config.max_duration,
-                    step=1,
-                    value=state.duration,
-                    on_value_change=on_duration_change,
-                    style=me.Style(width="100%"),
-                )
-
-        # 6. Generate Video button
+        # 4. Generate Video button
         me.button(
             "Generate Video",
             type="stroked",

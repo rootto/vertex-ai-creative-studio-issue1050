@@ -212,7 +212,6 @@ def gemini_omni_page() -> None:
                     on_mode_change=on_mode_change,
                     on_model_change=on_model_change,
                     on_aspect_ratio_change=on_aspect_ratio_change,
-                    on_duration_change=on_duration_change,
                     on_generate_click=on_generate_click,
                 )
 
@@ -246,12 +245,6 @@ def on_aspect_ratio_change(e: me.SelectSelectionChangeEvent) -> None:
     """Update the aspect ratio."""
     state = me.state(PageState)
     state.aspect_ratio = e.value
-
-
-def on_duration_change(e: me.SliderValueChangeEvent) -> None:
-    """Update the video duration."""
-    state = me.state(PageState)
-    state.duration = int(e.value)
 
 
 def on_close_error_dialog(_e: me.ClickEvent) -> None:
@@ -405,7 +398,6 @@ def on_generate_click(_e: me.ClickEvent) -> Generator[None]:
             prompt=state.prompt,
             mode=state.generation_mode,
             aspect_ratio=state.aspect_ratio,
-            duration=state.duration,
             i2v_image_gcs=state.i2v_image_gcs,
             i2v_image_mime=state.i2v_image_mime_type,
             r2v_images_json=state.r2v_images_json,

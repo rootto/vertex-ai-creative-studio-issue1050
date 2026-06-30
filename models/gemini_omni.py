@@ -16,9 +16,9 @@
 import base64
 import io
 import json
-import shortuuid
 import time
 
+import shortuuid
 from google import genai
 from google.genai import types
 
@@ -46,7 +46,6 @@ def generate_omni_video(
     prompt: str,
     mode: str,
     aspect_ratio: str,
-    duration: int,
     i2v_image_gcs: str | None = None,
     i2v_image_mime: str | None = None,
     r2v_images_json: str = "[]",
@@ -153,11 +152,10 @@ def generate_omni_video(
         response_format = {
             "type": "video",
             "aspect_ratio": aspect_ratio,
-            "duration_seconds": duration,
         }
 
         logger.info(
-            f"Calling interactions.create with mode={mode}, aspect_ratio={aspect_ratio}, duration={duration}",
+            f"Calling interactions.create with mode={mode}, aspect_ratio={aspect_ratio}",
         )
         interaction = client.interactions.create(
             model="gemini-omni-flash-preview",
