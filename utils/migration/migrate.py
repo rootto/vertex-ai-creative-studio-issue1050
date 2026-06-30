@@ -12,6 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# /// script
+# dependencies = [
+#   "google-cloud-firestore",
+#   "google-cloud-storage",
+#   "google-auth"
+# ]
+# ///
+
 """Command line migration utility for Firestore metadata and GCS files."""
 
 import argparse

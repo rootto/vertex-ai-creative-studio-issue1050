@@ -6,11 +6,13 @@ This command-line utility migrates `genmedia` metadata documents and correspondi
 
 ## Prerequisites
 
-Make sure the following Python libraries are installed in your virtual environment:
+The migration script includes PEP 723 inline script metadata for its dependencies. If you have `uv` installed, you can run the script directly. It will automatically download the required libraries into an ephemeral, self-contained environment:
 
 ```bash
-pip install google-cloud-firestore google-cloud-storage google-auth
+uv run utils/migration/migrate.py [args]
 ```
+
+No manual installation of `google-cloud-firestore`, `google-cloud-storage`, or `google-auth` is necessary.
 
 ---
 
@@ -36,7 +38,7 @@ If you are migrating across different organizations, or your user account doesn'
 2. In the **Destination Project**, create a Service Account, grant it the `Storage Object Creator` and `Cloud Datastore User` (or `Firestore User`) roles, and download its JSON key file.
 3. Pass the paths to these key files using the `--source-credentials` and `--dest-credentials` flags:
    ```bash
-   python utils/migration/migrate.py \
+   uv run utils/migration/migrate.py \
      --source-project "source-project-id" \
      --dest-project "dest-project-id" \
      --source-bucket "source-bucket-name" \
@@ -71,7 +73,7 @@ If you are migrating across different organizations, or your user account doesn'
 It is highly recommended to run a dry-run first to verify credentials, GCS bucket names, and see a preview of what files/records will be migrated:
 
 ```bash
-python utils/migration/migrate.py \
+uv run utils/migration/migrate.py \
   --source-project "vertex-creative-official" \
   --source-db "create-studio-asset-metadata" \
   --source-bucket "creative-studio-vertex-creative-official-assets" \
@@ -84,7 +86,7 @@ python utils/migration/migrate.py \
 Once verified, run the actual migration:
 
 ```bash
-python utils/migration/migrate.py \
+uv run utils/migration/migrate.py \
   --source-project "vertex-creative-official" \
   --source-db "create-studio-asset-metadata" \
   --source-bucket "creative-studio-vertex-creative-official-assets" \
@@ -96,7 +98,7 @@ python utils/migration/migrate.py \
 If a migration was interrupted, you can run it again. By default, the tool skips already migrated files/documents. If you want to force re-copying everything, use `--force`:
 
 ```bash
-python utils/migration/migrate.py \
+uv run utils/migration/migrate.py \
   --source-project "vertex-creative-official" \
   --source-db "create-studio-asset-metadata" \
   --source-bucket "creative-studio-vertex-creative-official-assets" \

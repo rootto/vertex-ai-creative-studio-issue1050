@@ -44,12 +44,12 @@ Below are the identified Firestore collections and fields containing GCS referen
 
 ## 4. Architecture of the CLI Tool
 
-The tool will be written in Python as a standalone command-line script located at `tools/migrate_project.py`.
+The tool will be written in Python as a standalone command-line script located at `utils/migration/migrate.py`.
 
 ### CLI Arguments & Options
 
 ```bash
-python tools/migrate_project.py \
+uv run utils/migration/migrate.py \
   --source-project "source-project-id" \
   --dest-project "dest-project-id" \
   --source-bucket "source-assets-bucket" \
@@ -68,7 +68,7 @@ python tools/migrate_project.py \
 To migrate from the official production source `vertex-creative-official` to your destination release-candidate project (e.g. `release-candidate-495709`):
 
 ```bash
-python tools/migrate_project.py \
+uv run utils/migration/migrate.py \
   --source-project "vertex-creative-official" \
   --source-db "create-studio-asset-metadata" \
   --source-bucket "creative-studio-vertex-creative-official-assets" \
@@ -172,6 +172,6 @@ def copy_gcs_object(src_client, src_bucket_name, dest_client, dest_bucket_name, 
 ## 6. Next Steps & Actions
 
 1.  **Approval:** Review this design.
-2.  **Implementation:** Create the CLI script `tools/migrate_project.py`.
+2.  **Implementation:** Create the CLI script `utils/migration/migrate.py`.
 3.  **Local/Dry Run Testing:** Test the script against sandbox projects/buckets.
 4.  **Verification:** Confirm that migrated documents on the destination project match the source and work seamlessly in the deployed UI.
