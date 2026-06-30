@@ -20,7 +20,6 @@ import mesop as me
 from flask import request
 
 from common.analytics import get_logger
-from common.storage import get_session
 from services.team_service import get_teams_for_user
 from services.user_service import bootstrap_user, get_user_role
 
@@ -44,41 +43,24 @@ class AppState:
         """Initializes the AppState, reading user info from the request context."""
         self.managed_teams_json = "[]"  # Initialize to avoid AttributeError
 
-        # Try to get identity from session cookie (Custom Auth)
-        session_id = request.cookies.get("session_id")
-        if session_id:
-            logger.debug(f"DEBUG: AppState.__init__ found session_id: {session_id}")
-            session = get_session(session_id)
-            if session:
-                logger.debug(
-                    f"DEBUG: AppState.__init__ loaded session user: {session.user_email}",
-                )
-                self.user_email = session.user_email
-                self.session_id = session_id
-            else:
-                logger.debug(
-                    f"DEBUG: AppState.__init__ session not found in Firestore: {session_id}",
-                )
-                self.user_email = "anonymous@google.com"
-                self.session_id = session_id
+        # Read user email directly from IAP or environment headers
+        user_email = None
+        if "HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL" in request.environ:
+            user_email = request.environ["HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL"]
+            if user_email.startswith("accounts.google.com:"):
+                user_email = user_email.split(":")[-1]
+        elif "MESOP_USER_EMAIL" in request.environ:
+            user_email = request.environ["MESOP_USER_EMAIL"]
 
-        # Fallback to IAP headers if not found via custom session
-        if self.user_email == "anonymous@google.com":
-            if "HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL" in request.environ:
-                user_email = request.environ["HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL"]
-                if user_email.startswith("accounts.google.com:"):
-                    user_email = user_email.split(":")[-1]
-                self.user_email = user_email
-                self.session_id = request.environ.get(
-                    "MESOP_SESSION_ID",
-                    self.session_id,
-                )
-            elif "MESOP_USER_EMAIL" in request.environ:
-                self.user_email = request.environ["MESOP_USER_EMAIL"]
-                self.session_id = request.environ.get(
-                    "MESOP_SESSION_ID",
-                    self.session_id,
-                )
+        if user_email:
+            self.user_email = user_email
+        else:
+            self.user_email = "anonymous@google.com"
+
+        self.session_id = request.environ.get(
+            "MESOP_SESSION_ID",
+            request.cookies.get("session_id", ""),
+        )
 
         # Bootstrap and fetch role/teams
         if self.user_email != "anonymous@google.com":

@@ -38,10 +38,16 @@ _signed_url_cache = {}
 def create_display_url(gcs_uri: str) -> str:
     """Create a cacheable display URL for a GCS asset.
 
-    Generate a signed URL valid for 15 minutes and cache it.
+    If USE_MEDIA_PROXY config is True, this returns a proxy URL
+    which automatically redirects to short-lived GCS signed URLs.
+    Otherwise, it returns a 15-minute signed GCS URL.
     """
     if not gcs_uri or not gcs_uri.startswith("gs://"):
         return ""
+
+    if cfg().USE_MEDIA_PROXY:
+        proxy_path = gcs_uri.replace("gs://", "")
+        return f"/media/{proxy_path}"
 
     # Check cache
     now = datetime.datetime.now(datetime.UTC)

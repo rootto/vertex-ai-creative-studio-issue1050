@@ -23,7 +23,7 @@ from components.styles import (
     SIDENAV_MIN_WIDTH,
 )
 from components.theme_manager.theme_manager import theme_manager
-from state.state import AppState, is_logged_in
+from state.state import AppState
 
 
 def on_theme_load(e: me.WebEvent):
@@ -44,43 +44,31 @@ def page_scaffold(page_name: str):
 
     theme_manager(theme=app_state.theme_mode, on_theme_load=on_theme_load)
 
-    # Allow login page to render without auth
-    if page_name == "login" or is_logged_in():
-        app_state.has_redirected = False  # Reset redirect status
-        sidenav("")
+    sidenav("")
 
-        with (
-            me.box(
-                style=me.Style(
-                    display="flex",
-                    flex_direction="column",
-                    height="100%",
-                    margin=me.Margin(
-                        left=SIDENAV_MAX_WIDTH
-                        if app_state.sidenav_open
-                        else SIDENAV_MIN_WIDTH,
-                    ),
+    with (
+        me.box(
+            style=me.Style(
+                display="flex",
+                flex_direction="column",
+                height="100%",
+                margin=me.Margin(
+                    left=SIDENAV_MAX_WIDTH
+                    if app_state.sidenav_open
+                    else SIDENAV_MIN_WIDTH,
                 ),
             ),
-            me.box(
-                style=me.Style(
-                    background=me.theme_var("background"),
-                    height="100%",
-                    overflow_y="scroll",
-                    margin=me.Margin(bottom=20),
-                ),
+        ),
+        me.box(
+            style=me.Style(
+                background=me.theme_var("background"),
+                height="100%",
+                overflow_y="scroll",
+                margin=me.Margin(bottom=20),
             ),
-        ):
-            me.slot()
-    else:
-        # Automatically redirect unauthenticated users to the login page exactly once
-        if not app_state.has_redirected:
-            app_state.has_redirected = True
-            me.navigate("/login")
-        # Mesop requires me.slot() to be called in content components.
-        # So we call it here but hide it!
-        with me.box(style=me.Style(display="none")):
-            me.slot()
+        ),
+    ):
+        me.slot()
 
 
 @me.content_component

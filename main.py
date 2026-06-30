@@ -47,7 +47,6 @@ from pages import guideline_analysis as guideline_analysis_page
 from pages import home as home_page
 from pages import interior_design_v2 as interior_design_page
 from pages import library_v4 as library_v4_page
-from pages import login as login_page
 from pages import lyria as lyria_page
 from pages import object_rotation as object_rotation_page
 from pages import pixie_compositor as pixie_compositor_page
@@ -195,25 +194,15 @@ async def add_global_csp(request: Request, call_next):
 
 @app.middleware("http")
 async def set_request_context(request: Request, call_next):
+    user_email = request.headers.get("X-Goog-Authenticated-User-Email")
+    if user_email and user_email.startswith("accounts.google.com:"):
+        user_email = user_email.split(":")[-1]
+
+    # Fallback to local dev user if IAP header not present
+    if not user_email:
+        user_email = os.environ.get("DEV_USER_EMAIL", "anonymous@google.com")
+
     session_id = request.cookies.get("session_id")
-    user_email = None
-
-    # 1. Try to load from session cookie first
-    if session_id:
-        session = get_session(session_id)
-        if session:
-            user_email = session.user_email
-
-    # 2. Fallback to checking X-Goog-Authenticated-User-Email header
-    if not user_email:
-        user_email = request.headers.get("X-Goog-Authenticated-User-Email")
-        if user_email and user_email.startswith("accounts.google.com:"):
-            user_email = user_email.split(":")[-1]
-
-    # 3. Fallback to default
-    if not user_email:
-        user_email = "anonymous@google.com"
-
     if not session_id:
         session_id = str(uuid.uuid4())
 
@@ -265,10 +254,10 @@ def get_proxy_storage_client():
     return _proxy_storage_client
 
 
-# Add a new endpoint to proxy GCS media for better caching.
+# Add a new endpoint to proxy GCS media for better caching and automatic URL refreshing.
 @app.get("/media/{bucket_name}/{object_path:path}")
 def get_media_proxy(request: Request, bucket_name: str, object_path: str):
-    """Securely proxies a GCS object, checking for IAP authentication."""
+    """Securely redirects to a short-lived signed URL for a GCS object, checking for IAP authentication."""
     user_email = request.scope.get("MESOP_USER_EMAIL")
     app_env = config.Default().APP_ENV
 
@@ -280,27 +269,38 @@ def get_media_proxy(request: Request, bucket_name: str, object_path: str):
         raise HTTPException(status_code=401, detail="Authentication required")
 
     try:
+        credentials, _ = google.auth.default()
+
+        signing_credentials = impersonated_credentials.Credentials(
+            source_credentials=credentials,
+            target_principal=config.Default.SERVICE_ACCOUNT_EMAIL,
+            target_scopes="https://www.googleapis.com/auth/devstorage.read_only",
+        )
+
         storage_client = get_proxy_storage_client()
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(object_path)
 
-        if not blob.exists():
-            raise HTTPException(status_code=404, detail="Object not found")
+        # Generate a signed URL valid for 15 minutes
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=datetime.timedelta(minutes=15),
+            method="GET",
+            credentials=signing_credentials,
+        )
 
-        blob.reload()
-        content_type = blob.content_type
-
-        # Set a cache header to instruct browsers and CDNs to cache for 1 hour.
-        headers = {"Cache-Control": "public, max-age=3600"}
-
-        # Stream the file content directly from GCS to the user.
-        stream = blob.open("rb")
-        return StreamingResponse(stream, media_type=content_type, headers=headers)
+        # Instruct browser NOT to cache the redirect itself, so it always asks us for a fresh URL
+        headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        }
+        return RedirectResponse(url=signed_url, status_code=307, headers=headers)
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error proxying GCS object: {e}")
+        print(f"Error redirecting GCS object: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
