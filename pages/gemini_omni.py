@@ -187,6 +187,65 @@ def gemini_omni_page() -> None:
                                 box_shadow=me.theme_var("shadow_elevation_1"),
                             ),
                         )
+                        # Conversational Refinement Prompt Box
+                        with me.box(
+                            style=me.Style(
+                                display="flex",
+                                flex_direction="column",
+                                gap=10,
+                                width="100%",
+                                margin=me.Margin(top=20),
+                                padding=me.Padding.all(12),
+                                background=me.theme_var("surface-container-high"),
+                                border_radius=8,
+                            ),
+                        ):
+                            me.text(
+                                "Chat Refinement (Multi-turn edit)",
+                                style=me.Style(font_size=13, font_weight=500),
+                            )
+                            me.native_textarea(
+                                autosize=True,
+                                min_rows=2,
+                                max_rows=5,
+                                placeholder="e.g. Change the car color to metallic blue. Keep everything else same.",
+                                value=state.refinement_prompt,
+                                on_blur=on_refinement_blur,
+                                style=me.Style(
+                                    width="100%",
+                                    border=me.Border.all(
+                                        me.BorderSide(
+                                            width=1,
+                                            style="solid",
+                                            color=me.theme_var("outline-variant"),
+                                        ),
+                                    ),
+                                    border_radius=8,
+                                    padding=me.Padding.all(10),
+                                    background=me.theme_var("surface"),
+                                    color=me.theme_var("on-surface"),
+                                    outline="none",
+                                ),
+                            )
+                            with me.box(
+                                style=me.Style(
+                                    display="flex",
+                                    justify_content="flex-end",
+                                    gap=10,
+                                ),
+                            ):
+                                me.button(
+                                    "Reset Chat",
+                                    type="stroked",
+                                    on_click=on_reset_chat,
+                                    style=me.Style(border_radius=18),
+                                )
+                                me.button(
+                                    "Send",
+                                    type="flat",
+                                    on_click=on_send_refinement,
+                                    style=me.Style(border_radius=18),
+                                )
                     else:
                         me.text(
                             "Generate a video to see preview here.",
@@ -388,10 +447,11 @@ def on_generate_click(_e: me.ClickEvent) -> Generator[None]:
     state.is_loading = True
     state.generated_video_url = ""
     state.generated_video_gcs = ""
+    state.last_interaction_id = ""
     yield
 
     try:
-        gcs_uri, display_url = generate_omni_video(
+        gcs_uri, display_url, interaction_id = generate_omni_video(
             prompt=state.prompt,
             mode=state.generation_mode,
             aspect_ratio=state.aspect_ratio,
@@ -405,9 +465,65 @@ def on_generate_click(_e: me.ClickEvent) -> Generator[None]:
         )
         state.generated_video_gcs = gcs_uri
         state.generated_video_url = display_url
+        state.last_interaction_id = interaction_id
     except Exception as ex:  # noqa: BLE001
         state.error_message = str(ex)
         state.show_error_dialog = True
     finally:
         state.is_loading = False
     yield
+
+
+def on_refinement_blur(e: me.InputBlurEvent) -> None:
+    """Update the refinement prompt in state."""
+    state = me.state(PageState)
+    state.refinement_prompt = e.value
+
+
+def on_send_refinement(_e: me.ClickEvent) -> Generator[None]:
+    """Send refinement prompt to the Omni interaction model."""
+    state = me.state(PageState)
+
+    if not state.refinement_prompt:
+        state.error_message = "Please enter a refinement instruction."
+        state.show_error_dialog = True
+        yield
+        return
+
+    refinement_to_send = state.refinement_prompt
+    state.is_loading = True
+    state.refinement_prompt = ""
+    yield
+
+    try:
+        gcs_uri, display_url, interaction_id = generate_omni_video(
+            prompt=refinement_to_send,
+            mode=state.generation_mode,
+            aspect_ratio=state.aspect_ratio,
+            i2v_image_gcs=state.i2v_image_gcs,
+            i2v_image_mime=state.i2v_image_mime_type,
+            r2v_images_json=state.r2v_images_json,
+            edit_video_gcs=state.edit_video_gcs,
+            edit_video_mime=state.edit_video_mime_type,
+            edit_style_gcs=state.edit_style_image_gcs,
+            edit_style_mime=state.edit_style_image_mime_type,
+            previous_interaction_id=state.last_interaction_id,
+        )
+        state.generated_video_gcs = gcs_uri
+        state.generated_video_url = display_url
+        state.last_interaction_id = interaction_id
+    except Exception as ex:  # noqa: BLE001
+        state.error_message = str(ex)
+        state.show_error_dialog = True
+    finally:
+        state.is_loading = False
+    yield
+
+
+def on_reset_chat(_e: me.ClickEvent) -> None:
+    """Reset the chat session and clear the page output."""
+    state = me.state(PageState)
+    state.generated_video_url = ""
+    state.generated_video_gcs = ""
+    state.last_interaction_id = ""
+    state.refinement_prompt = ""

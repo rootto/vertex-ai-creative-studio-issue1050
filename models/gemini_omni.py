@@ -20,7 +20,6 @@ import time
 
 import shortuuid
 from google import genai
-from google.genai import types
 
 from common.analytics import get_logger
 from common.error_handling import GenerationError
@@ -41,12 +40,7 @@ def _get_field(obj, field_name):
 
 def get_omni_client() -> genai.Client:
     """Initialize the google-genai Client configured for Gemini Omni API."""
-    return genai.Client(
-        vertexai=True,
-        project=config.PROJECT_ID,
-        location="global",
-        http_options=types.HttpOptions(headers={"Api-Revision": "2026-05-20"}),
-    )
+    return genai.Client()
 
 
 def generate_omni_video(
@@ -60,19 +54,25 @@ def generate_omni_video(
     edit_video_mime: str | None = None,
     edit_style_gcs: str | None = None,
     edit_style_mime: str | None = None,
-) -> tuple[str, str]:
+    previous_interaction_id: str | None = None,
+) -> tuple[str, str, str]:
     """Generate or edit a video using Gemini Omni Flash interactions API.
 
     Returns:
-        tuple[str, str]: (gcs_uri, display_url) of the generated video.
+        tuple[str, str, str]: (gcs_uri, display_url, interaction_id) of the generated video.
 
     """
     client = get_omni_client()
     input_parts = []
 
     try:
-        # 1. Build input parts based on mode
-        if mode == "t2v":
+        if previous_interaction_id:
+            logger.info(
+                f"Subsequent edit/refinement turn referencing: {previous_interaction_id}",
+            )
+            input_parts.append({"type": "text", "text": prompt})
+
+        elif mode == "t2v":
             input_parts.append({"type": "text", "text": prompt})
 
         elif mode == "i2v":
@@ -162,19 +162,22 @@ def generate_omni_video(
         }
 
         generation_config = None
-        if mode == "i2v":
-            generation_config = {"video_config": {"task": "image_to_video"}}
-        elif mode == "r2v":
-            generation_config = {"video_config": {"task": "reference_to_video"}}
+        if not previous_interaction_id:
+            if mode == "i2v":
+                generation_config = {"video_config": {"task": "image_to_video"}}
+            elif mode == "r2v":
+                generation_config = {"video_config": {"task": "reference_to_video"}}
 
         logger.info(
-            f"Calling interactions.create with mode={mode}, aspect_ratio={aspect_ratio}",
+            f"Calling interactions.create with mode={mode}, aspect_ratio={aspect_ratio}, previous_interaction_id={previous_interaction_id}",
         )
         kwargs = {
             "model": "gemini-omni-flash-preview",
             "input": input_parts,
             "response_format": response_format,
         }
+        if previous_interaction_id:
+            kwargs["previous_interaction_id"] = previous_interaction_id
         if generation_config:
             kwargs["generation_config"] = generation_config
 
@@ -228,10 +231,11 @@ def generate_omni_video(
             bucket_name=config.VIDEO_BUCKET,
         )
         display_url = create_display_url(gcs_uri)
+        interaction_id = _get_field(interaction, "id") or ""
         logger.info(
-            f"Stored Omni output to {gcs_uri}. Display URL: {display_url}",
+            f"Stored Omni output to {gcs_uri}. Display URL: {display_url}. Interaction ID: {interaction_id}",
         )
-        return gcs_uri, display_url
+        return gcs_uri, display_url, interaction_id
 
     except Exception as e:
         logger.exception("Error during Gemini Omni video generation")
