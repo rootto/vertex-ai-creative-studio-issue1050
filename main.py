@@ -41,6 +41,7 @@ from pages import character_consistency as character_consistency_page
 from pages import chirp_3hd as chirp_3hd_page
 from pages import config as config_page
 from pages import gemini_image_generation as gemini_image_generation_page
+from pages import gemini_omni as gemini_omni_page
 from pages import gemini_tts as gemini_tts_page
 from pages import gemini_writers_workshop as gemini_writers_workshop_page
 from pages import guideline_analysis as guideline_analysis_page

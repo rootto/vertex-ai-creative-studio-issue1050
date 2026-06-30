@@ -29,6 +29,16 @@
       "video_url": "https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/veo__cover_s0RKXWX.mp4"
     },
     {
+      "id": 12,
+      "display": "Gemini Omni",
+      "icon": "video_library",
+      "route": "/gemini-omni",
+      "group": "foundation",
+      "mode": "video",
+      "description": "Generate and edit videos using Gemini Omni Flash.",
+      "video_url": "https://storage.googleapis.com/gdm-deepmind-com-prod-public/media/media/veo__cover_s0RKXWX.mp4"
+    },
+    {
       "id": 14,
       "display": "Gemini TTS",
       "icon": "spark",
