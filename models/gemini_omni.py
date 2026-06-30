@@ -178,6 +178,14 @@ def generate_omni_video(
         }
         if previous_interaction_id:
             kwargs["previous_interaction_id"] = previous_interaction_id
+        elif mode == "i2v":
+            kwargs["generation_config"] = {
+                "video_config": {"task": "image_to_video"},
+            }
+        elif mode == "r2v":
+            kwargs["generation_config"] = {
+                "video_config": {"task": "reference_to_video"},
+            }
 
         interaction = client.interactions.create(**kwargs)
 
