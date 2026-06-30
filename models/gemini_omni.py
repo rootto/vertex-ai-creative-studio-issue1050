@@ -32,6 +32,13 @@ config = Default()
 logger = get_logger(__name__)
 
 
+def _get_field(obj, field_name):
+    """Retrieve field value from either a dictionary or an object."""
+    if isinstance(obj, dict):
+        return obj.get(field_name)
+    return getattr(obj, field_name, None)
+
+
 def get_omni_client() -> genai.Client:
     """Initialize the google-genai Client configured for Gemini Omni API."""
     return genai.Client(
@@ -164,7 +171,20 @@ def generate_omni_video(
         )
 
         # 3. Process outputs
-        video_part = interaction.output_video
+        steps = _get_field(interaction, "steps") or []
+        video_part = None
+        for step in reversed(steps):
+            step_type = _get_field(step, "type")
+            step_content = _get_field(step, "content")
+            if step_type == "model_output" and step_content:
+                for part in reversed(step_content):
+                    part_type = _get_field(part, "type")
+                    if part_type == "video":
+                        video_part = part
+                        break
+            if video_part:
+                break
+
         if not video_part:
             raise GenerationError(
                 "No video returned from the Gemini Omni model response.",
@@ -175,10 +195,11 @@ def generate_omni_video(
         file_name = f"omni_{shortuuid.uuid()}.mp4"
 
         # Check if the data is inline base64 or stored as a GCS URI (e.g. delivery="uri")
-        video_b64 = video_part.data
-        if not video_b64 and video_part.uri:
-            logger.info(f"Downloading from response URI: {video_part.uri}")
-            video_bytes = client.files.download(file=video_part.uri)
+        video_b64 = _get_field(video_part, "data")
+        video_uri = _get_field(video_part, "uri")
+        if not video_b64 and video_uri:
+            logger.info(f"Downloading from response URI: {video_uri}")
+            video_bytes = client.files.download(file=video_uri)
             video_b64 = base64.b64encode(video_bytes).decode("utf-8")
 
         if not video_b64:
@@ -187,10 +208,11 @@ def generate_omni_video(
             )
 
         # Save to genmedia video GCS bucket
+        mime_type = _get_field(video_part, "mime_type") or "video/mp4"
         gcs_uri = store_to_gcs(
             folder="omni",
             file_name=file_name,
-            mime_type=video_part.mime_type or "video/mp4",
+            mime_type=mime_type,
             contents=video_b64,
             decode=True,
             bucket_name=config.VIDEO_BUCKET,
