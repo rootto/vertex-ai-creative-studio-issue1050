@@ -192,6 +192,9 @@ locals {
     EDIT_IMAGES_ENABLED   = var.edit_images_enabled
     THUMBNAIL_QUEUE_ID    = google_cloud_tasks_queue.thumbnail_queue.name
     API_BASE_URL          = var.api_base_url != "" ? var.api_base_url : (var.use_lb ? "https://${var.domain}" : "")
+    GOOGLE_GENAI_USE_VERTEXAI = "true"
+    GOOGLE_CLOUD_PROJECT      = var.project_id
+    GOOGLE_CLOUD_LOCATION     = "global"
   }
 }
 
