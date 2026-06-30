@@ -33,10 +33,6 @@ class PageState:
     error_message: str = ""
     show_error_dialog: bool = False
 
-    # Multi-turn conversational editing
-    last_interaction_id: str = ""
-    refinement_prompt: str = ""
-
     # Outputs
     generated_video_url: str = ""  # Base64 data URL or HTTP display URL
     generated_video_gcs: str = ""
