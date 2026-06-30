@@ -30,7 +30,6 @@ from . import (
     library_v2,
     library_v3,
     library_v4,
-    login,
     lyria,
     object_rotation,
     pixie_compositor,
