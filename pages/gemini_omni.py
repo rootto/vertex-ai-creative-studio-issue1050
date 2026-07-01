@@ -28,6 +28,8 @@ from components.header import header
 from components.library.events import LibrarySelectionChangeEvent
 from components.page_scaffold import page_frame, page_scaffold
 from config.default import Default
+from config.rewriters import VIDEO_REWRITER
+from models.gemini import rewriter
 from models.gemini_omni import generate_omni_video
 from state.gemini_omni_state import PageState
 from state.state import AppState
@@ -35,8 +37,57 @@ from state.state import AppState
 
 def on_omni_load(_e: me.LoadEvent) -> Generator[None]:
     """Initialize the page state on load."""
-    me.state(PageState)
-    # We can load defaults here if needed
+    state = me.state(PageState)
+
+    from config.default import Default as cfg  # noqa: PLC0415, N813
+
+    if not getattr(cfg(), "TEAM_AND_BRANDING", True):
+        state.available_brand_guidelines_json = "[]"
+        yield
+        return
+
+    from services.team_service import get_teams_for_user  # noqa: PLC0415
+
+    app_state = me.state(AppState)
+    assigned_only = app_state.user_role != "administrator"
+    teams = get_teams_for_user(
+        app_state.user_email,
+        role=app_state.user_role,
+        assigned_only=assigned_only,
+    )
+    guidelines = []
+    for team in teams:
+        team_name = team.name or f"Team ({team.id or 'Unnamed'})"
+        for g in team.branding_guidelines:
+            g_id = g.get("id", "")
+            g_name = g.get("name", "Default Guideline")
+            g_type = g.get("type", "text")
+            if g_type == "pdf":
+                content_str = (
+                    g.get("extracted_text")
+                    or "Brand guidelines extraction in progress. Please check again in a few seconds."
+                )
+            else:
+                content_str = (
+                    g.get("content", "")
+                    or "No brand guidelines configured for this team."
+                )
+
+            label = f"{team_name} - {g_name}"
+            if g_type == "pdf":
+                label = f"{label} (PDF Summary)"
+
+            guidelines.append(
+                {
+                    "team_id": team.id,
+                    "team_name": team_name,
+                    "team_label": label,
+                    "id": g_id,
+                    "name": g_name,
+                    "content": content_str,
+                },
+            )
+    state.available_brand_guidelines_json = json.dumps(guidelines, default=str)
     yield
 
 
@@ -51,7 +102,7 @@ def on_omni_load(_e: me.LoadEvent) -> Generator[None]:
         ],
     ),
 )
-def gemini_omni_page() -> None:
+def gemini_omni_page() -> None:  # noqa: PLR0915
     """Render the Gemini Omni page."""
     me.state(AppState)
     state = me.state(PageState)
@@ -112,31 +163,116 @@ def gemini_omni_page() -> None:
                         "Prompt Description",
                         style=me.Style(font_size=13, font_weight=500),
                     )
-                    me.native_textarea(
-                        autosize=True,
-                        min_rows=4,
-                        max_rows=8,
-                        placeholder="Video generation instructions...",
-                        value=state.prompt,
-                        on_blur=on_prompt_blur,
-                        style=me.Style(
-                            width="100%",
-                            border=me.Border.all(
-                                me.BorderSide(
-                                    width=1,
-                                    style="solid",
-                                    color=me.theme_var("outline-variant"),
+
+                    # Brand Guidelines select box
+                    cfg = Default()
+                    if getattr(cfg, "TEAM_AND_BRANDING", True):
+                        guidelines = []
+                        if state.available_brand_guidelines_json:
+                            guidelines = json.loads(
+                                state.available_brand_guidelines_json,
+                            )
+                        if guidelines:
+                            me.select(
+                                label="Select Brand Guidelines to Inject",
+                                options=[
+                                    me.SelectOption(label="None", value=""),
+                                ]
+                                + [
+                                    me.SelectOption(
+                                        label=g["team_label"],
+                                        value=g["content"],
+                                    )
+                                    for g in guidelines
+                                ],
+                                on_selection_change=on_brand_guideline_change,
+                                value=state.selected_brand_guideline,
+                                style=me.Style(
+                                    width="100%",
+                                    margin=me.Margin(bottom=10),
                                 ),
-                            ),
-                            border_radius=8,
-                            padding=me.Padding.all(12),
-                            background=me.theme_var("surface"),
-                            color=me.theme_var("on-surface"),
-                            font_family="Roboto, sans-serif",
-                            font_size=14,
-                            outline="none",
+                            )
+
+                    with me.box(
+                        style=me.Style(
+                            border_radius=16,
+                            padding=me.Padding.all(8),
+                            background=me.theme_var("surface-container-high"),
+                            display="flex",
+                            width="100%",
                         ),
-                    )
+                    ):
+                        with me.box(style=me.Style(flex_grow=1)):
+                            me.native_textarea(
+                                autosize=True,
+                                min_rows=6,
+                                max_rows=10,
+                                placeholder="Video generation instructions...",
+                                style=me.Style(
+                                    padding=me.Padding(top=16, left=16),
+                                    background=me.theme_var(
+                                        "surface-container-high",
+                                    ),
+                                    outline="none",
+                                    width="100%",
+                                    overflow_y="auto",
+                                    border=me.Border.all(
+                                        me.BorderSide(style="none"),
+                                    ),
+                                    color=me.theme_var("on-surface"),
+                                    flex_grow=1,
+                                    font_family="Roboto, sans-serif",
+                                    font_size=14,
+                                ),
+                                on_blur=on_prompt_blur,
+                                key=str(state.prompt_textarea_key),
+                                value=state.prompt,
+                            )
+                        with me.box(
+                            style=me.Style(
+                                display="flex",
+                                flex_direction="column",
+                                gap=15,
+                            ),
+                        ):
+                            icon_style = me.Style(
+                                display="flex",
+                                flex_direction="column",
+                                gap=3,
+                                font_size=10,
+                                align_items="center",
+                                color=me.theme_var("on-surface-variant"),
+                            )
+                            with (
+                                me.content_button(
+                                    type="icon",
+                                    on_click=on_generate_click,
+                                    disabled=state.is_loading,
+                                ),
+                                me.box(style=icon_style),
+                            ):
+                                me.icon("play_arrow")
+                                me.text("Create")
+                            with (
+                                me.content_button(
+                                    type="icon",
+                                    on_click=on_click_custom_rewriter,
+                                    disabled=state.is_loading,
+                                ),
+                                me.box(style=icon_style),
+                            ):
+                                me.icon("auto_awesome")
+                                me.text("Rewriter")
+                            with (
+                                me.content_button(
+                                    type="icon",
+                                    on_click=on_clear_prompt,
+                                    disabled=state.is_loading,
+                                ),
+                                me.box(style=icon_style),
+                            ):
+                                me.icon("clear")
+                                me.text("Clear")
 
                 # Dynamic Media Uploaders
                 media_uploaders(
@@ -298,6 +434,30 @@ def on_prompt_blur(e: me.InputBlurEvent) -> None:
     """Update the prompt text in state."""
     state = me.state(PageState)
     state.prompt = e.value
+
+
+def on_clear_prompt(_e: me.ClickEvent) -> None:
+    """Clear the prompt input."""
+    state = me.state(PageState)
+    state.prompt = ""
+    state.prompt_textarea_key += 1
+
+
+def on_click_custom_rewriter(_e: me.ClickEvent) -> Generator[None]:
+    """Omni custom prompt rewriter."""
+    state = me.state(PageState)
+    if not state.prompt:
+        yield
+        return
+    rewritten_prompt = rewriter(state.prompt, VIDEO_REWRITER)
+    state.prompt = rewritten_prompt
+    yield
+
+
+def on_brand_guideline_change(e: me.SelectSelectionChangeEvent) -> None:
+    """Update selected brand guideline."""
+    state = me.state(PageState)
+    state.selected_brand_guideline = e.value
 
 
 def on_mode_change(e: me.SelectSelectionChangeEvent) -> None:
@@ -489,7 +649,7 @@ def on_clear_edit_style(_e: me.ClickEvent) -> None:
     state.edit_style_image_file_key += 1
 
 
-def on_generate_click(_e: me.ClickEvent) -> Generator[None]:
+def on_generate_click(_e: me.ClickEvent) -> Generator[None]:  # noqa: C901, PLR0912, PLR0915
     """Trigger the Gemini Omni video generation/editing workflow."""
     state = me.state(PageState)
 
@@ -507,9 +667,23 @@ def on_generate_click(_e: me.ClickEvent) -> Generator[None]:
     state.conversation_history_json = "[]"
     yield
 
+    prompt_to_send = state.prompt
+    if state.selected_brand_guideline and not state.selected_brand_guideline.startswith(
+        "No brand guidelines",
+    ):
+        guidelines = (
+            json.loads(state.available_brand_guidelines_json)
+            if state.available_brand_guidelines_json
+            else []
+        )
+        for g in guidelines:
+            if g["content"] == state.selected_brand_guideline:
+                prompt_to_send = f"{prompt_to_send}\n\nBrand Guidelines:\n{state.selected_brand_guideline}"
+                break
+
     try:
         gcs_uri, display_url, interaction_id, steps_json = generate_omni_video(
-            prompt=state.prompt,
+            prompt=prompt_to_send,
             mode=state.generation_mode,
             aspect_ratio=state.aspect_ratio,
             i2v_image_gcs=state.i2v_image_gcs,
@@ -529,6 +703,8 @@ def on_generate_click(_e: me.ClickEvent) -> Generator[None]:
         try:
             cfg = Default()
 
+            app_state = me.state(AppState)
+
             media_item = MediaItem(
                 prompt=state.prompt,
                 original_prompt=state.prompt,
@@ -537,6 +713,7 @@ def on_generate_click(_e: me.ClickEvent) -> Generator[None]:
                 mode=f"omni-{state.generation_mode}",
                 gcsuri=gcs_uri,
                 aspect=state.aspect_ratio,
+                user_email=app_state.user_email,
                 comment="Gemini Omni Generation",
             )
             # Add generation-specific references
@@ -613,6 +790,8 @@ def on_send_refinement(_e: me.ClickEvent) -> Generator[None]:
         try:
             cfg = Default()
 
+            app_state = me.state(AppState)
+
             media_item = MediaItem(
                 prompt=refinement_to_send,
                 original_prompt=state.prompt,
@@ -621,6 +800,7 @@ def on_send_refinement(_e: me.ClickEvent) -> Generator[None]:
                 mode=f"omni-{state.generation_mode}",
                 gcsuri=gcs_uri,
                 aspect=state.aspect_ratio,
+                user_email=app_state.user_email,
                 related_media_item_id=state.last_media_item_id or None,
                 comment="Gemini Omni Refinement",
             )

@@ -23,6 +23,7 @@ class PageState:
     prompt: str = (
         "A golden retriever running joyfully through a field of wildflowers at sunset."
     )
+    prompt_textarea_key: int = 0
     generation_mode: str = "t2v"  # t2v, i2v, r2v, editing
     model_version: str = "gemini-omni-flash-preview"
     aspect_ratio: str = "16:9"
@@ -38,6 +39,8 @@ class PageState:
     refinement_prompt: str = ""
     conversation_history_json: str = "[]"
     last_media_item_id: str = ""
+    available_brand_guidelines_json: str = "[]"
+    selected_brand_guideline: str = ""
 
     # Outputs
     generated_video_url: str = ""  # Base64 data URL or HTTP display URL
