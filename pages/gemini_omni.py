@@ -20,7 +20,7 @@ import mesop as me
 
 from common.metadata import MediaItem, add_media_item_to_firestore
 from common.storage import store_to_gcs
-from common.utils import create_display_url
+from common.utils import create_display_url, https_url_to_gcs_uri
 from components.dialog import dialog, dialog_actions
 from components.gemini_omni.media_uploaders import media_uploaders
 from components.gemini_omni.settings_panel import settings_panel
@@ -43,8 +43,6 @@ def on_omni_load(_e: me.LoadEvent) -> Generator[None]:
     if image_path:
         image_uri = ""
         if image_path.startswith("https://"):
-            from common.utils import https_url_to_gcs_uri
-
             image_uri = https_url_to_gcs_uri(image_path)
         else:
             image_uri = f"gs://{image_path}"
@@ -451,10 +449,16 @@ def on_prompt_blur(e: me.InputBlurEvent) -> None:
 
 
 def on_clear_prompt(_e: me.ClickEvent) -> None:
-    """Clear the prompt input."""
+    """Clear the prompt input and reset output/chat refinement."""
     state = me.state(PageState)
     state.prompt = ""
     state.prompt_textarea_key += 1
+    state.generated_video_url = ""
+    state.generated_video_gcs = ""
+    state.last_interaction_id = ""
+    state.refinement_prompt = ""
+    state.conversation_history_json = "[]"
+    state.last_media_item_id = ""
 
 
 def on_click_custom_rewriter(_e: me.ClickEvent) -> Generator[None]:
