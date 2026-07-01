@@ -145,8 +145,9 @@ def _build_stateless_input(
             f"Failed to retrieve previous interaction: {e}",
         ) from e
 
+    steps = prev_interaction.steps or []
     return [
-        *prev_interaction.steps,
+        *steps,
         {
             "type": "user_input",
             "content": [
@@ -162,14 +163,32 @@ def _build_stateless_input(
 def _extract_video_bytes(response: types.Interaction) -> bytes:
     """Extract and decode base64 video bytes from interaction response."""
     contents = []
-    for step in response.steps:
-        if step.type == "model_output":
-            contents.extend(step.content)
+    steps = response.steps or []
+    for step in steps:
+        step_type = (
+            step.get("type") if isinstance(step, dict) else getattr(step, "type", None)
+        )
+        if step_type == "model_output":
+            step_content = (
+                step.get("content")
+                if isinstance(step, dict)
+                else getattr(step, "content", None)
+            )
+            if step_content:
+                contents.extend(step_content)
 
-    if not contents or not hasattr(contents[0], "data") or not contents[0].data:
+    if not contents:
         raise GenerationError("No video output generated from model interaction.")
 
-    raw_data = contents[0].data
+    first_content = contents[0]
+    raw_data = (
+        first_content.get("data")
+        if isinstance(first_content, dict)
+        else getattr(first_content, "data", None)
+    )
+
+    if not raw_data:
+        raise GenerationError("No video output generated from model interaction.")
 
     try:
         if isinstance(raw_data, str):

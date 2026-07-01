@@ -237,3 +237,38 @@ def test_generate_omni_video_stateless_turn_2(
     assert (
         input_data[1]["content"][0]["text"] == "Make the same video in a doodle style."
     )
+
+
+def test_generate_omni_video_with_dict_steps(
+    mock_genai_client,
+    mock_store_to_gcs,
+    mock_create_display_url,
+):
+    """Test output parsing when steps are dict objects."""
+    # Arrange
+    mock_interaction = MagicMock()
+    mock_interaction.id = "turn1_id"
+    mock_interaction.steps = [
+        {
+            "type": "model_output",
+            "content": [
+                {
+                    "type": "video",
+                    "data": b"fake_base64_encoded_video_data",
+                },
+            ],
+        },
+    ]
+    mock_genai_client.interactions.create.return_value = mock_interaction
+
+    # Act
+    gcs_uri, display_url, interaction_id = generate_omni_video(
+        prompt="A cute cat playing",
+        mode="t2v",
+        aspect_ratio="16:9",
+    )
+
+    # Assert
+    assert gcs_uri == "gs://fake-bucket/fake-video.mp4"
+    assert display_url == "https://example.com/fake-video.mp4"
+    assert interaction_id == "turn1_id"
