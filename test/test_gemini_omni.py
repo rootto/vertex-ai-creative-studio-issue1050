@@ -16,6 +16,7 @@
 
 # ruff: noqa: S101, ANN001, ANN201, ARG001, PLR2004
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -83,7 +84,7 @@ def test_generate_omni_video_t2v(
     mock_genai_client.interactions.create.return_value = mock_interaction
 
     # Act
-    gcs_uri, display_url, interaction_id = generate_omni_video(
+    gcs_uri, display_url, interaction_id, steps_json = generate_omni_video(
         prompt="A cute cat playing",
         mode="t2v",
         aspect_ratio="16:9",
@@ -93,6 +94,7 @@ def test_generate_omni_video_t2v(
     assert gcs_uri == "gs://fake-bucket/fake-video.mp4"
     assert display_url == "https://example.com/fake-video.mp4"
     assert interaction_id == "turn1_id"
+    assert steps_json != "[]"
 
     # Verify API calls
     mock_genai_client.interactions.create.assert_called_once_with(
@@ -120,7 +122,7 @@ def test_generate_omni_video_i2v(
     mock_genai_client.interactions.create.return_value = mock_interaction
 
     # Act
-    generate_omni_video(
+    _, _, _, _ = generate_omni_video(
         prompt="Make it move",
         mode="i2v",
         aspect_ratio="9:16",
@@ -158,7 +160,7 @@ def test_generate_omni_video_editing_with_ref(
     mock_genai_client.interactions.create.return_value = mock_interaction
 
     # Act
-    generate_omni_video(
+    _, _, _, _ = generate_omni_video(
         prompt="Make it cartoon style",
         mode="editing",
         aspect_ratio="16:9",
@@ -212,7 +214,7 @@ def test_generate_omni_video_stateless_turn_2(
     mock_genai_client.interactions.create.return_value = mock_interaction_2
 
     # Act
-    generate_omni_video(
+    _, _, _, _ = generate_omni_video(
         prompt="Make the same video in a doodle style.",
         mode="t2v",
         aspect_ratio="16:9",
@@ -262,7 +264,7 @@ def test_generate_omni_video_with_dict_steps(
     mock_genai_client.interactions.create.return_value = mock_interaction
 
     # Act
-    gcs_uri, display_url, interaction_id = generate_omni_video(
+    gcs_uri, display_url, interaction_id, steps_json = generate_omni_video(
         prompt="A cute cat playing",
         mode="t2v",
         aspect_ratio="16:9",
@@ -272,3 +274,50 @@ def test_generate_omni_video_with_dict_steps(
     assert gcs_uri == "gs://fake-bucket/fake-video.mp4"
     assert display_url == "https://example.com/fake-video.mp4"
     assert interaction_id == "turn1_id"
+    assert steps_json != "[]"
+
+
+def test_generate_omni_video_stateless_history_json(
+    mock_genai_client,
+    mock_store_to_gcs,
+    mock_create_display_url,
+):
+    """Test Turn 2 generation using conversation_history_json state."""
+    # Arrange
+    mock_interaction = _create_mock_interaction(
+        interaction_id="turn2_id",
+        video_data=b"fake_video_2",
+    )
+    mock_genai_client.interactions.create.return_value = mock_interaction
+
+    history_json = json.dumps(
+        [
+            {
+                "type": "user_input",
+                "content": [{"type": "text", "text": "Turn 1 Prompt"}],
+            },
+            {
+                "type": "model_output",
+                "content": [{"type": "video", "data": "fake_video_1"}],
+            },
+        ]
+    )
+
+    # Act
+    _, _, _, _ = generate_omni_video(
+        prompt="Make it cartoon style",
+        mode="t2v",
+        aspect_ratio="16:9",
+        conversation_history_json=history_json,
+    )
+
+    # Assert
+    # Verify interactions.create was called with the deserialized history + new prompt
+    _, called_kwargs = mock_genai_client.interactions.create.call_args
+    input_data = called_kwargs["input"]
+    assert len(input_data) == 3
+    assert input_data[0]["type"] == "user_input"
+    assert input_data[0]["content"][0]["text"] == "Turn 1 Prompt"
+    assert input_data[1]["type"] == "model_output"
+    assert input_data[2]["type"] == "user_input"
+    assert input_data[2]["content"][0]["text"] == "Make it cartoon style"

@@ -36,6 +36,7 @@ class PageState:
     # Multi-turn conversational editing
     last_interaction_id: str = ""
     refinement_prompt: str = ""
+    conversation_history_json: str = "[]"
 
     # Outputs
     generated_video_url: str = ""  # Base64 data URL or HTTP display URL

@@ -497,10 +497,11 @@ def on_generate_click(_e: me.ClickEvent) -> Generator[None]:
     state.generated_video_url = ""
     state.generated_video_gcs = ""
     state.last_interaction_id = ""
+    state.conversation_history_json = "[]"
     yield
 
     try:
-        gcs_uri, display_url, interaction_id = generate_omni_video(
+        gcs_uri, display_url, interaction_id, steps_json = generate_omni_video(
             prompt=state.prompt,
             mode=state.generation_mode,
             aspect_ratio=state.aspect_ratio,
@@ -515,6 +516,7 @@ def on_generate_click(_e: me.ClickEvent) -> Generator[None]:
         state.generated_video_gcs = gcs_uri
         state.generated_video_url = display_url
         state.last_interaction_id = interaction_id
+        state.conversation_history_json = steps_json
     except Exception as ex:  # noqa: BLE001
         state.error_message = str(ex)
         state.show_error_dialog = True
@@ -545,7 +547,7 @@ def on_send_refinement(_e: me.ClickEvent) -> Generator[None]:
     yield
 
     try:
-        gcs_uri, display_url, interaction_id = generate_omni_video(
+        gcs_uri, display_url, interaction_id, steps_json = generate_omni_video(
             prompt=refinement_to_send,
             mode=state.generation_mode,
             aspect_ratio=state.aspect_ratio,
@@ -557,10 +559,12 @@ def on_send_refinement(_e: me.ClickEvent) -> Generator[None]:
             edit_style_gcs=state.edit_style_image_gcs,
             edit_style_mime=state.edit_style_image_mime_type,
             previous_interaction_id=state.last_interaction_id,
+            conversation_history_json=state.conversation_history_json,
         )
         state.generated_video_gcs = gcs_uri
         state.generated_video_url = display_url
         state.last_interaction_id = interaction_id
+        state.conversation_history_json = steps_json
     except Exception as ex:  # noqa: BLE001
         state.error_message = str(ex)
         state.show_error_dialog = True

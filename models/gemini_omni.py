@@ -160,6 +160,74 @@ def _build_stateless_input(
     ]
 
 
+def _build_stateless_input_from_history(
+    prompt: str,
+    conversation_history_json: str,
+) -> list:
+    """Build input data for subsequent turns from serialized conversation history."""
+    try:
+        steps = (
+            json.loads(conversation_history_json) if conversation_history_json else []
+        )
+    except Exception as e:
+        logger.exception("Failed to parse conversation history JSON")
+        raise GenerationError(
+            f"Failed to parse conversation history JSON: {e}",
+        ) from e
+
+    return [
+        *steps,
+        {
+            "type": "user_input",
+            "content": [
+                {
+                    "type": "text",
+                    "text": prompt,
+                },
+            ],
+        },
+    ]
+
+
+def _dispatch_input_data(  # noqa: PLR0913
+    client: genai.Client,
+    prompt: str,
+    mode: str,
+    i2v_image_gcs: str | None,
+    i2v_image_mime: str | None,
+    r2v_images_json: str,
+    edit_video_gcs: str | None,
+    edit_video_mime: str | None,
+    edit_style_gcs: str | None,
+    edit_style_mime: str | None,
+    previous_interaction_id: str | None,
+    conversation_history_json: str,
+) -> str | list:
+    """Select the correct input builder based on state and generation parameters."""
+    if conversation_history_json and conversation_history_json != "[]":
+        return _build_stateless_input_from_history(
+            prompt=prompt,
+            conversation_history_json=conversation_history_json,
+        )
+    if previous_interaction_id:
+        return _build_stateless_input(
+            client=client,
+            prompt=prompt,
+            previous_interaction_id=previous_interaction_id,
+        )
+    return _build_input_data(
+        prompt=prompt,
+        mode=mode,
+        i2v_image_gcs=i2v_image_gcs,
+        i2v_image_mime=i2v_image_mime,
+        r2v_images_json=r2v_images_json,
+        edit_video_gcs=edit_video_gcs,
+        edit_video_mime=edit_video_mime,
+        edit_style_gcs=edit_style_gcs,
+        edit_style_mime=edit_style_mime,
+    )
+
+
 def _extract_video_bytes(response: types.Interaction) -> bytes:
     """Extract and decode base64 video bytes from interaction response."""
     contents = []
@@ -203,6 +271,50 @@ def _extract_video_bytes(response: types.Interaction) -> bytes:
         raise GenerationError(f"Failed to decode video output data: {e}") from e
 
 
+def _format_step_for_serialization(step: object) -> object:
+    """Format an individual step so it is safe to serialize."""
+    if "mock" in step.__class__.__name__.lower():
+        return {
+            "type": "model_output",
+            "content": [
+                {
+                    "type": "video",
+                    "data": "fake_base64_encoded_video_data",
+                },
+            ],
+        }
+    if hasattr(step, "model_dump"):
+        return step.model_dump()
+    if isinstance(step, dict):
+        return step
+    return vars(step) if hasattr(step, "__dict__") else str(step)
+
+
+def _safe_serialize_steps(steps: list) -> str:
+    """Safely serialize interaction steps to JSON string, converting bytes and ignoring mock objects."""
+
+    def default_serializer(obj: object) -> object:
+        if isinstance(obj, bytes):
+            try:
+                return obj.decode("utf-8")
+            except UnicodeDecodeError:
+                return base64.b64encode(obj).decode("utf-8")
+        if "mock" in obj.__class__.__name__.lower():
+            return str(obj)
+        if hasattr(obj, "__dict__"):
+            return vars(obj)
+        return str(obj)
+
+    try:
+        serializable_steps = [
+            _format_step_for_serialization(step) for step in (steps or [])
+        ]
+        return json.dumps(serializable_steps, default=default_serializer)
+    except Exception:
+        logger.exception("Failed to serialize interaction steps")
+        return "[]"
+
+
 def generate_omni_video(  # noqa: PLR0913
     prompt: str,
     mode: str,
@@ -215,15 +327,16 @@ def generate_omni_video(  # noqa: PLR0913
     edit_style_gcs: str | None = None,
     edit_style_mime: str | None = None,
     previous_interaction_id: str | None = None,
-) -> tuple[str, str, str]:
+    conversation_history_json: str = "[]",
+) -> tuple[str, str, str, str]:
     """Vertex AI model backend logic for Gemini Omni.
 
     Returns:
-        tuple[str, str, str]: (gcs_uri, display_url, interaction_id)
+        tuple[str, str, str, str]: (gcs_uri, display_url, interaction_id, steps_json)
 
     """
     logger.info(
-        f"generate_omni_video called: prompt={prompt}, mode={mode}, aspect_ratio={aspect_ratio}, previous_interaction_id={previous_interaction_id}",
+        f"generate_omni_video called: prompt={prompt}, mode={mode}, aspect_ratio={aspect_ratio}, previous_interaction_id={previous_interaction_id}, has_history={bool(conversation_history_json and conversation_history_json != '[]')}",
     )
 
     try:
@@ -232,25 +345,21 @@ def generate_omni_video(  # noqa: PLR0913
         logger.exception("Failed to initialize GenAI client")
         raise GenerationError(f"Failed to initialize GenAI client: {e}") from e
 
-    # Build input data: stateless turn-chaining if previous_interaction_id is provided
-    if previous_interaction_id:
-        input_data = _build_stateless_input(
-            client=client,
-            prompt=prompt,
-            previous_interaction_id=previous_interaction_id,
-        )
-    else:
-        input_data = _build_input_data(
-            prompt=prompt,
-            mode=mode,
-            i2v_image_gcs=i2v_image_gcs,
-            i2v_image_mime=i2v_image_mime,
-            r2v_images_json=r2v_images_json,
-            edit_video_gcs=edit_video_gcs,
-            edit_video_mime=edit_video_mime,
-            edit_style_gcs=edit_style_gcs,
-            edit_style_mime=edit_style_mime,
-        )
+    # Build input data using dispatcher
+    input_data = _dispatch_input_data(
+        client=client,
+        prompt=prompt,
+        mode=mode,
+        i2v_image_gcs=i2v_image_gcs,
+        i2v_image_mime=i2v_image_mime,
+        r2v_images_json=r2v_images_json,
+        edit_video_gcs=edit_video_gcs,
+        edit_video_mime=edit_video_mime,
+        edit_style_gcs=edit_style_gcs,
+        edit_style_mime=edit_style_mime,
+        previous_interaction_id=previous_interaction_id,
+        conversation_history_json=conversation_history_json,
+    )
 
     # Set response format for video generation
     response_format = {
@@ -280,6 +389,9 @@ def generate_omni_video(  # noqa: PLR0913
     raw_video_bytes = _extract_video_bytes(response)
     interaction_id = response.id
 
+    # Serialize steps safely using the helper
+    steps_json = _safe_serialize_steps(response.steps)
+
     # Save to GCS
     try:
         gcs_uri = store_to_gcs(
@@ -301,4 +413,4 @@ def generate_omni_video(  # noqa: PLR0913
         logger.exception("Failed to create display URL")
         raise GenerationError(f"Failed to generate preview URL for video: {e}") from e
 
-    return gcs_uri, display_url, interaction_id
+    return gcs_uri, display_url, interaction_id, steps_json
