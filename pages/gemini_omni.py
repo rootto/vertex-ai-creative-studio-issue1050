@@ -18,6 +18,7 @@ from collections.abc import Generator
 
 import mesop as me
 
+from common.metadata import MediaItem, add_media_item_to_firestore
 from common.storage import store_to_gcs
 from common.utils import create_display_url
 from components.dialog import dialog, dialog_actions
@@ -26,6 +27,7 @@ from components.gemini_omni.settings_panel import settings_panel
 from components.header import header
 from components.library.events import LibrarySelectionChangeEvent
 from components.page_scaffold import page_frame, page_scaffold
+from config.default import Default
 from models.gemini_omni import generate_omni_video
 from state.gemini_omni_state import PageState
 from state.state import AppState
@@ -302,6 +304,11 @@ def on_mode_change(e: me.SelectSelectionChangeEvent) -> None:
     """Update the generation mode and resets corresponding mode assets."""
     state = me.state(PageState)
     state.generation_mode = e.value
+    # Reset chat refinement state
+    state.last_interaction_id = ""
+    state.conversation_history_json = "[]"
+    state.refinement_prompt = ""
+    state.last_media_item_id = ""
 
 
 def on_model_change(e: me.SelectSelectionChangeEvent) -> None:
@@ -517,6 +524,42 @@ def on_generate_click(_e: me.ClickEvent) -> Generator[None]:
         state.generated_video_url = display_url
         state.last_interaction_id = interaction_id
         state.conversation_history_json = steps_json
+
+        # Save to Firestore Asset Library
+        try:
+            cfg = Default()
+
+            media_item = MediaItem(
+                prompt=state.prompt,
+                original_prompt=state.prompt,
+                model=cfg.GEMINI_OMNI_MODEL_ID,
+                mime_type="video/mp4",
+                mode=f"omni-{state.generation_mode}",
+                gcsuri=gcs_uri,
+                aspect=state.aspect_ratio,
+                comment="Gemini Omni Generation",
+            )
+            # Add generation-specific references
+            if state.generation_mode == "i2v" and state.i2v_image_gcs:
+                media_item.reference_image = state.i2v_image_gcs
+            elif state.generation_mode == "r2v" and state.r2v_images_json:
+                try:
+                    refs = json.loads(state.r2v_images_json)
+                    media_item.r2v_reference_images = [
+                        ref["gcs_uri"] for ref in refs if ref.get("gcs_uri")
+                    ]
+                except Exception:  # noqa: BLE001, S110
+                    pass
+            elif state.generation_mode == "editing":
+                if state.edit_video_gcs:
+                    media_item.source_uris = [state.edit_video_gcs]
+                if state.edit_style_image_gcs:
+                    media_item.reference_image = state.edit_style_image_gcs
+
+            add_media_item_to_firestore(media_item)
+            state.last_media_item_id = media_item.id
+        except Exception as fs_err:  # noqa: BLE001
+            print(f"Failed to log MediaItem to Firestore: {fs_err}")
     except Exception as ex:  # noqa: BLE001
         state.error_message = str(ex)
         state.show_error_dialog = True
@@ -565,6 +608,43 @@ def on_send_refinement(_e: me.ClickEvent) -> Generator[None]:
         state.generated_video_url = display_url
         state.last_interaction_id = interaction_id
         state.conversation_history_json = steps_json
+
+        # Save to Firestore Asset Library
+        try:
+            cfg = Default()
+
+            media_item = MediaItem(
+                prompt=refinement_to_send,
+                original_prompt=state.prompt,
+                model=cfg.GEMINI_OMNI_MODEL_ID,
+                mime_type="video/mp4",
+                mode=f"omni-{state.generation_mode}",
+                gcsuri=gcs_uri,
+                aspect=state.aspect_ratio,
+                related_media_item_id=state.last_media_item_id or None,
+                comment="Gemini Omni Refinement",
+            )
+            # Carry over generation-specific references
+            if state.generation_mode == "i2v" and state.i2v_image_gcs:
+                media_item.reference_image = state.i2v_image_gcs
+            elif state.generation_mode == "r2v" and state.r2v_images_json:
+                try:
+                    refs = json.loads(state.r2v_images_json)
+                    media_item.r2v_reference_images = [
+                        ref["gcs_uri"] for ref in refs if ref.get("gcs_uri")
+                    ]
+                except Exception:  # noqa: BLE001, S110
+                    pass
+            elif state.generation_mode == "editing":
+                if state.edit_video_gcs:
+                    media_item.source_uris = [state.edit_video_gcs]
+                if state.edit_style_image_gcs:
+                    media_item.reference_image = state.edit_style_image_gcs
+
+            add_media_item_to_firestore(media_item)
+            state.last_media_item_id = media_item.id
+        except Exception as fs_err:  # noqa: BLE001
+            print(f"Failed to log MediaItem refinement to Firestore: {fs_err}")
     except Exception as ex:  # noqa: BLE001
         state.error_message = str(ex)
         state.show_error_dialog = True
@@ -580,3 +660,5 @@ def on_reset_chat(_e: me.ClickEvent) -> None:
     state.generated_video_gcs = ""
     state.last_interaction_id = ""
     state.refinement_prompt = ""
+    state.conversation_history_json = "[]"
+    state.last_media_item_id = ""

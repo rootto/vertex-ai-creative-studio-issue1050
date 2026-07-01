@@ -37,6 +37,7 @@ class PageState:
     last_interaction_id: str = ""
     refinement_prompt: str = ""
     conversation_history_json: str = "[]"
+    last_media_item_id: str = ""
 
     # Outputs
     generated_video_url: str = ""  # Base64 data URL or HTTP display URL

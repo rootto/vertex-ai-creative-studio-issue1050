@@ -141,9 +141,13 @@ def test_generate_omni_video_i2v(
     # Check parts
     input_data = called_kwargs["input"]
     assert isinstance(input_data, list)
-    assert input_data[0] == "Make it move"
-    assert input_data[1].file_data.file_uri == "gs://bucket/start.png"
-    assert input_data[1].file_data.mime_type == "image/png"
+    assert len(input_data) == 2
+    assert input_data[0] == {
+        "type": "image",
+        "uri": "gs://bucket/start.png",
+        "mime_type": "image/png",
+    }
+    assert input_data[1] == {"type": "text", "text": "Make it move"}
 
 
 def test_generate_omni_video_editing_with_ref(
@@ -174,9 +178,17 @@ def test_generate_omni_video_editing_with_ref(
     _, called_kwargs = mock_genai_client.interactions.create.call_args
     input_data = called_kwargs["input"]
     assert len(input_data) == 3
-    assert input_data[0] == "Make it cartoon style"
-    assert input_data[1].file_data.file_uri == "gs://bucket/base.mp4"
-    assert input_data[2].file_data.file_uri == "gs://bucket/style.png"
+    assert input_data[0] == {
+        "type": "video",
+        "uri": "gs://bucket/base.mp4",
+        "mime_type": "video/mp4",
+    }
+    assert input_data[1] == {
+        "type": "image",
+        "uri": "gs://bucket/style.png",
+        "mime_type": "image/png",
+    }
+    assert input_data[2] == {"type": "text", "text": "Make it cartoon style"}
 
 
 def test_generate_omni_video_missing_i2v_image(mock_genai_client):
@@ -232,9 +244,8 @@ def test_generate_omni_video_stateless_turn_2(
 
     input_data = called_kwargs["input"]
     assert len(input_data) == 2
-    # First item is mock_step from mock_interaction_1
-    assert input_data[0] == mock_interaction_1.steps[0]
-    # Second item is the new user input dict
+    assert input_data[0]["type"] == "model_output"
+    assert input_data[0]["content"][0]["type"] == "video"
     assert input_data[1]["type"] == "user_input"
     assert (
         input_data[1]["content"][0]["text"] == "Make the same video in a doodle style."
@@ -300,7 +311,7 @@ def test_generate_omni_video_stateless_history_json(
                 "type": "model_output",
                 "content": [{"type": "video", "data": "fake_video_1"}],
             },
-        ]
+        ],
     )
 
     # Act

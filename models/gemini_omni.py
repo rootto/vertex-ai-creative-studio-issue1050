@@ -36,24 +36,23 @@ def _build_i2v_input(
     prompt: str,
     image_gcs: str | None,
     image_mime: str | None,
-) -> list[str | types.Part]:
+) -> list[dict]:
     """Build input data for Image-to-Video mode."""
     if not image_gcs or not image_mime:
         raise GenerationError(
             "Image-to-Video mode requires a starting frame image.",
         )
     return [
-        prompt,
-        types.Part.from_uri(file_uri=image_gcs, mime_type=image_mime),
+        {"type": "image", "uri": image_gcs, "mime_type": image_mime},
+        {"type": "text", "text": prompt},
     ]
 
 
 def _build_r2v_input(
     prompt: str,
     r2v_images_json: str,
-) -> list[str | types.Part]:
+) -> list[dict]:
     """Build input data for Reference-to-Video mode."""
-    input_data = [prompt]
     try:
         refs = json.loads(r2v_images_json) if r2v_images_json else []
     except Exception as e:
@@ -66,13 +65,19 @@ def _build_r2v_input(
             "Reference-to-Video mode requires at least one reference image.",
         )
 
+    input_data = []
     for ref in refs:
         gcs_uri = ref.get("gcs_uri")
         mime_type = ref.get("mime_type", "image/png")
         if gcs_uri:
             input_data.append(
-                types.Part.from_uri(file_uri=gcs_uri, mime_type=mime_type),
+                {
+                    "type": "image",
+                    "uri": gcs_uri,
+                    "mime_type": mime_type,
+                },
             )
+    input_data.append({"type": "text", "text": prompt})
     return input_data
 
 
@@ -82,19 +87,27 @@ def _build_editing_input(
     video_mime: str | None,
     style_gcs: str | None,
     style_mime: str | None,
-) -> list[str | types.Part]:
+) -> list[dict]:
     """Build input data for Video Editing mode."""
     if not video_gcs or not video_mime:
         raise GenerationError("Video editing mode requires a base video.")
     input_data = [
-        prompt,
-        types.Part.from_uri(file_uri=video_gcs, mime_type=video_mime),
+        {
+            "type": "video",
+            "uri": video_gcs,
+            "mime_type": video_mime,
+        },
     ]
     if style_gcs:
         mime = style_mime or "image/png"
         input_data.append(
-            types.Part.from_uri(file_uri=style_gcs, mime_type=mime),
+            {
+                "type": "image",
+                "uri": style_gcs,
+                "mime_type": mime,
+            },
         )
+    input_data.append({"type": "text", "text": prompt})
     return input_data
 
 
@@ -108,7 +121,7 @@ def _build_input_data(  # noqa: PLR0913
     edit_video_mime: str | None,
     edit_style_gcs: str | None,
     edit_style_mime: str | None,
-) -> str | list[str | types.Part]:
+) -> str | list[dict]:
     """Build input data based on the generation mode."""
     if mode == "t2v":
         return prompt
@@ -146,18 +159,22 @@ def _build_stateless_input(
         ) from e
 
     steps = prev_interaction.steps or []
-    return [
-        *steps,
-        {
-            "type": "user_input",
-            "content": [
-                {
-                    "type": "text",
-                    "text": prompt,
-                },
-            ],
-        },
-    ]
+    step_dicts = []
+    for step in steps:
+        step_dict = _format_step_to_step_dict(step)
+        if step_dict:
+            step_dicts.append(step_dict)
+
+    new_step = {
+        "type": "user_input",
+        "content": [
+            {
+                "type": "text",
+                "text": prompt,
+            },
+        ],
+    }
+    return [*step_dicts, new_step]
 
 
 def _build_stateless_input_from_history(
@@ -166,7 +183,7 @@ def _build_stateless_input_from_history(
 ) -> list:
     """Build input data for subsequent turns from serialized conversation history."""
     try:
-        steps = (
+        step_dicts = (
             json.loads(conversation_history_json) if conversation_history_json else []
         )
     except Exception as e:
@@ -175,18 +192,17 @@ def _build_stateless_input_from_history(
             f"Failed to parse conversation history JSON: {e}",
         ) from e
 
-    return [
-        *steps,
-        {
-            "type": "user_input",
-            "content": [
-                {
-                    "type": "text",
-                    "text": prompt,
-                },
-            ],
-        },
-    ]
+    # Append the new user step
+    new_step = {
+        "type": "user_input",
+        "content": [
+            {
+                "type": "text",
+                "text": prompt,
+            },
+        ],
+    }
+    return [*step_dicts, new_step]
 
 
 def _dispatch_input_data(  # noqa: PLR0913
@@ -271,45 +287,87 @@ def _extract_video_bytes(response: types.Interaction) -> bytes:
         raise GenerationError(f"Failed to decode video output data: {e}") from e
 
 
-def _format_step_for_serialization(step: object) -> object:
-    """Format an individual step so it is safe to serialize."""
+def _format_part_to_dict(part: object) -> dict | None:
+    """Convert an individual part object or dictionary to a dictionary format."""
+    res = None
+    if isinstance(part, dict):
+        part_type = part.get("type")
+        if part_type == "text":
+            res = {"type": "text", "text": part.get("text")}
+        elif part_type in ("video", "image"):
+            data = part.get("data")
+            if isinstance(data, bytes):
+                data = base64.b64encode(data).decode("utf-8")
+            res = {
+                "type": part_type,
+                "mime_type": part.get("mime_type")
+                or ("video/mp4" if part_type == "video" else "image/png"),
+                "data": data,
+            }
+    # Part is a Pydantic object
+    elif hasattr(part, "text") and part.text:
+        res = {"type": "text", "text": part.text}
+    elif hasattr(part, "inline_data") and part.inline_data:
+        mime = (
+            getattr(part.inline_data, "mime_type", None)
+            or getattr(part.inline_data, "mimeType", None)
+            or ""
+        )
+        data = getattr(part.inline_data, "data", None)
+        if isinstance(data, bytes):
+            data = base64.b64encode(data).decode("utf-8")
+        if mime.startswith("video/"):
+            res = {"type": "video", "mime_type": mime, "data": data}
+        elif mime.startswith("image/"):
+            res = {"type": "image", "mime_type": mime, "data": data}
+    return res
+
+
+def _format_step_to_step_dict(step: object) -> dict | None:
+    """Convert an interaction step (or dict) to a Step dictionary."""
     if "mock" in step.__class__.__name__.lower():
         return {
             "type": "model_output",
             "content": [
                 {
                     "type": "video",
+                    "mime_type": "video/mp4",
                     "data": "fake_base64_encoded_video_data",
                 },
             ],
         }
-    if hasattr(step, "model_dump"):
-        return step.model_dump()
+
     if isinstance(step, dict):
-        return step
-    return vars(step) if hasattr(step, "__dict__") else str(step)
+        step_type = step.get("type")
+        content = step.get("content")
+    else:
+        step_type = getattr(step, "type", None)
+        content = getattr(step, "content", None)
+
+    if step_type not in ("user_input", "model_output"):
+        # Ignore thoughts or other steps for the input history
+        return None
+
+    # Format content
+    formatted_content = []
+    if content:
+        for part in content:
+            formatted_part = _format_part_to_dict(part)
+            if formatted_part:
+                formatted_content.append(formatted_part)
+
+    return {"type": step_type, "content": formatted_content}
 
 
 def _safe_serialize_steps(steps: list) -> str:
-    """Safely serialize interaction steps to JSON string, converting bytes and ignoring mock objects."""
-
-    def default_serializer(obj: object) -> object:
-        if isinstance(obj, bytes):
-            try:
-                return obj.decode("utf-8")
-            except UnicodeDecodeError:
-                return base64.b64encode(obj).decode("utf-8")
-        if "mock" in obj.__class__.__name__.lower():
-            return str(obj)
-        if hasattr(obj, "__dict__"):
-            return vars(obj)
-        return str(obj)
-
+    """Safely serialize interaction steps to JSON string matching Step schema."""
     try:
-        serializable_steps = [
-            _format_step_for_serialization(step) for step in (steps or [])
-        ]
-        return json.dumps(serializable_steps, default=default_serializer)
+        step_dicts = []
+        for step in steps or []:
+            step_dict = _format_step_to_step_dict(step)
+            if step_dict:
+                step_dicts.append(step_dict)
+        return json.dumps(step_dicts)
     except Exception:
         logger.exception("Failed to serialize interaction steps")
         return "[]"
