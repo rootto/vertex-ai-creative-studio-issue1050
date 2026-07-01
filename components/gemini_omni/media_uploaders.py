@@ -14,6 +14,7 @@
 """Media uploaders component for Gemini Omni."""
 
 import json
+from collections.abc import Callable
 
 import mesop as me
 
@@ -21,19 +22,23 @@ from components.image_thumbnail import image_thumbnail
 from state.gemini_omni_state import PageState
 
 
-@me.component
-def media_uploaders(
-    on_upload_i2v_image,
-    on_clear_i2v_image,
-    on_upload_r2v_image,
-    on_clear_r2v_image_idx,
-    on_upload_edit_video,
-    on_clear_edit_video,
-    on_upload_edit_style,
-    on_clear_edit_style,
+def media_uploaders(  # noqa: C901, PLR0912, PLR0913
+    on_upload_i2v_image: Callable,
+    on_clear_i2v_image: Callable,
+    on_upload_r2v_image: Callable,
+    on_clear_r2v_image_idx: Callable,
+    on_upload_edit_video: Callable,
+    on_clear_edit_video: Callable,
+    on_upload_edit_style: Callable,
+    on_clear_edit_style: Callable,
 ) -> None:
-    """Renders the media uploaders depending on the selected mode in PageState."""
+    """Render the media uploaders depending on the selected mode in PageState."""
     state = me.state(PageState)
+    print(
+        "DEBUG - media_uploaders rendering: generation_mode =",
+        state.generation_mode,
+        flush=True,
+    )
 
     if state.generation_mode == "t2v":
         # Text-to-Video doesn't need any uploaders
@@ -80,7 +85,7 @@ def media_uploaders(
             )
             try:
                 refs = json.loads(state.r2v_images_json)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 refs = []
 
             with me.box(style=me.Style(display="flex", gap=10, flex_direction="row")):
@@ -93,7 +98,7 @@ def media_uploaders(
                         height=150,
                     )
 
-                if len(refs) < 3:
+                if len(refs) < 3:  # noqa: PLR2004
                     _placeholder_uploader(
                         label="Add Reference Image",
                         on_upload=on_upload_r2v_image,
@@ -158,14 +163,13 @@ def media_uploaders(
                         )
 
 
-@me.component
 def _placeholder_uploader(
     label: str,
-    on_upload,
+    on_upload: Callable,
     accepted_types: list[str],
     key: str,
 ) -> None:
-    """Renders a dashed placeholder card wrapping a file uploader."""
+    """Render a dashed placeholder card wrapping a file uploader."""
     with me.box(
         style=me.Style(
             height=150,

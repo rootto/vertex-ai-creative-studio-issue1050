@@ -52,6 +52,7 @@ def gemini_omni_page() -> None:
     """Render the Gemini Omni page."""
     me.state(AppState)
     state = me.state(PageState)
+    print("DEBUG - Rendering gemini_omni_page: generation_mode =", state.generation_mode, flush=True)
 
     # 1. Error dialog
     if state.show_error_dialog:
