@@ -174,7 +174,7 @@ def gemini_omni_page() -> None:  # noqa: PLR0915
                             )
                         if guidelines:
                             me.select(
-                                label="Select Brand Guidelines to Inject",
+                                label="Add Brand Guidelines",
                                 options=[
                                     me.SelectOption(label="None", value=""),
                                 ]
@@ -197,7 +197,7 @@ def gemini_omni_page() -> None:  # noqa: PLR0915
                         style=me.Style(
                             border_radius=16,
                             padding=me.Padding.all(8),
-                            background=me.theme_var("surface-container-high"),
+                            background=me.theme_var("secondary-container"),
                             display="flex",
                             width="100%",
                         ),
@@ -205,13 +205,13 @@ def gemini_omni_page() -> None:  # noqa: PLR0915
                         with me.box(style=me.Style(flex_grow=1)):
                             me.native_textarea(
                                 autosize=True,
-                                min_rows=6,
-                                max_rows=10,
-                                placeholder="Video generation instructions...",
+                                min_rows=10,
+                                max_rows=13,
+                                placeholder="video creation instructions",
                                 style=me.Style(
                                     padding=me.Padding(top=16, left=16),
                                     background=me.theme_var(
-                                        "surface-container-high",
+                                        "secondary-container",
                                     ),
                                     outline="none",
                                     width="100%",
@@ -219,7 +219,7 @@ def gemini_omni_page() -> None:  # noqa: PLR0915
                                     border=me.Border.all(
                                         me.BorderSide(style="none"),
                                     ),
-                                    color=me.theme_var("on-surface"),
+                                    color=me.theme_var("foreground"),
                                     flex_grow=1,
                                     font_family="Roboto, sans-serif",
                                     font_size=14,
@@ -241,7 +241,6 @@ def gemini_omni_page() -> None:  # noqa: PLR0915
                                 gap=3,
                                 font_size=10,
                                 align_items="center",
-                                color=me.theme_var("on-surface-variant"),
                             )
                             with (
                                 me.content_button(

@@ -196,6 +196,16 @@ def add_media_item_to_firestore(item: MediaItem):
     If item.id is None, a new document is created with a Firestore-generated ID.
     If item.id is provided, the existing document with that ID is updated.
     """
+    if not item.user_email:
+        try:
+            import mesop as me
+
+            from state.state import AppState
+
+            item.user_email = me.state(AppState).user_email
+        except Exception:
+            pass
+
     if not db:
         logger.warning(
             "Firestore client (db) is not initialized. Cannot add media item.",
