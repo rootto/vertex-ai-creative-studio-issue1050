@@ -51,6 +51,12 @@ def on_omni_load(_e: me.LoadEvent) -> Generator[None]:
         state.i2v_image_mime_type = "image/png"
         state.generation_mode = "i2v"
         state.prompt = "Animate this image with subtle motion."
+        state.generated_video_url = ""
+        state.generated_video_gcs = ""
+        state.last_interaction_id = ""
+        state.refinement_prompt = ""
+        state.conversation_history_json = "[]"
+        state.last_media_item_id = ""
 
     from config.default import Default as cfg  # noqa: PLC0415, N813
 

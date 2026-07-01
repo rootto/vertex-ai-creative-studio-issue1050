@@ -14,13 +14,15 @@
 
 """A reusable button for navigating to the Gemini Omni page."""
 
+from collections.abc import Generator
+
 import mesop as me
 
 from common.analytics import log_ui_click
 from state.state import AppState
 
 
-def on_send_to_omni(e: me.ClickEvent):
+def on_send_to_omni(e: me.ClickEvent) -> Generator[None]:
     """Navigates to the Gemini Omni page with the selected image as a query parameter."""
     app_state = me.state(AppState)
     log_ui_click(
@@ -41,9 +43,10 @@ def on_send_to_omni(e: me.ClickEvent):
 
 
 @me.component
-def omni_button(gcs_uri: str):
-    """A reusable button that navigates to the Gemini Omni page with the provided
-    image GCS URI.
+def omni_button(gcs_uri: str) -> None:
+    """Render a button that navigates to the Gemini Omni page.
+
+    The page is loaded with the provided image GCS URI.
 
     Args:
         gcs_uri: The Google Cloud Storage URI of the image to send to Omni.
@@ -65,4 +68,4 @@ def omni_button(gcs_uri: str):
         ),
     ):
         me.icon("movie_filter")
-        me.text("Edit with Omni")
+        me.text("Omni")
