@@ -39,6 +39,21 @@ def on_omni_load(_e: me.LoadEvent) -> Generator[None]:
     """Initialize the page state on load."""
     state = me.state(PageState)
 
+    image_path = me.query_params.get("image_path")
+    if image_path:
+        image_uri = ""
+        if image_path.startswith("https://"):
+            from common.utils import https_url_to_gcs_uri
+
+            image_uri = https_url_to_gcs_uri(image_path)
+        else:
+            image_uri = f"gs://{image_path}"
+        state.i2v_image_gcs = image_uri
+        state.i2v_image_display_url = create_display_url(image_uri)
+        state.i2v_image_mime_type = "image/png"
+        state.generation_mode = "i2v"
+        state.prompt = "Animate this image with subtle motion."
+
     from config.default import Default as cfg  # noqa: PLC0415, N813
 
     if not getattr(cfg(), "TEAM_AND_BRANDING", True):
