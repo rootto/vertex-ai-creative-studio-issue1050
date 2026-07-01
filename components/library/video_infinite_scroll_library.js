@@ -35,11 +35,12 @@ class VideoInfiniteScrollLibrary extends LitElement {
       height: 100%;
       overflow-y: auto;
     }
-    video {
+    video, img {
       width: 100%;
       border-radius: 8px;
       object-fit: cover;
       cursor: pointer;
+      aspect-ratio: 16 / 9;
     }
     .loader {
       text-align: center;
@@ -59,7 +60,11 @@ class VideoInfiniteScrollLibrary extends LitElement {
     return html`
       <div class="container" @scroll=${this._handleScroll}>
         ${this.items.map(item => html`
-          <video muted playsinline loop src="${this._formatGcsUri(item.uri)}" @click=${() => this._handleImageClick(item.uri)}></video>
+          ${item.thumbnail ? html`
+            <img src="${this._formatGcsUri(item.thumbnail)}" @click=${() => this._handleImageClick(item.uri)}></img>
+          ` : html`
+            <video muted playsinline loop src="${this._formatGcsUri(item.uri)}" @click=${() => this._handleImageClick(item.uri)}></video>
+          `}
         `)}
         ${this.hasMoreItems ? html`<div class="loader">Loading...</div>` : ''}
       </div>

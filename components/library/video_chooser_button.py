@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Callable
+"""A button component to choose a video from the library."""
+
+from collections.abc import Callable, Generator
 from dataclasses import field
 
 import mesop as me
@@ -42,11 +44,11 @@ def video_chooser_button(
     button_label: str | None = None,
     button_type: str = "stroked",
     key: str = "",
-):
+) -> None:
     """Render a button that opens a dialog to select a video from the library with infinite scroll."""
     state = me.state(State)
 
-    def open_dialog(e: me.ClickEvent):
+    def open_dialog(e: me.ClickEvent) -> Generator[None]:
         """Open the dialog and load the first page of videos."""
         state.active_chooser_key = e.key
         state.show_dialog = True
@@ -63,7 +65,7 @@ def video_chooser_button(
             state.has_more_items = False
         yield
 
-    def handle_load_more(e: me.WebEvent):
+    def handle_load_more(_e: me.WebEvent) -> Generator[None]:
         """Load the next page of videos when the user scrolls to the bottom."""
         if state.is_loading or not state.has_more_items or not state.media_items:
             return
@@ -89,7 +91,7 @@ def video_chooser_button(
         state.is_loading = False
         yield
 
-    def handle_image_selected(e: me.WebEvent):
+    def handle_image_selected(e: me.WebEvent) -> Generator[None]:
         """Handle the image selection from the web component."""
         event = LibrarySelectionChangeEvent(
             chooser_id=state.active_chooser_key,
@@ -121,49 +123,59 @@ def video_chooser_button(
         flex_direction="column",
     )
 
-    with dialog(is_open=state.show_dialog, dialog_style=dialog_style):  # pylint: disable=E1129:not-context-manager
+    with (
+        dialog(is_open=state.show_dialog, dialog_style=dialog_style),  # pylint: disable=E1129:not-context-manager
+        me.box(
+            style=me.Style(
+                display="flex",
+                flex_direction="column",
+                gap=16,
+                flex_grow=1,
+            ),
+        ),
+    ):
+        me.text("Select a Video from Library", type="headline-6")
+        with me.box(style=me.Style(flex_grow=1, overflow_y="auto")):
+            if state.is_loading and not state.media_items:
+                with me.box(
+                    style=me.Style(
+                        display="flex",
+                        justify_content="center",
+                        align_items="center",
+                        height="100%",
+                    ),
+                ):
+                    me.progress_spinner()
+            else:
+                items_to_render = []
+                for item in state.media_items:
+                    thumbnail = item.thumbnail_uri or ""
+                    if item.gcs_uris:
+                        items_to_render.extend(
+                            {"uri": uri, "thumbnail": thumbnail}
+                            for uri in item.gcs_uris
+                        )
+                    elif item.gcsuri:
+                        items_to_render.append(
+                            {"uri": item.gcsuri, "thumbnail": thumbnail},
+                        )
+
+                video_infinite_scroll_library(
+                    key=f"infinite_scroll_{state.active_chooser_key}",
+                    items=items_to_render,
+                    has_more_items=state.has_more_items,
+                    on_load_more=handle_load_more,
+                    on_image_selected=handle_image_selected,
+                )
         with me.box(
             style=me.Style(
-                display="flex", flex_direction="column", gap=16, flex_grow=1,
+                display="flex",
+                justify_content="flex-end",
+                margin=me.Margin(top=24),
             ),
         ):
-            me.text("Select a Video from Library", type="headline-6")
-            with me.box(style=me.Style(flex_grow=1, overflow_y="auto")):
-                if state.is_loading and not state.media_items:
-                    with me.box(
-                        style=me.Style(
-                            display="flex",
-                            justify_content="center",
-                            align_items="center",
-                            height="100%",
-                        ),
-                    ):
-                        me.progress_spinner()
-                else:
-                    items_to_render = []
-                    for item in state.media_items:
-                        if item.gcs_uris:
-                            for uri in item.gcs_uris:
-                                items_to_render.append({"uri": uri})
-                        elif item.gcsuri:
-                            items_to_render.append({"uri": item.gcsuri})
-
-                    video_infinite_scroll_library(
-                        key=f"infinite_scroll_{state.active_chooser_key}",
-                        items=items_to_render,
-                        has_more_items=state.has_more_items,
-                        on_load_more=handle_load_more,
-                        on_image_selected=handle_image_selected,
-                    )
-            with me.box(
-                style=me.Style(
-                    display="flex",
-                    justify_content="flex-end",
-                    margin=me.Margin(top=24),
-                ),
-            ):
-                me.button(
-                    "Cancel",
-                    on_click=lambda e: setattr(state, "show_dialog", False),
-                    type="stroked",
-                )
+            me.button(
+                "Cancel",
+                on_click=lambda _: setattr(state, "show_dialog", False),
+                type="stroked",
+            )

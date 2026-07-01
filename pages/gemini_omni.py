@@ -14,12 +14,14 @@
 """Gemini Omni page."""
 
 import json
+import threading
 from collections.abc import Generator
 
 import mesop as me
 
 from common.metadata import MediaItem, add_media_item_to_firestore
 from common.storage import store_to_gcs
+from common.tasks import enqueue_thumbnail_task
 from common.utils import create_display_url, https_url_to_gcs_uri
 from components.dialog import dialog, dialog_actions
 from components.gemini_omni.media_uploaders import media_uploaders
@@ -31,6 +33,7 @@ from config.default import Default
 from config.rewriters import VIDEO_REWRITER
 from models.gemini import rewriter
 from models.gemini_omni import generate_omni_video
+from services.veo_service import run_thumbnail_job
 from state.gemini_omni_state import PageState
 from state.state import AppState
 
@@ -441,6 +444,22 @@ def gemini_omni_page() -> None:  # noqa: PLR0915
                 )
 
 
+
+def _trigger_thumbnail_generation(job_id: str, gcs_uri: str) -> None:
+    """Triggers thumbnail extraction in the background."""
+    try:
+        enqueued = enqueue_thumbnail_task(job_id, gcs_uri)
+        if not enqueued:
+            print(f"Falling back to background thread for thumbnail job {job_id}")
+            threading.Thread(
+                target=run_thumbnail_job,
+                args=(job_id, gcs_uri),
+                daemon=True,
+            ).start()
+    except Exception as ex:  # noqa: BLE001
+        print(f"Failed to trigger thumbnail generation for {job_id}: {ex}")
+
+
 # --- Event Handlers ---
 
 
@@ -759,6 +778,7 @@ def on_generate_click(_e: me.ClickEvent) -> Generator[None]:  # noqa: C901, PLR0
 
             add_media_item_to_firestore(media_item)
             state.last_media_item_id = media_item.id
+            _trigger_thumbnail_generation(media_item.id, gcs_uri)
         except Exception as fs_err:  # noqa: BLE001
             print(f"Failed to log MediaItem to Firestore: {fs_err}")
     except Exception as ex:  # noqa: BLE001
@@ -847,6 +867,7 @@ def on_send_refinement(_e: me.ClickEvent) -> Generator[None]:
 
             add_media_item_to_firestore(media_item)
             state.last_media_item_id = media_item.id
+            _trigger_thumbnail_generation(media_item.id, gcs_uri)
         except Exception as fs_err:  # noqa: BLE001
             print(f"Failed to log MediaItem refinement to Firestore: {fs_err}")
     except Exception as ex:  # noqa: BLE001

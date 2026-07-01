@@ -18,13 +18,12 @@ import mesop as me
 from common.metadata import MediaItem
 from common.utils import gcs_uri_to_https_url
 from components.pill import pill
-
-from ..video_thumbnail.video_thumbnail import video_thumbnail
+from components.video_thumbnail.video_thumbnail import video_thumbnail
 
 
 @me.component
-def video_grid_item(item: MediaItem):
-    """Renders a grid item for a video media type."""
+def video_grid_item(item: MediaItem) -> None:
+    """Render a grid item for a video media type."""
     item_duration_str = f"{item.duration} sec" if item.duration is not None else "N/A"
     gcs_uri = (
         item.gcsuri if item.gcsuri else (item.gcs_uris[0] if item.gcs_uris else None)
@@ -81,6 +80,7 @@ def video_grid_item(item: MediaItem):
             # Use the new, robust video_thumbnail component
             video_thumbnail(
                 video_src=item_url,
+                thumbnail_src=gcs_uri_to_https_url(item.thumbnail_uri) if item.thumbnail_uri else None,
                 # This component is not selectable in the grid, so on_click is not set
             )
         else:

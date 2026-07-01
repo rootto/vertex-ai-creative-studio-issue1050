@@ -3,6 +3,7 @@ import { LitElement, css, html } from 'https://cdn.jsdelivr.net/npm/lit/+esm';
 class VideoThumbnail extends LitElement {
   static properties = {
     videoSrc: { type: String },
+    thumbnailSrc: { type: String },
     selected: { type: Boolean },
     thumbnailClick: { type: String },
   };
@@ -10,6 +11,7 @@ class VideoThumbnail extends LitElement {
   constructor() {
     super();
     this.videoSrc = '';
+    this.thumbnailSrc = '';
     this.selected = false;
   }
 
@@ -62,7 +64,7 @@ class VideoThumbnail extends LitElement {
         @mouseout=${this.handleMouseOut}
         @click=${this.handleClick}
       >
-        <video .src=${this.videoSrc} muted loop playsinline></video>
+        <video .src=${this.videoSrc} poster=${this.thumbnailSrc} muted loop playsinline></video>
       </div>
     `;
   }
