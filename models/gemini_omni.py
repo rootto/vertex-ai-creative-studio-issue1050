@@ -287,27 +287,43 @@ def _extract_video_bytes(response: types.Interaction) -> bytes:
         raise GenerationError(f"Failed to decode video output data: {e}") from e
 
 
-def _format_part_to_dict(part: object) -> dict | None:
-    """Convert an individual part object or dictionary to a dictionary format."""
-    res = None
-    if isinstance(part, dict):
-        part_type = part.get("type")
-        if part_type == "text":
-            res = {"type": "text", "text": part.get("text")}
-        elif part_type in ("video", "image"):
-            data = part.get("data")
-            if isinstance(data, bytes):
-                data = base64.b64encode(data).decode("utf-8")
-            res = {
-                "type": part_type,
-                "mime_type": part.get("mime_type")
-                or ("video/mp4" if part_type == "video" else "image/png"),
-                "data": data,
-            }
-    # Part is a Pydantic object
-    elif hasattr(part, "text") and part.text:
-        res = {"type": "text", "text": part.text}
-    elif hasattr(part, "inline_data") and part.inline_data:
+def _format_dict_part_to_dict(part: dict) -> dict | None:
+    """Format dictionary-based content part."""
+    part_type = part.get("type")
+    if part_type == "text":
+        return {"type": "text", "text": part.get("text")}
+    if part_type in ("video", "image"):
+        data = part.get("data")
+        if isinstance(data, bytes):
+            data = base64.b64encode(data).decode("utf-8")
+        return {
+            "type": part_type,
+            "mime_type": part.get("mime_type")
+            or ("video/mp4" if part_type == "video" else "image/png"),
+            "data": data,
+        }
+    return None
+
+
+def _format_obj_part_to_dict(part: object) -> dict | None:
+    """Format object-based content part (Pydantic objects)."""
+    if hasattr(part, "text") and part.text:
+        return {"type": "text", "text": part.text}
+
+    if hasattr(part, "type") and getattr(part, "type", None) in ("video", "image"):
+        data = getattr(part, "data", None)
+        if isinstance(data, bytes):
+            data = base64.b64encode(data).decode("utf-8")
+        return {
+            "type": getattr(part, "type"),
+            "mime_type": getattr(part, "mime_type", None)
+            or getattr(part, "mimeType", None)
+            or ("video/mp4" if getattr(part, "type") == "video" else "image/png"),
+            "data": data,
+            "uri": getattr(part, "uri", None),
+        }
+
+    if hasattr(part, "inline_data") and part.inline_data:
         mime = (
             getattr(part.inline_data, "mime_type", None)
             or getattr(part.inline_data, "mimeType", None)
@@ -317,10 +333,18 @@ def _format_part_to_dict(part: object) -> dict | None:
         if isinstance(data, bytes):
             data = base64.b64encode(data).decode("utf-8")
         if mime.startswith("video/"):
-            res = {"type": "video", "mime_type": mime, "data": data}
-        elif mime.startswith("image/"):
-            res = {"type": "image", "mime_type": mime, "data": data}
-    return res
+            return {"type": "video", "mime_type": mime, "data": data}
+        if mime.startswith("image/"):
+            return {"type": "image", "mime_type": mime, "data": data}
+
+    return None
+
+
+def _format_part_to_dict(part: object) -> dict | None:
+    """Convert an individual part object or dictionary to a dictionary format."""
+    if isinstance(part, dict):
+        return _format_dict_part_to_dict(part)
+    return _format_obj_part_to_dict(part)
 
 
 def _format_step_to_step_dict(step: object) -> dict | None:
