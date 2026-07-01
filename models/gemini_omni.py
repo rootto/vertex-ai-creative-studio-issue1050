@@ -33,7 +33,9 @@ cfg = Default()
 
 
 def _build_i2v_input(
-    prompt: str, image_gcs: str | None, image_mime: str | None,
+    prompt: str,
+    image_gcs: str | None,
+    image_mime: str | None,
 ) -> list[str | types.Part]:
     """Build input data for Image-to-Video mode."""
     if not image_gcs or not image_mime:
@@ -47,7 +49,8 @@ def _build_i2v_input(
 
 
 def _build_r2v_input(
-    prompt: str, r2v_images_json: str,
+    prompt: str,
+    r2v_images_json: str,
 ) -> list[str | types.Part]:
     """Build input data for Reference-to-Video mode."""
     input_data = [prompt]
@@ -128,6 +131,59 @@ def _build_input_data(  # noqa: PLR0913
     raise GenerationError(f"Unsupported generation mode: {mode}")
 
 
+def _build_stateless_input(
+    client: genai.Client,
+    prompt: str,
+    previous_interaction_id: str,
+) -> list:
+    """Build input data for subsequent turns in a stateless conversation."""
+    try:
+        prev_interaction = client.interactions.get(previous_interaction_id)
+    except Exception as e:
+        logger.exception("Failed to retrieve previous interaction")
+        raise GenerationError(
+            f"Failed to retrieve previous interaction: {e}",
+        ) from e
+
+    return [
+        *prev_interaction.steps,
+        {
+            "type": "user_input",
+            "content": [
+                {
+                    "type": "text",
+                    "text": prompt,
+                },
+            ],
+        },
+    ]
+
+
+def _extract_video_bytes(response: types.Interaction) -> bytes:
+    """Extract and decode base64 video bytes from interaction response."""
+    contents = []
+    for step in response.steps:
+        if step.type == "model_output":
+            contents.extend(step.content)
+
+    if not contents or not hasattr(contents[0], "data") or not contents[0].data:
+        raise GenerationError("No video output generated from model interaction.")
+
+    raw_data = contents[0].data
+
+    try:
+        if isinstance(raw_data, str):
+            return base64.b64decode(raw_data)
+
+        try:
+            return base64.b64decode(raw_data)
+        except binascii.Error, ValueError, TypeError:
+            return raw_data
+    except Exception as e:
+        logger.exception("Failed to decode video output data")
+        raise GenerationError(f"Failed to decode video output data: {e}") from e
+
+
 def generate_omni_video(  # noqa: PLR0913
     prompt: str,
     mode: str,
@@ -157,17 +213,25 @@ def generate_omni_video(  # noqa: PLR0913
         logger.exception("Failed to initialize GenAI client")
         raise GenerationError(f"Failed to initialize GenAI client: {e}") from e
 
-    input_data = _build_input_data(
-        prompt=prompt,
-        mode=mode,
-        i2v_image_gcs=i2v_image_gcs,
-        i2v_image_mime=i2v_image_mime,
-        r2v_images_json=r2v_images_json,
-        edit_video_gcs=edit_video_gcs,
-        edit_video_mime=edit_video_mime,
-        edit_style_gcs=edit_style_gcs,
-        edit_style_mime=edit_style_mime,
-    )
+    # Build input data: stateless turn-chaining if previous_interaction_id is provided
+    if previous_interaction_id:
+        input_data = _build_stateless_input(
+            client=client,
+            prompt=prompt,
+            previous_interaction_id=previous_interaction_id,
+        )
+    else:
+        input_data = _build_input_data(
+            prompt=prompt,
+            mode=mode,
+            i2v_image_gcs=i2v_image_gcs,
+            i2v_image_mime=i2v_image_mime,
+            r2v_images_json=r2v_images_json,
+            edit_video_gcs=edit_video_gcs,
+            edit_video_mime=edit_video_mime,
+            edit_style_gcs=edit_style_gcs,
+            edit_style_mime=edit_style_mime,
+        )
 
     # Set response format for video generation
     response_format = {
@@ -185,7 +249,6 @@ def generate_omni_video(  # noqa: PLR0913
         response = client.interactions.create(
             model=model_name,
             input=input_data,
-            previous_interaction_id=previous_interaction_id,
             response_format=response_format,
         )
     except Exception as e:
@@ -194,31 +257,9 @@ def generate_omni_video(  # noqa: PLR0913
             f"Error generating video from Gemini Omni API: {e}",
         ) from e
 
-    # Extract output video
-    if (
-        not hasattr(response, "output_video")
-        or not response.output_video
-        or not response.output_video.data
-    ):
-        raise GenerationError("No video output generated from model interaction.")
-
+    # Extract output video bytes
+    raw_video_bytes = _extract_video_bytes(response)
     interaction_id = response.id
-    raw_data = response.output_video.data
-
-    try:
-        # Base64 decode raw data if it is base64 encoded
-        if isinstance(raw_data, str):
-            raw_video_bytes = base64.b64decode(raw_data)
-        else:
-            # If it's already bytes, it might be base64-encoded bytes or raw video bytes.
-            # Try to decode first. If it raises an exception, fallback.
-            try:
-                raw_video_bytes = base64.b64decode(raw_data)
-            except (binascii.Error, ValueError, TypeError):
-                raw_video_bytes = raw_data
-    except Exception as e:
-        logger.exception("Failed to decode video output data")
-        raise GenerationError(f"Failed to decode video output data: {e}") from e
 
     # Save to GCS
     try:

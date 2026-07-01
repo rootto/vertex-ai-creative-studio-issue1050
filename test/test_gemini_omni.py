@@ -54,6 +54,21 @@ def mock_create_display_url():
         yield mock_url
 
 
+def _create_mock_interaction(interaction_id: str, video_data: bytes) -> MagicMock:
+    """Create a mocked interaction with the correct steps structure."""
+    mock_part = MagicMock()
+    mock_part.data = video_data
+
+    mock_step = MagicMock()
+    mock_step.type = "model_output"
+    mock_step.content = [mock_part]
+
+    mock_interaction = MagicMock()
+    mock_interaction.id = interaction_id
+    mock_interaction.steps = [mock_step]
+    return mock_interaction
+
+
 def test_generate_omni_video_t2v(
     mock_genai_client,
     mock_store_to_gcs,
@@ -61,9 +76,10 @@ def test_generate_omni_video_t2v(
 ):
     """Test text-to-video generation."""
     # Arrange
-    mock_interaction = MagicMock()
-    mock_interaction.id = "turn1_id"
-    mock_interaction.output_video.data = b"fake_base64_encoded_video_data"
+    mock_interaction = _create_mock_interaction(
+        interaction_id="turn1_id",
+        video_data=b"fake_base64_encoded_video_data",
+    )
     mock_genai_client.interactions.create.return_value = mock_interaction
 
     # Act
@@ -82,7 +98,6 @@ def test_generate_omni_video_t2v(
     mock_genai_client.interactions.create.assert_called_once_with(
         model="gemini-omni-flash-preview",
         input="A cute cat playing",
-        previous_interaction_id=None,
         response_format={"type": "video", "aspect_ratio": "16:9"},
     )
     mock_store_to_gcs.assert_called_once()
@@ -98,9 +113,10 @@ def test_generate_omni_video_i2v(
 ):
     """Test image-to-video generation."""
     # Arrange
-    mock_interaction = MagicMock()
-    mock_interaction.id = "turn1_id_i2v"
-    mock_interaction.output_video.data = b"fake_video"
+    mock_interaction = _create_mock_interaction(
+        interaction_id="turn1_id_i2v",
+        video_data=b"fake_video",
+    )
     mock_genai_client.interactions.create.return_value = mock_interaction
 
     # Act
@@ -115,7 +131,6 @@ def test_generate_omni_video_i2v(
     # Assert
     _, called_kwargs = mock_genai_client.interactions.create.call_args
     assert called_kwargs["model"] == "gemini-omni-flash-preview"
-    assert called_kwargs["previous_interaction_id"] is None
     assert called_kwargs["response_format"] == {
         "type": "video",
         "aspect_ratio": "9:16",
@@ -136,9 +151,10 @@ def test_generate_omni_video_editing_with_ref(
 ):
     """Test video editing with optional style/reference image."""
     # Arrange
-    mock_interaction = MagicMock()
-    mock_interaction.id = "turn1_id_edit"
-    mock_interaction.output_video.data = b"fake_video"
+    mock_interaction = _create_mock_interaction(
+        interaction_id="turn1_id_edit",
+        video_data=b"fake_video",
+    )
     mock_genai_client.interactions.create.return_value = mock_interaction
 
     # Act
@@ -171,4 +187,53 @@ def test_generate_omni_video_missing_i2v_image(mock_genai_client):
         )
     assert "Image-to-Video mode requires a starting frame image" in str(
         exc_info.value,
+    )
+
+
+def test_generate_omni_video_stateless_turn_2(
+    mock_genai_client,
+    mock_store_to_gcs,
+    mock_create_display_url,
+):
+    """Test Turn 2 generation using stateless turn-chaining."""
+    # Arrange
+    # 1. Mock first interaction
+    mock_interaction_1 = _create_mock_interaction(
+        interaction_id="turn1_id",
+        video_data=b"fake_video_1",
+    )
+    mock_genai_client.interactions.get.return_value = mock_interaction_1
+
+    # 2. Mock second interaction returned from interactions.create
+    mock_interaction_2 = _create_mock_interaction(
+        interaction_id="turn2_id",
+        video_data=b"fake_video_2",
+    )
+    mock_genai_client.interactions.create.return_value = mock_interaction_2
+
+    # Act
+    generate_omni_video(
+        prompt="Make the same video in a doodle style.",
+        mode="t2v",
+        aspect_ratio="16:9",
+        previous_interaction_id="turn1_id",
+    )
+
+    # Assert
+    # Verify interactions.get was called to retrieve the previous interaction
+    mock_genai_client.interactions.get.assert_called_once_with("turn1_id")
+
+    # Verify interactions.create was called with the combined steps + new prompt
+    _, called_kwargs = mock_genai_client.interactions.create.call_args
+    assert called_kwargs["model"] == "gemini-omni-flash-preview"
+    assert called_kwargs["response_format"] == {"type": "video", "aspect_ratio": "16:9"}
+
+    input_data = called_kwargs["input"]
+    assert len(input_data) == 2
+    # First item is mock_step from mock_interaction_1
+    assert input_data[0] == mock_interaction_1.steps[0]
+    # Second item is the new user input dict
+    assert input_data[1]["type"] == "user_input"
+    assert (
+        input_data[1]["content"][0]["text"] == "Make the same video in a doodle style."
     )
