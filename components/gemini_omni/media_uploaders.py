@@ -19,6 +19,7 @@ from collections.abc import Callable
 import mesop as me
 
 from components.image_thumbnail import image_thumbnail
+from components.library.library_chooser_button import library_chooser_button
 from state.gemini_omni_state import PageState
 
 
@@ -31,6 +32,7 @@ def media_uploaders(  # noqa: C901, PLR0912, PLR0913
     on_clear_edit_video: Callable,
     on_upload_edit_style: Callable,
     on_clear_edit_style: Callable,
+    on_library_select: Callable,
 ) -> None:
     """Render the media uploaders depending on the selected mode in PageState."""
     state = me.state(PageState)
@@ -77,6 +79,12 @@ def media_uploaders(  # noqa: C901, PLR0912, PLR0913
                         accepted_types=["image/jpeg", "image/png", "image/webp"],
                         key=f"i2v_img_{state.i2v_image_file_key}",
                     )
+                    library_chooser_button(
+                        on_library_select=on_library_select,
+                        button_label="Choose\nfrom Library",
+                        media_type=["images"],
+                        key="i2v_lib",
+                    )
 
         elif state.generation_mode == "r2v":
             me.text(
@@ -105,6 +113,12 @@ def media_uploaders(  # noqa: C901, PLR0912, PLR0913
                         accepted_types=["image/jpeg", "image/png", "image/webp"],
                         key=f"r2v_img_{state.r2v_upload_key}",
                     )
+                    library_chooser_button(
+                        on_library_select=on_library_select,
+                        button_label="Choose\nfrom Library",
+                        media_type=["images"],
+                        key="r2v_lib",
+                    )
 
         elif state.generation_mode == "editing":
             # Section 1: Optional style reference
@@ -130,6 +144,12 @@ def media_uploaders(  # noqa: C901, PLR0912, PLR0913
                             on_upload=on_upload_edit_style,
                             accepted_types=["image/jpeg", "image/png", "image/webp"],
                             key=f"edit_style_{state.edit_style_image_file_key}",
+                        )
+                        library_chooser_button(
+                            on_library_select=on_library_select,
+                            button_label="Choose\nfrom Library",
+                            media_type=["images"],
+                            key="edit_style_lib",
                         )
 
             # Section 2: Base video reference
@@ -160,6 +180,12 @@ def media_uploaders(  # noqa: C901, PLR0912, PLR0913
                                 "video/webm",
                             ],
                             key=f"edit_vid_{state.edit_video_file_key}",
+                        )
+                        library_chooser_button(
+                            on_library_select=on_library_select,
+                            button_label="Choose\nfrom Library",
+                            media_type=["videos"],
+                            key="edit_vid_lib",
                         )
 
 

@@ -24,6 +24,7 @@ from components.dialog import dialog, dialog_actions
 from components.gemini_omni.media_uploaders import media_uploaders
 from components.gemini_omni.settings_panel import settings_panel
 from components.header import header
+from components.library.events import LibrarySelectionChangeEvent
 from components.page_scaffold import page_frame, page_scaffold
 from models.gemini_omni import generate_omni_video
 from state.gemini_omni_state import PageState
@@ -52,7 +53,11 @@ def gemini_omni_page() -> None:
     """Render the Gemini Omni page."""
     me.state(AppState)
     state = me.state(PageState)
-    print("DEBUG - Rendering gemini_omni_page: generation_mode =", state.generation_mode, flush=True)
+    print(
+        "DEBUG - Rendering gemini_omni_page: generation_mode =",
+        state.generation_mode,
+        flush=True,
+    )
 
     # 1. Error dialog
     if state.show_error_dialog:
@@ -141,6 +146,7 @@ def gemini_omni_page() -> None:
                     on_clear_edit_video=on_clear_edit_video,
                     on_upload_edit_style=on_upload_edit_style,
                     on_clear_edit_style=on_clear_edit_style,
+                    on_library_select=on_library_select,
                 )
 
                 # Preview Box
@@ -314,6 +320,42 @@ def on_close_error_dialog(_e: me.ClickEvent) -> None:
     """Close the error dialog."""
     state = me.state(PageState)
     state.show_error_dialog = False
+
+
+def on_library_select(e: LibrarySelectionChangeEvent) -> Generator[None]:
+    """Handle media selection from library chooser dialog."""
+    state = me.state(PageState)
+    try:
+        gcs_path = e.gcs_uri
+        display_url = create_display_url(gcs_path)
+
+        if e.chooser_id == "i2v_lib":
+            state.i2v_image_gcs = gcs_path
+            state.i2v_image_display_url = display_url
+            state.i2v_image_mime_type = "image/png"
+        elif e.chooser_id == "r2v_lib":
+            refs = json.loads(state.r2v_images_json) if state.r2v_images_json else []
+            refs.append(
+                {
+                    "gcs_uri": gcs_path,
+                    "display_url": display_url,
+                    "mime_type": "image/png",
+                },
+            )
+            state.r2v_images_json = json.dumps(refs)
+            state.r2v_upload_key += 1
+        elif e.chooser_id == "edit_style_lib":
+            state.edit_style_image_gcs = gcs_path
+            state.edit_style_image_display_url = display_url
+            state.edit_style_image_mime_type = "image/png"
+        elif e.chooser_id == "edit_vid_lib":
+            state.edit_video_gcs = gcs_path
+            state.edit_video_display_url = display_url
+            state.edit_video_mime_type = "video/mp4"
+    except Exception as ex:  # noqa: BLE001
+        state.error_message = f"Failed to select library item: {ex}"
+        state.show_error_dialog = True
+    yield
 
 
 def on_upload_i2v_image(e: me.UploadEvent) -> Generator[None]:
