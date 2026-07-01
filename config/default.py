@@ -77,6 +77,10 @@ class Default:
     GA_MEASUREMENT_ID: str = os.environ.get("GA_MEASUREMENT_ID")
     MODEL_ID: str = os.environ.get("MODEL_ID", "gemini-3-flash-preview")
     INIT_VERTEX: bool = True
+    GEMINI_OMNI_MODEL_ID: str = os.environ.get(
+        "GEMINI_OMNI_MODEL_ID",
+        "gemini-omni-flash-preview",
+    )
     GEMINI_IMAGE_GEN_MODEL: str = os.environ.get(
         "GEMINI_IMAGE_GEN_MODEL",
         "gemini-3.1-flash-image-preview",
@@ -221,7 +225,7 @@ class Default:
         os.environ.get(
             "INTERIOR_DESIGN_VIDEO_DURATION",
             6,
-        )
+        ),
     )
 
     # Object Rotation
