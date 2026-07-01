@@ -41,6 +41,12 @@ def on_omni_load(_e: me.LoadEvent) -> Generator[None]:
     path="/gemini-omni",
     title="Gemini Omni - GenMedia Creative Studio",
     on_load=on_omni_load,
+    security_policy=me.SecurityPolicy(
+        dangerously_disable_trusted_types=True,
+        allowed_script_srcs=[
+            "https://cdn.jsdelivr.net",
+        ],
+    ),
 )
 def gemini_omni_page() -> None:
     """Render the Gemini Omni page."""
