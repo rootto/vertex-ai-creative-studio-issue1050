@@ -30,5 +30,6 @@ storage.googleapis.com
 aiplatform.googleapis.com
 firestore.googleapis.com
 cloudtasks.googleapis.com
+identitytoolkit.googleapis.com
 serviceusage.googleapis.com
 cloudresourcemanager.googleapis.com
