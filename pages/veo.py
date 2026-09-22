@@ -17,12 +17,16 @@ import json
 import time
 
 import mesop as me
-import requests
-
 from common.analytics import log_ui_click, track_click, track_model_call
-from common.error_handling import AsyncVeoPollingFailedError
+from common.error_handling import AsyncVeoPollingFailedError, GenerationError
+from common.metadata import (
+    MediaItem,
+    add_media_item_to_firestore,
+    get_media_item_by_id,
+)
 from common.storage import store_to_gcs
-from common.utils import create_display_url
+from common.utils import create_display_url, get_image_dimensions_from_base64
+from common.veo_utils import start_async_veo_job
 from components.dialog import dialog, dialog_actions
 from components.header import header
 from components.library.events import LibrarySelectionChangeEvent
@@ -57,7 +61,7 @@ def on_veo_load(e: me.LoadEvent):
 
     if image_path:
         # When an image is passed, default to the i2v mode and Veo 3.1 Fast model.
-        _update_state_for_new_model(DEFAULT_VEO_VERSION_ID)
+        _update_state_for_new_model("3.1-fast")
 
         image_uri = ""
         if image_path.startswith("https://"):
@@ -247,6 +251,18 @@ def on_change_auto_enhance_prompt(e: me.CheckboxChangeEvent):
     yield
 
 
+
+def on_blur_veo_seed(e: me.InputBlurEvent):
+    """Handles blur event for the Veo seed input."""
+    state = me.state(PageState)
+    try:
+        seed_value = int(e.value)
+        state.veo_seed = seed_value if seed_value >= 0 else 0
+    except ValueError:
+        state.veo_seed = 0
+    yield
+
+
 def on_change_generate_audio(e: me.CheckboxChangeEvent):
     """Toggle audio generation."""
     app_state = me.state(AppState)
@@ -374,6 +390,7 @@ def veo_content(app_state: me.state):
                 on_selection_change_person_generation=on_selection_change_person_generation,
                 on_change_auto_enhance_prompt=on_change_auto_enhance_prompt,
                 on_change_generate_audio=on_change_generate_audio,
+                on_blur_veo_seed=on_blur_veo_seed,
             )
 
         me.box(style=me.Style(height=50))
@@ -466,6 +483,7 @@ def on_click_extend_video(e: me.ClickEvent):
 
     request = VideoGenerationRequest(
         prompt=prompt_to_send,
+        negative_prompt=state.negative_prompt,
         model_version_id=state.veo_model,
         aspect_ratio=state.aspect_ratio,
         resolution=state.resolution,
@@ -478,6 +496,7 @@ def on_click_extend_video(e: me.ClickEvent):
         ),  # Use extension length or default
         video_count=state.video_count,
         enhance_prompt=state.auto_enhance_prompt,
+        seed=state.veo_seed if state.veo_seed > 0 else None,
         generate_audio=state.generate_audio,
         person_generation=state.person_generation,
         video_input_gcs=video_input_gcs,
@@ -487,23 +506,8 @@ def on_click_extend_video(e: me.ClickEvent):
 
     # --- 1. Initiate Async Job ---
     try:
-        api_url = f"{config.API_BASE_URL}/api/veo/generate_async"
-        headers = {"X-Goog-Authenticated-User-Email": app_state.user_email}
+        data = start_async_veo_job(request, app_state.user_email, mode="extension")
 
-        # Log analytics
-        with track_model_call(
-            model_name=model_config.model_name,
-            prompt_length=len(request.prompt) if request.prompt else 0,
-            duration_seconds=request.duration_seconds,
-            aspect_ratio=request.aspect_ratio,
-            video_count=request.video_count,
-            mode="extension",
-        ):
-            response = requests.post(
-                api_url, json=request.model_dump(), headers=headers,
-            )
-            response.raise_for_status()
-            data = response.json()
         state.current_job_id = data["job_id"]
         state.job_status = data["status"]
         yield
@@ -518,17 +522,19 @@ def on_click_extend_video(e: me.ClickEvent):
     while state.job_status in ["pending", "processing", "created"]:
         time.sleep(2)
         try:
-            status_url = f"{config.API_BASE_URL}/api/veo/job/{state.current_job_id}"
-            resp = requests.get(status_url)
-            resp.raise_for_status()
-            status_data = resp.json()
-            state.job_status = status_data["status"]
+            item = get_media_item_by_id(state.current_job_id)
+            if not item:
+                raise AsyncVeoPollingFailedError(
+                    f"Job {state.current_job_id} not found in Firestore."
+                )
+
+            state.job_status = item.status
 
             if state.job_status == "complete":
                 # Success! Update state with results.
-                state.result_gcs_uris = status_data.get("video_uris", [])
-                if not state.result_gcs_uris and status_data.get("video_uri"):
-                    state.result_gcs_uris = [status_data["video_uri"]]
+                state.result_gcs_uris = item.gcs_uris or []
+                if not state.result_gcs_uris and item.gcsuri:
+                    state.result_gcs_uris = [item.gcsuri]
 
                 state.result_display_urls = [
                     create_display_url(uri) for uri in state.result_gcs_uris
@@ -544,8 +550,8 @@ def on_click_extend_video(e: me.ClickEvent):
                 break
 
             elif state.job_status == "failed":
-                state.error_message = status_data.get(
-                    "error_message", "Unknown error during extension.",
+                state.error_message = (
+                    item.error_message or "Unknown error during extension."
                 )
                 state.show_error_dialog = True
                 state.is_loading = False
@@ -587,7 +593,7 @@ def on_click_clear(e: me.ClickEvent):  # pylint: disable=unused-argument
     state.veo_prompt_input = None
     state.original_prompt = None
     state.veo_prompt_textarea_key += 1
-    state.veo_model = DEFAULT_VEO_VERSION_ID
+    state.veo_model = "3.1-fast"
     # Get default duration for the reset model
     model_config = get_veo_model_config(state.veo_model)
     state.video_length = model_config.default_duration if model_config else 8
@@ -628,7 +634,40 @@ def on_click_custom_rewriter(e: me.ClickEvent):  # pylint: disable=unused-argume
         print("Prompt is empty, skipping rewrite.")
         yield
         return
-    rewritten_prompt = rewriter(state.veo_prompt_input, VIDEO_REWRITER)
+
+    # Gather mode-appropriate reference images so the rewriter has visual
+    # context. Each entry is a (gcs_uri, mime_type) pair; empty URIs are skipped
+    # by the rewriter. Use the mime types stored in state (not a hardcoded
+    # image/png) for correctness.
+    images: list[tuple[str, str]] = []
+    if state.veo_mode == "i2v":
+        if state.reference_image_gcs:
+            images.append(
+                (state.reference_image_gcs, state.reference_image_mime_type)
+            )
+    elif state.veo_mode == "interpolation":
+        if state.reference_image_gcs:
+            images.append(
+                (state.reference_image_gcs, state.reference_image_mime_type)
+            )
+        if state.last_reference_image_gcs:
+            images.append(
+                (
+                    state.last_reference_image_gcs,
+                    state.last_reference_image_mime_type,
+                )
+            )
+    elif state.veo_mode == "r2v":
+        images.extend(
+            zip(state.r2v_reference_images, state.r2v_reference_mime_types)
+        )
+        # NOTE: r2v_style_image is deliberately NOT included: a style image
+        # influences the look, not the content, of the rewrite. This is an
+        # easily-changed default if owner preference shifts.
+
+    rewritten_prompt = rewriter(
+        state.veo_prompt_input, VIDEO_REWRITER, images=images
+    )
     state.veo_prompt_input = rewritten_prompt
     state.veo_prompt_placeholder = rewritten_prompt
     yield
@@ -682,12 +721,14 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
 
     request = VideoGenerationRequest(
         prompt=prompt_to_send,
+        negative_prompt=state.negative_prompt,
         model_version_id=state.veo_model,
         aspect_ratio=state.aspect_ratio,
         resolution=state.resolution,
         duration_seconds=state.video_length,
         video_count=state.video_count,
         enhance_prompt=state.auto_enhance_prompt,
+        seed=state.veo_seed if state.veo_seed > 0 else None,
         generate_audio=state.generate_audio,
         person_generation=state.person_generation,
         reference_image_gcs=state.reference_image_gcs
@@ -719,32 +760,8 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
 
     # --- 1. Initiate Async Job ---
     try:
-        base_url = (
-            "http://localhost:8080"
-            if "localhost" not in config.API_BASE_URL
-            else config.API_BASE_URL
-        )
-        api_url = f"{base_url}/api/veo/generate_async"
-        headers = {"X-Goog-Authenticated-User-Email": app_state.user_email}
+        data = start_async_veo_job(request, app_state.user_email, mode=state.veo_mode)
 
-        # Log the initial click/attempt
-        model_name_for_analytics = get_veo_model_config(
-            request.model_version_id,
-        ).model_name
-
-        with track_model_call(
-            model_name=model_name_for_analytics,
-            prompt_length=len(request.prompt) if request.prompt else 0,
-            duration_seconds=request.duration_seconds,
-            aspect_ratio=request.aspect_ratio,
-            video_count=request.video_count,
-            mode=state.veo_mode,
-        ):
-            response = requests.post(
-                api_url, json=request.model_dump(), headers=headers,
-            )
-            response.raise_for_status()
-            data = response.json()
         state.current_job_id = data["job_id"]
         state.job_status = data["status"]
         yield
@@ -762,23 +779,20 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
     while state.job_status in ["pending", "processing", "created"]:
         time.sleep(2)
         try:
-            base_url = (
-                "http://localhost:8080"
-                if "localhost" not in config.API_BASE_URL
-                else config.API_BASE_URL
-            )
-            status_url = f"{base_url}/api/veo/job/{state.current_job_id}"
-            resp = requests.get(status_url)
-            resp.raise_for_status()
-            status_data = resp.json()
-            state.job_status = status_data["status"]
+            item = get_media_item_by_id(state.current_job_id)
+            if not item:
+                raise AsyncVeoPollingFailedError(
+                    f"Job {state.current_job_id} not found in Firestore."
+                )
+
+            state.job_status = item.status
 
             if state.job_status == "complete":
                 # Success! Update state with results.
-                state.result_gcs_uris = status_data.get("video_uris", [])
+                state.result_gcs_uris = item.gcs_uris or []
                 # If only one URI is returned but we expected a list, handle it.
-                if not state.result_gcs_uris and status_data.get("video_uri"):
-                    state.result_gcs_uris = [status_data["video_uri"]]
+                if not state.result_gcs_uris and item.gcsuri:
+                    state.result_gcs_uris = [item.gcsuri]
 
                 state.result_display_urls = [
                     create_display_url(uri) for uri in state.result_gcs_uris
@@ -795,8 +809,8 @@ def on_click_veo(e: me.ClickEvent):  # pylint: disable=unused-argument
 
             elif state.job_status == "failed":
                 # Failure. Show error.
-                state.error_message = status_data.get(
-                    "error_message", "Unknown error during generation.",
+                state.error_message = (
+                    item.error_message or "Unknown error during generation."
                 )
                 state.show_error_dialog = True
                 state.is_loading = False

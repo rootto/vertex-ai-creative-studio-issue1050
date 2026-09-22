@@ -14,11 +14,12 @@
 
 import json
 import re
-from typing import Any
+from typing import Any, Dict
 
 
-def parse_evaluation_markdown(markdown_text: str) -> dict[str, Any]:
-    """Parses the markdown output from the evaluation prompt into a dict
+def parse_evaluation_markdown(markdown_text: str) -> Dict[str, Any]:
+    """
+    Parses the markdown output from the evaluation prompt into a dict
     that can be used to create a ParsedChecklistResponse object.
     """
     # Split the text by the main category headers
@@ -56,7 +57,7 @@ def parse_evaluation_markdown(markdown_text: str) -> dict[str, Any]:
                     "Issue Found": (
                         f"**Location:** {json_data.get('location_in_prompt', 'N/A')}\n\n"
                         f"**Rationale:** {json_data.get('rationale', 'N/A')}"
-                    ),
+                    )
                 }
                 category_data = {
                     "items": {"Issue Found": True},
@@ -68,7 +69,7 @@ def parse_evaluation_markdown(markdown_text: str) -> dict[str, Any]:
                 category_data = {
                     "items": {"Issue Found": False},
                     "details": {
-                        "Issue Found": "Could not parse details for this category.",
+                        "Issue Found": "Could not parse details for this category."
                     },
                     "explanation": "There was an error parsing the response from the model.",
                 }

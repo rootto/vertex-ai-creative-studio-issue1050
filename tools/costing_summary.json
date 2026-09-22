@@ -1,0 +1,75 @@
+{
+  "analysis_period_days": 120,
+  "total_users": 199,
+  "total_sessions": 2344,
+  "total_generations": 5223,
+  "total_spend": 3154.48,
+  "rates": {
+    "video_per_sec": 0.12,
+    "image_per_gen": 0.03,
+    "audio_per_sec": 0.01,
+    "tool_per_sec": 0.25
+  },
+  "metrics_by_archetype": {
+    "Standalone Video (T2V / I2V)": {
+      "session_count": 730,
+      "session_share_pct": 31.14,
+      "avg_turns": 1.0,
+      "avg_duration_sec": 1.0,
+      "avg_duration_min": 0.02,
+      "avg_cost_per_session": 0.8114,
+      "total_spend": 592.32,
+      "spend_share_pct": 18.78
+    },
+    "Iterative Refinement": {
+      "session_count": 384,
+      "session_share_pct": 16.38,
+      "avg_turns": 2.51,
+      "avg_duration_sec": 413.0,
+      "avg_duration_min": 6.88,
+      "avg_cost_per_session": 1.9116,
+      "total_spend": 734.07,
+      "spend_share_pct": 23.27
+    },
+    "Image-to-Video Pipeline": {
+      "session_count": 484,
+      "session_share_pct": 20.65,
+      "avg_turns": 2.0,
+      "avg_duration_sec": 327.9,
+      "avg_duration_min": 5.46,
+      "avg_cost_per_session": 0.8265,
+      "total_spend": 400.02,
+      "spend_share_pct": 12.68
+    },
+    "Multi-Turn Deep Stacking": {
+      "session_count": 416,
+      "session_share_pct": 17.75,
+      "avg_turns": 4.81,
+      "avg_duration_sec": 956.1,
+      "avg_duration_min": 15.94,
+      "avg_cost_per_session": 2.6146,
+      "total_spend": 1087.68,
+      "spend_share_pct": 34.48
+    },
+    "Post-Production Editing Workflow": {
+      "session_count": 176,
+      "session_share_pct": 7.51,
+      "avg_turns": 2.0,
+      "avg_duration_sec": 419.0,
+      "avg_duration_min": 6.98,
+      "avg_cost_per_session": 1.85,
+      "total_spend": 325.6,
+      "spend_share_pct": 10.32
+    },
+    "Standalone Image Generation": {
+      "session_count": 154,
+      "session_share_pct": 6.57,
+      "avg_turns": 1.38,
+      "avg_duration_sec": 57.9,
+      "avg_duration_min": 0.96,
+      "avg_cost_per_session": 0.096,
+      "total_spend": 14.79,
+      "spend_share_pct": 0.47
+    }
+  }
+}

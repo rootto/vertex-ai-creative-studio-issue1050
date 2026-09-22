@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_thumbnail_job(job_id: str, video_uri: str) -> None:
-    """Extracts a thumbnail and update Firestore.
+    """Extracts a thumbnail and updates Firestore.
 
     Synchronous function called by Cloud Tasks or a background thread.
     """
@@ -75,13 +75,9 @@ def process_veo_generation_task(
         video_uris, resolution = generate_video(request_data)
 
         # 3. Success! Update Firestore with results.
-        # Check if this was an extension request to correct the duration
         actual_duration = None
         if request_data.video_input_gcs and video_uris:
             try:
-                # For extensions, the resulting video is longer than the requested 'duration_seconds'
-                # (which is just the extension amount)
-                # So we inspect the actual generated file to get the true total duration.
                 actual_duration = get_video_duration(video_uris[0])
                 logger.info(
                     f"Corrected duration for extended video: {actual_duration}s",
@@ -94,12 +90,9 @@ def process_veo_generation_task(
         _complete_job(job_id, video_uris, resolution, duration=actual_duration)
         logger.info(f"Background task for job {job_id} completed successfully.")
 
-        # 4. Trigger thumbnail generation
+        # 4. Trigger thumbnail generation (Cloud Tasks with thread fallback)
         if video_uris:
-            # Try to enqueue a Cloud Task for robustness
             enqueued = enqueue_thumbnail_task(job_id, video_uris[0])
-
-            # Fallback to a background thread if Cloud Tasks is not configured or fails
             if not enqueued:
                 logger.info(
                     f"Falling back to background thread for thumbnail job {job_id}",
@@ -113,9 +106,9 @@ def process_veo_generation_task(
     except GenerationError as ge:
         logger.warning(f"GenerationError for job {job_id}: {ge}")
         _fail_job(job_id, str(ge))
-    except Exception:
-        logger.exception(f"Background task for job {job_id} failed")
-        _fail_job(job_id, "Generation failed. Please try again.")
+    except Exception as e:
+        logger.exception(f"Background task for job {job_id} failed: {e}")
+        _fail_job(job_id, str(e))
 
 
 def _update_job_status(job_id: str, status: str) -> None:
@@ -143,12 +136,8 @@ def _complete_job(
         if duration is not None:
             item.duration = duration
 
-        # Calculate generation time if possible, or just use now - timestamp
         if item.timestamp:
-            # Ensure both are offset-aware or both are offset-naive.
-            # Firestore timestamps are usually UTC.
             now = datetime.datetime.now(datetime.UTC)
-            # Handle potential string timestamp from legacy data if not fully parsed
             start_time = item.timestamp
             if isinstance(start_time, str):
                 try:
@@ -156,7 +145,7 @@ def _complete_job(
                         start_time.replace("Z", "+00:00"),
                     )
                 except ValueError:
-                    start_time = now  # Fallback
+                    start_time = now
 
             item.generation_time = (now - start_time).total_seconds()
 
@@ -225,6 +214,7 @@ def create_initial_job(request: VideoGenerationRequest, user_email: str) -> str:
         if request.r2v_style_image
         else None,
         negative_prompt=request.negative_prompt,
+        seed=getattr(request, "seed", None),
         enhanced_prompt_used=request.enhance_prompt,
     )
     add_media_item_to_firestore(item)

@@ -12,15 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
 import logging
+import math
 import os
 import tempfile
 import uuid
 
 import cv2
+import moviepy
 import numpy as np
-from moviepy import *
-from moviepy import VideoFileClip, afx, vfx
+from moviepy import (
+    ColorClip,
+    CompositeAudioClip,
+    CompositeVideoClip,
+    VideoClip,
+    VideoFileClip,
+    afx,
+    concatenate_videoclips,
+    vfx,
+)
 from moviepy.audio.io.AudioFileClip import AudioFileClip
 from scipy.ndimage import gaussian_filter
 
@@ -69,17 +80,47 @@ def _upload_to_gcs(local_path: str, destination_folder: str, mime_type: str) -> 
 
 
 # --- Transition Functions (moviepy v2.x compatible) --- #
-import datetime
+print(f"DEBUG: Loading video_processing.py at {datetime.datetime.now()}. Moviepy version: {moviepy.__version__}")
 
-import moviepy
 
-print(
-    f"DEBUG: Loading video_processing.py at {datetime.datetime.now()}. Moviepy version: {moviepy.__version__}",
-)
+def _safe_transition_duration(clip1, clip2, transition_duration):
+    """Returns a transition duration that fits inside both clips."""
+    transition_duration = float(transition_duration)
+    if not math.isfinite(transition_duration) or transition_duration <= 0:
+        raise ValueError("Transition duration must be a positive number.")
+
+    max_transition_duration = min(clip1.duration, clip2.duration)
+    if max_transition_duration <= 0:
+        raise ValueError("Video clips must have positive duration for transitions.")
+
+    return min(transition_duration, max_transition_duration)
+
+
+def _match_clip_size(clip, target_size):
+    """Fits a clip into target_size with letterboxing when needed."""
+    if clip.size == target_size:
+        return clip
+
+    ratio = min(target_size[0] / clip.size[0], target_size[1] / clip.size[1])
+    resized_clip = clip.resized(ratio)
+    background = ColorClip(size=target_size, color=(0, 0, 0), duration=resized_clip.duration)
+    fitted_clip = CompositeVideoClip(
+        [background, resized_clip.with_position("center")],
+        size=target_size,
+    )
+
+    if resized_clip.audio:
+        fitted_clip.audio = resized_clip.audio
+
+    if getattr(clip, "fps", None):
+        fitted_clip.fps = clip.fps
+
+    return fitted_clip
 
 
 def crossfade(clip1, clip2, transition_duration, speed_curve="sigmoid"):
     print("DEBUG: Entering crossfade function")
+    transition_duration = _safe_transition_duration(clip1, clip2, transition_duration)
     transition_start = clip1.duration - transition_duration
     total_duration = clip1.duration + clip2.duration - transition_duration
 
@@ -111,13 +152,14 @@ def crossfade(clip1, clip2, transition_duration, speed_curve="sigmoid"):
     def make_frame(t):
         if t < transition_start:
             return clip1.get_frame(t)
-        if t >= clip1.duration:
+        elif t >= clip1.duration:
             return clip2.get_frame(t - transition_start)
-        frame1 = clip1.get_frame(t)
-        frame2 = clip2.get_frame(t - transition_start)
-        progress = (t - transition_start) / transition_duration
-        weight = 1.0 - curve_func(progress)
-        return (weight * frame1 + (1 - weight) * frame2).astype("uint8")
+        else:
+            frame1 = clip1.get_frame(t)
+            frame2 = clip2.get_frame(t - transition_start)
+            progress = (t - transition_start) / transition_duration
+            weight = 1.0 - curve_func(progress)
+            return (weight * frame1 + (1 - weight) * frame2).astype("uint8")
 
     final_clip = VideoClip(make_frame, duration=total_duration)
     final_clip.fps = clip1.fps  # Set fps for the new clip
@@ -125,9 +167,9 @@ def crossfade(clip1, clip2, transition_duration, speed_curve="sigmoid"):
     if clip1.audio and clip2.audio:
         print("DEBUG: Applying audio crossfade")
         audio1 = clip1.audio.with_effects([afx.AudioFadeOut(transition_duration)])
-        audio2 = clip2.audio.with_effects(
-            [afx.AudioFadeIn(transition_duration)],
-        ).with_start(clip1.duration - transition_duration)
+        audio2 = clip2.audio.with_effects([afx.AudioFadeIn(transition_duration)]).with_start(
+            clip1.duration - transition_duration
+        )
         final_audio = CompositeAudioClip([audio1, audio2])
         final_clip.audio = final_audio
 
@@ -135,6 +177,7 @@ def crossfade(clip1, clip2, transition_duration, speed_curve="sigmoid"):
 
 
 def wipe(clip1, clip2, transition_duration, direction="left-to-right"):
+    transition_duration = _safe_transition_duration(clip1, clip2, transition_duration)
     width, height = clip1.size
 
     transition_start = clip1.duration - transition_duration
@@ -145,7 +188,7 @@ def wipe(clip1, clip2, transition_duration, direction="left-to-right"):
     def make_mask_frame(t):
         if t < transition_start:
             return np.ones((height, width), dtype=np.float32)
-        if t < clip1.duration:
+        elif t < clip1.duration:
             progress = (t - transition_start) / transition_duration
             mask = np.ones((height, width), dtype=np.float32)
             if direction == "left-to-right":
@@ -165,7 +208,8 @@ def wipe(clip1, clip2, transition_duration, direction="left-to-right"):
                 if edge_position < height:
                     mask[edge_position:, :] = 0.0
             return mask
-        return np.zeros((height, width), dtype=np.float32)
+        else:
+            return np.zeros((height, width), dtype=np.float32)
 
     mask_clip = VideoClip(make_mask_frame, duration=total_duration, is_mask=True)
     clip1_masked = clip1.with_mask(mask_clip)
@@ -176,9 +220,9 @@ def wipe(clip1, clip2, transition_duration, direction="left-to-right"):
 
     if clip1.audio and clip2.audio:
         audio1 = clip1.audio.with_effects([afx.AudioFadeOut(transition_duration)])
-        audio2 = clip2.audio.with_effects(
-            [afx.AudioFadeIn(transition_duration)],
-        ).with_start(clip1.duration - transition_duration)
+        audio2 = clip2.audio.with_effects([afx.AudioFadeIn(transition_duration)]).with_start(
+            clip1.duration - transition_duration
+        )
         final_audio = CompositeAudioClip([audio1, audio2])
         final_clip.audio = final_audio
 
@@ -186,25 +230,26 @@ def wipe(clip1, clip2, transition_duration, direction="left-to-right"):
 
 
 def dipToBlack(clip1, clip2, transition_duration, **kwargs):
+    transition_duration = _safe_transition_duration(clip1, clip2, transition_duration)
     fade_duration = transition_duration / 2.0
+    total_duration = clip1.duration + clip2.duration - fade_duration
     clip1_faded = clip1.with_effects([vfx.FadeOut(fade_duration)])
     clip2_faded = clip2.with_effects([vfx.FadeIn(fade_duration)]).with_start(
-        clip1.duration - fade_duration,
+        clip1.duration - fade_duration
     )
 
     black_clip = ColorClip(
-        size=clip1.size,
-        color=(0, 0, 0),
-        duration=clip1.duration + clip2.duration,
+        size=clip1.size, color=(0, 0, 0), duration=total_duration
     )
 
     final_clip = CompositeVideoClip([black_clip, clip1_faded, clip2_faded])
+    final_clip = final_clip.with_duration(total_duration)
     final_clip.fps = clip1.fps
 
     if clip1.audio and clip2.audio:
         audio1 = clip1.audio.with_effects([afx.AudioFadeOut(fade_duration)])
         audio2 = clip2.audio.with_effects([afx.AudioFadeIn(fade_duration)]).with_start(
-            clip1.duration - fade_duration,
+            clip1.duration - fade_duration
         )
         final_audio = CompositeAudioClip([audio1, audio2])
         final_clip.audio = final_audio
@@ -213,17 +258,15 @@ def dipToBlack(clip1, clip2, transition_duration, **kwargs):
 
 
 def add_blur_transition(
-    clip,
-    blur_duration,
-    max_blur_strength=1.0,
-    reverse=False,
-    position="end",
+    clip, blur_duration, max_blur_strength=1.0, reverse=False, position="end"
 ):
-    """Add a gradual blur effect to the start or end of a video clip."""
+    """
+    Add a gradual blur effect to the start or end of a video clip.
+    """
     if blur_duration > clip.duration:
         blur_duration = clip.duration
         print(
-            f"Warning: Blur duration exceeds clip duration. Setting blur duration to {blur_duration} seconds.",
+            f"Warning: Blur duration exceeds clip duration. Setting blur duration to {blur_duration} seconds."
         )
 
     if position.lower() == "start":
@@ -242,7 +285,8 @@ def add_blur_transition(
             position.lower() == "end" and reverse
         ):
             return max_radius * (1 - effect_progress)
-        return max_radius * effect_progress
+        else:
+            return max_radius * effect_progress
 
     def make_frame_for_blur(t):
         frame = clip.get_frame(t)
@@ -257,9 +301,7 @@ def add_blur_transition(
         return frame
 
     return VideoClip(
-        make_frame=make_frame_for_blur,
-        duration=clip.duration,
-        fps=clip.fps,
+        make_frame=make_frame_for_blur, duration=clip.duration, fps=clip.fps
     )
 
 
@@ -300,42 +342,8 @@ def process_videos(
         clip1 = clips[0]
         clip2 = clips[1]
 
-        # Check for resolution mismatch before transitions that require it
-        if transition in ["x-fade", "wipe"]:
-            if clip1.size != clip2.size:
-                messages.append(
-                    f"Resized video 2 from {clip2.size} to match video 1's resolution of {clip1.size} while preserving aspect ratio.",
-                )
-
-                # Import necessary classes locally to avoid polluting the global scope
-                from moviepy.video.compositing.CompositeVideoClip import (
-                    CompositeVideoClip,
-                )
-                from moviepy.video.VideoClip import ColorClip
-
-                # Resize clip2 to fit within clip1's dimensions, preserving aspect ratio
-                ratio = min(
-                    clip1.size[0] / clip2.size[0],
-                    clip1.size[1] / clip2.size[1],
-                )
-                resized_clip2 = clip2.resize(ratio)
-
-                # Create a black background clip with the size of clip1
-                background = ColorClip(
-                    size=clip1.size,
-                    color=(0, 0, 0),
-                    duration=resized_clip2.duration,
-                )
-
-                # Composite the resized clip2 onto the center of the background
-                # This makes clip2 have the same dimensions as clip1, with black bars
-                clip2 = CompositeVideoClip(
-                    [background, resized_clip2.set_position("center")],
-                )
-
-                # Ensure the new composite clip has the same audio properties
-                if resized_clip2.audio:
-                    clip2.audio = resized_clip2.audio
+        if transition != "concat":
+            clip2 = _match_clip_size(clip2, clip1.size)
 
         if transition == "concat":
             final_clip = concatenate_videoclips(clips)
@@ -362,7 +370,8 @@ def process_videos(
 
 
 def layer_audio_on_video(video_gcs_uri: str, audio_gcs_uri: str) -> str:
-    """Layers an audio track over a video file. If the video already has audio,
+    """
+    Layers an audio track over a video file. If the video already has audio,
     it will be replaced.
     """
     if not video_gcs_uri or not audio_gcs_uri:
@@ -395,10 +404,7 @@ def layer_audio_on_video(video_gcs_uri: str, audio_gcs_uri: str) -> str:
         return final_gcs_uri
 
 
-def _calculate_motion_score(
-    clip: VideoFileClip,
-    sample_interval_seconds: float = 0.5,
-) -> float:
+def _calculate_motion_score(clip: VideoFileClip, sample_interval_seconds: float = 0.5) -> float:
     """Calculates a motion score based on frame-to-frame differences."""
     frame_diffs = []
     prev_frame = None
@@ -410,7 +416,7 @@ def _calculate_motion_score(
         if prev_frame is not None:
             diff = cv2.absdiff(gray_frame, prev_frame)
             frame_diffs.append(np.mean(diff))
-
+        
         prev_frame = gray_frame
 
     if not frame_diffs:
@@ -420,7 +426,9 @@ def _calculate_motion_score(
 
 
 def get_video_duration(gcs_uri: str) -> float:
-    """Downloads the video from GCS and returns its duration in seconds."""
+    """
+    Downloads the video from GCS and returns its duration in seconds.
+    """
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
             local_path = _download_videos_to_temp([gcs_uri], tmpdir)[0]
@@ -428,24 +436,18 @@ def get_video_duration(gcs_uri: str) -> float:
                 duration = clip.duration
             return duration
         except Exception as e:
-            logging.exception(f"Failed to get video duration for {gcs_uri}: {e}")
+            logging.error(f"Failed to get video duration for {gcs_uri}: {e}")
             return 0.0
 
 
 # --- GIF Conversion --- #
 
 
-def convert_mp4_to_gif(
-    source_video_gcs_uri: str,
-    user_email: str,
-    target_mb: int = 8,
-) -> str:
+def convert_mp4_to_gif(source_video_gcs_uri: str, user_email: str, target_mb: int = 8) -> str:
     with tempfile.TemporaryDirectory() as tmpdir:
         local_path = _download_videos_to_temp([source_video_gcs_uri], tmpdir)[0]
 
-        output_filename = (
-            f"{os.path.splitext(os.path.basename(local_path))[0]}{uuid.uuid4()}.gif"
-        )
+        output_filename = f"{os.path.splitext(os.path.basename(local_path))[0]}{uuid.uuid4()}.gif"
         output_path = os.path.join(tmpdir, output_filename)
 
         clip = VideoFileClip(local_path)
@@ -456,35 +458,29 @@ def convert_mp4_to_gif(
 
         TARGET_SIZE_BYTES = target_mb * 1024 * 1024
         # Start with reasonable quality defaults
-        fps = min(clip.fps, 12)
+        fps = min(clip.fps, 12) 
         resize_factor = 1.0
-
+        
         # Adjust heuristic based on motion. A higher score means more motion and less compressibility.
         # A motion score of ~30 is moderate. Let's make the heuristic more directly influenced by it.
         # Start with a base heuristic and add a motion factor.
         # base_heuristic = 0.35
         # motion_factor = (motion_score / 50.0) # Normalize based on an expected max motion of ~50
         # bytes_per_pixel_heuristic = base_heuristic + motion_factor * 0.2 # Motion adjusts heuristic by up to 0.2
-
+        
         # Let's map the motion score (e.g., 0-50) to a more aggressive heuristic range (e.g., 0.6 - 1.4)
-        normalized_motion = min(motion_score / 50.0, 1.0)  # Normalize score, cap at 1.0
-        bytes_per_pixel_heuristic = 0.6 + (
-            normalized_motion * 0.8
-        )  # Map to 0.6-1.4 range
+        normalized_motion = min(motion_score / 50.0, 1.0) # Normalize score, cap at 1.0
+        bytes_per_pixel_heuristic = 0.6 + (normalized_motion * 0.8) # Map to 0.6-1.4 range
 
-        logging.info(
-            f"Using motion-adjusted heuristic: {bytes_per_pixel_heuristic:.2f}",
-        )
+        logging.info(f"Using motion-adjusted heuristic: {bytes_per_pixel_heuristic:.2f}")
 
         # Estimate initial size
         estimated_size = (
-            clip.size[0]
-            * resize_factor
-            * clip.size[1]
-            * resize_factor
-            * fps
-            * clip.duration
-            * bytes_per_pixel_heuristic
+            clip.size[0] * resize_factor * 
+            clip.size[1] * resize_factor * 
+            fps * 
+            clip.duration * 
+            bytes_per_pixel_heuristic
         )
 
         # Iteratively reduce quality if estimate is too high
@@ -493,27 +489,21 @@ def convert_mp4_to_gif(
                 resize_factor -= 0.1
             elif fps > 8:
                 fps -= 2
-            else:  # Last resort
+            else: # Last resort
                 resize_factor -= 0.05
 
             estimated_size = (
-                clip.size[0]
-                * resize_factor
-                * clip.size[1]
-                * resize_factor
-                * fps
-                * clip.duration
-                * bytes_per_pixel_heuristic
+                clip.size[0] * resize_factor * 
+                clip.size[1] * resize_factor * 
+                fps * 
+                clip.duration * 
+                bytes_per_pixel_heuristic
             )
-            logging.info(
-                f"Adjusting parameters. New resize_factor: {resize_factor:.2f}, New fps: {fps}, Estimated Size: {estimated_size / 1024 / 1024:.2f} MB",
-            )
+            logging.info(f"Adjusting parameters. New resize_factor: {resize_factor:.2f}, New fps: {fps}, Estimated Size: {estimated_size / 1024 / 1024:.2f} MB")
 
-        final_params_comment = (
-            f"GIF generation params: resize_factor={resize_factor:.2f}, fps={fps}"
-        )
+        final_params_comment = f"GIF generation params: resize_factor={resize_factor:.2f}, fps={fps}"
         logging.info(f"FINAL PARAMS: {final_params_comment}")
-
+        
         final_clip = clip.resized(resize_factor)
         final_clip.write_gif(output_path, fps=fps)
 
@@ -533,14 +523,12 @@ def convert_mp4_to_gif(
             MediaItem(
                 gcsuri=gif_uri,
                 user_email=user_email,
-                timestamp=datetime.datetime.now(datetime.UTC),
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
                 mime_type="image/gif",
-                source_images_gcs=[
-                    source_video_gcs_uri,
-                ],  # Source is the concatenated video
+                source_images_gcs=[source_video_gcs_uri], # Source is the concatenated video
                 comment=final_params_comment,
                 model="pixie-compositor-v1-gif",
-            ),
+            )
         )
 
         return gif_uri
@@ -574,5 +562,5 @@ def extract_and_upload_thumbnail(video_gcs_uri: str, timestamp_s: float) -> str:
             return thumbnail_uri
 
         except Exception as e:
-            logging.exception(f"Failed to extract and upload thumbnail: {e}")
+            logging.error(f"Failed to extract and upload thumbnail: {e}")
             return ""

@@ -2,7 +2,7 @@
 title: "MCP Imagen Server"
 ---
 
-This tool provides image generation capabilities using Google's Imagen models (via Vertex AI). It is one of the MCP tools for Google Cloud Genmedia services, functioning as an MCP server component to allow LLMs and other MCP clients to generate images from text prompts.
+This tool provides image generation capabilities using Google's Imagen models (via Google Cloud AI). It is one of the MCP tools for Google Cloud Genmedia services, functioning as an MCP server component to allow LLMs and other MCP clients to generate images from text prompts.
 
 ## MCP Tool Definition
 
@@ -23,6 +23,9 @@ The following tool is exposed by this server:
         *   Common values: `"1:1"` (square), `"16:9"` (widescreen), `"9:16"` (portrait)
     *   `gcs_bucket_uri` (string, optional): GCS URI prefix to store the generated images (e.g., "your-bucket/outputs/" or "gs://your-bucket/outputs/"). If provided, images are saved to GCS instead of returning bytes directly.
     *   `output_directory` (string, optional): If provided, specifies a local directory to save the generated image(s) to.
+    *   `output_filename` (string, optional): Base name for the output(s), e.g. `hero.png`. The extension is forced to the true image type and, when more than one image is generated, a `_1..n` suffix is inserted before the extension. Applied identically to local files and GCS objects. See [Naming Outputs](../index.md#naming-outputs-output_filename).
+
+When images are written to GCS, the tool appends one MCP `resource_link` content item per image — and one for the edited image on image-editing calls (`uri` = the `gs://` URI, plus `name`, `mimeType`, and a 1-based `description`); the text summary is unchanged. See [Resource Links for GCS Outputs](../index.md#resource-links-for-gcs-outputs).
 
 ### Resources
 
@@ -37,7 +40,7 @@ The tool utilizes the following environment variables:
 
 *   `GOOGLE_CLOUD_PROJECT` (string): **Required**. Your Google Cloud Project ID. The application will terminate if this is not set. Note: `PROJECT_ID` is also supported as a fallback.
     *   **Override**: You can override this globally for this specific server by setting `IMAGEN_PROJECT_ID`.
-*   `GOOGLE_CLOUD_LOCATION` (string): The preferred Google Cloud location/region for Vertex AI services.
+*   `GOOGLE_CLOUD_LOCATION` (string): The preferred Google Cloud location/region for Google Cloud AI services.
     *   Default: `"us-central1"`
     *   **Fallback**: `LOCATION` is also supported as a fallback for `GOOGLE_CLOUD_LOCATION`.
     *   **Override**: You can override this globally for this specific server by setting `IMAGEN_LOCATION`.

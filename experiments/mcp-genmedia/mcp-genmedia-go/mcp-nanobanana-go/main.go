@@ -26,7 +26,7 @@ import (
 	"strconv"
 	"time"
 
-	common "github.com/GoogleCloudPlatform/vertex-ai-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
+	common "github.com/GoogleCloudPlatform/genmedia-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"google.golang.org/genai"
@@ -41,8 +41,13 @@ var (
 
 const (
 	serviceName = "mcp-nanobanana-go"
-	version     = "3.9.0" // Synchronize release version
 )
+
+// version is overridden at build time via -ldflags "-X main.version=...".
+// The single source of truth for the version is the VERSION file at the root
+// of the mcp-genmedia-go tree (injected by the Makefile locally and by the git
+// tag through goreleaser for releases). Defaults to "dev" for un-injected builds.
+var version = "dev"
 
 func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -50,10 +55,10 @@ func init() {
 	flag.StringVar(&transport, "transport", "stdio", "Transport type (stdio, sse, or http)")
 	flag.IntVar(&port, "p", 0, "Port for SSE/HTTP server (defaults to PORT env var or 8080/8081)")
 	flag.IntVar(&port, "port", 0, "Port for SSE/HTTP server (defaults to PORT env var or 8080/8081)")
-	flag.Parse()
 }
 
 func main() {
+	flag.Parse() // Ensure flags are parsed before use
 
 	var cleanup func()
 	appConfig, cleanup = common.Init(serviceName, version)
@@ -98,9 +103,12 @@ func main() {
 		mcp.WithString("prompt", mcp.Required(), mcp.Description("The text prompt for content generation.")),
 		mcp.WithString("model", mcp.DefaultString("gemini-3.1-flash-image"), mcp.Description(common.BuildGeminiImageModelDescription())),
 		mcp.WithString("aspect_ratio", mcp.DefaultString("1:1"), mcp.Description("Aspect ratio of the generated images. Note: supported aspect ratios are model-dependent.")),
+		mcp.WithString("image_size", mcp.Description("Optional. Size of the generated images: 1K, 2K, or 4K. Defaults to 1K when unset. Note: supported sizes are model-dependent.")),
 		mcp.WithArray("images", mcp.Description("Optional. A list of local file paths or GCS URIs for input media (images, videos, or PDFs)."), mcp.Items(map[string]any{"type": "string"})),
 		mcp.WithString("output_directory", mcp.Description("Optional. Local directory to save generated image(s) to.")),
 		mcp.WithString("gcs_bucket_uri", mcp.Description("Optional. GCS URI prefix to store generated images (e.g., your-bucket/outputs/).")),
+		mcp.WithString("output_filename", mcp.Description("Optional. Client-predictable base name for the generated file(s). The extension is forced to the true output media type (e.g. .png). When a single image is produced the name is used as-is (e.g. 'hero.png'); when multiple images are produced they are suffixed '_1', '_2', ... before the extension (e.g. 'hero_1.png', 'hero_2.png'). An existing file/object of the same name is overwritten.")),
+		mcp.WithNumber("seed", mcp.Description("Optional. Non-negative integer seed for best-effort reproducible image generation.")),
 	)
 
 	handlerWithClient := func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {

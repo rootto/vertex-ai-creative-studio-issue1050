@@ -75,6 +75,31 @@ check_path() {
 }
 
 #
+# Function to ad-hoc codesign a locally built binary on macOS.
+#
+# 'go install' produces binaries with a signature that macOS Gatekeeper can
+# reject at exec time, silently killing the process (SIGKILL / exit 137)
+# with no output. Re-signing with an ad-hoc signature resolves this. This is
+# a no-op on non-macOS platforms.
+#
+codesign_go_binary() {
+  local server_dir="$1"
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return
+  fi
+  if ! command -v codesign &> /dev/null; then
+    return
+  fi
+  local binary_path="$HOME/go/bin/$server_dir"
+  if [ -f "$binary_path" ]; then
+    if ! codesign --force --sign - "$binary_path" 2>/dev/null; then
+      echo -e "${YELLOW}WARNING: Failed to ad-hoc sign $binary_path. It may be blocked by macOS Gatekeeper.${NC}"
+      echo -e "  Run manually: ${BLUE}codesign --force --sign - \"$binary_path\"${NC}"
+    fi
+  fi
+}
+
+#
 # Function to setup Agent Skills.
 #
 setup_agent_skills() {
@@ -85,7 +110,7 @@ setup_agent_skills() {
     # Check if gemini CLI is installed for remote installation tip
     if command -v gemini &> /dev/null; then
       echo -e "${YELLOW}Tip: You can also install these skills remotely via Gemini CLI:${NC}"
-      echo -e "  ${BLUE}gemini skills install https://github.com/GoogleCloudPlatform/vertex-ai-creative-studio.git --path experiments/mcp-genmedia/skills${NC}\n"
+      echo -e "  ${BLUE}gemini skills install https://github.com/GoogleCloudPlatform/genmedia-creative-studio.git --path experiments/mcp-genmedia/skills${NC}\n"
     fi
 
     # Gemini CLI
@@ -121,11 +146,86 @@ setup_agent_skills() {
 }
 
 #
+# Function to print usage information.
+#
+usage() {
+  cat <<EOF
+Usage: ./install.sh [OPTION]
+
+Interactively install or upgrade the Go MCP servers in this project.
+
+Options:
+  -a, --all    Install all MCP servers non-interactively (no menu).
+  -h, --help   Show this help message and exit.
+
+With no option, an interactive menu is shown. At the menu prompt you can
+enter a server's number, or enter '0', 'a', or 'all' to install everything.
+EOF
+}
+
+#
+# Function to install all discovered MCP servers.
+#
+install_all() {
+  echo -e "${BLUE}Installing all MCP servers...${NC}"
+  for d in $(find_mcp_servers); do
+    echo "Installing $d..."
+    # Run go mod tidy to prevent checksum mismatch errors
+    if ! (cd "$d" && go mod tidy && go install); then
+      echo -e "${RED}ERROR: Failed to install $d. Please check the output above for details.${NC}"
+      exit 1
+    fi
+    codesign_go_binary "$d"
+  done
+  echo -e "${GREEN}All MCP servers have been installed successfully.${NC}"
+  echo -e "\n${YELLOW}Reminder: Ensure ${BLUE}\$HOME/go/bin${YELLOW} is in your PATH to run the installed servers.${NC}"
+  setup_agent_skills
+}
+
+#
+# Function to install a single MCP server.
+#
+install_one() {
+  local server="$1"
+  echo -e "${BLUE}Installing $server...${NC}"
+  # Run go mod tidy to prevent checksum mismatch errors
+  if (cd "$server" && go mod tidy && go install); then
+    codesign_go_binary "$server"
+    echo -e "${GREEN}$server has been installed successfully.${NC}"
+    echo -e "\n${YELLOW}Reminder: Ensure ${BLUE}\$HOME/go/bin${YELLOW} is in your PATH to run the installed server.${NC}"
+    setup_agent_skills
+  else
+    echo -e "${RED}ERROR: Failed to install $server. Please check the output above for details.${NC}"
+    exit 1
+  fi
+}
+
+#
 # Main function.
 #
 # This is the main entry point of the script. It calls the other functions to
 # perform the installation process.
 main() {
+
+  # Parse command-line options.
+  local install_all_flag=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -a|--all)
+        install_all_flag=1
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        echo -e "${RED}Unknown option: $1${NC}"
+        usage
+        exit 1
+        ;;
+    esac
+  done
 
   # Fallback to PROJECT_ID if GOOGLE_CLOUD_PROJECT is not set
   if [[ -z "${GOOGLE_CLOUD_PROJECT}" ]] && [[ -n "${PROJECT_ID}" ]]; then
@@ -148,40 +248,38 @@ main() {
   check_go_installation
   check_path
 
+  # Non-interactive path: --all installs everything and exits.
+  if [[ "$install_all_flag" -eq 1 ]]; then
+    install_all
+    return
+  fi
+
   echo -e "${BLUE}Please choose an MCP server to install:${NC}"
+  echo -e "${YELLOW}(enter '0', 'a', or 'all' to install everything)${NC}"
   select server in $(find_mcp_servers) "Install All" "Exit"; do
+    # Accept '0', 'a', or 'all' (case-insensitive) as aliases for "Install All",
+    # regardless of the number 'select' assigns to that menu item. REPLY holds
+    # the raw text the user typed. tr keeps this portable to bash 3.2 (macOS).
+    local reply_lc
+    reply_lc=$(printf '%s' "$REPLY" | tr '[:upper:]' '[:lower:]')
+    case "$reply_lc" in
+      0|a|all)
+        install_all
+        break
+        ;;
+    esac
     case $server in
       "Install All")
-        echo -e "${BLUE}Installing all MCP servers...${NC}"
-        for d in $(find_mcp_servers); do
-          echo "Installing $d..."
-          # Run go mod tidy to prevent checksum mismatch errors
-          if ! (cd "$d" && go mod tidy && go install); then
-            echo -e "${RED}ERROR: Failed to install $d. Please check the output above for details.${NC}"
-            exit 1
-          fi
-        done
-        echo -e "${GREEN}All MCP servers have been installed successfully.${NC}"
-        echo -e "\n${YELLOW}Reminder: Ensure ${BLUE}\$HOME/go/bin${YELLOW} is in your PATH to run the installed servers.${NC}"
-        setup_agent_skills
+        install_all
         break
         ;;
       "Exit")
         echo "Exiting."
         exit 0
         ;;
-      *) 
+      *)
         if [ -n "$server" ]; then
-          echo -e "${BLUE}Installing $server...${NC}"
-                    # Run go mod tidy to prevent checksum mismatch errors
-          if (cd "$server" && go mod tidy && go install); then
-            echo -e "${GREEN}$server has been installed successfully.${NC}"
-            echo -e "\n${YELLOW}Reminder: Ensure ${BLUE}\$HOME/go/bin${YELLOW} is in your PATH to run the installed server.${NC}"
-            setup_agent_skills
-          else
-            echo -e "${RED}ERROR: Failed to install $server. Please check the output above for details.${NC}"
-            exit 1
-          fi
+          install_one "$server"
         else
           echo -e "${RED}Invalid selection.${NC}"
         fi
@@ -191,4 +289,4 @@ main() {
   done
 }
 
-main
+main "$@"

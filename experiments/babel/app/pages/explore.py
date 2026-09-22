@@ -13,25 +13,28 @@
 # limitations under the License.
 """Explore Mesop Page"""
 
-import json
+from dataclasses import field
 import logging
+import json
 import random
 
 # from typing import List, TypedDict, Any, cast
 import urllib
-from dataclasses import field
 
 import google.auth
 import google.auth.transport.requests as googlerequests
 import google.oauth2.id_token
+
 import mesop as me
-from set_up.set_up import Voice
+
+from state.state import AppState
+from config.default import Default, BabelMetadata
 
 # from set_up.set_up import VoicesSetup
+
 # from components.page_scaffold import page_scaffold, page_frame
-from components.styles import BACKGROUND_COLOR, CONTENT_STYLE
-from config.default import BabelMetadata, Default
-from state.state import AppState
+from components.styles import CONTENT_STYLE, BACKGROUND_COLOR
+from set_up.set_up import Voice
 
 logging.basicConfig(level=logging.DEBUG)
 config = Default()
@@ -45,27 +48,27 @@ class PageState:
     # pylint: disable=invalid-field-call
     location: int = 1
 
-    voices: list[Voice] = field(default_factory=list)
+    voices: list[Voice] = field(default_factory=lambda: [])
 
     is_loading: bool = False
     statement: str = ""
     audio_output_uri: str = ""
-    audio_output_infos: list[str] = field(default_factory=list)
-    audio_output_metadata: list[BabelMetadata] = field(default_factory=list)
+    audio_output_infos: list[str] = field(default_factory=lambda: [])
+    audio_output_metadata: list[BabelMetadata] = field(default_factory=lambda: [])
     audio_status: str = ""
     loaded: bool = False
     # pylint: disable=invalid-field-call
 
 
 def get_chosen_voices():
-    """Filters a list of Voice dictionaries, keeping only those whose name contains "Puck" or "Leda".
+    """
+    Filters a list of Voice dictionaries, keeping only those whose name contains "Puck" or "Leda".
 
     Args:
         voices: A list of Voice dictionaries.
 
     Returns:
         A new list of Voice dictionaries, filtered based on the name.
-
     """
     app_state = me.state(AppState)
     print(f"there are {len(app_state.voices)} total voices")
@@ -78,7 +81,8 @@ def get_chosen_voices():
 
 
 def filter_babel_metadata(filepath: str) -> list[BabelMetadata]:
-    """Reads a JSON file, filters the 'audio_metadata' list to keep only entries
+    """
+    Reads a JSON file, filters the 'audio_metadata' list to keep only entries
     with voice_name containing "Puck" or "Leda", and returns the filtered data as a List[BabelMetadata].
 
     Args:
@@ -86,10 +90,9 @@ def filter_babel_metadata(filepath: str) -> list[BabelMetadata]:
 
     Returns:
         A List[BabelMetadata] containing the filtered data.
-
     """
     try:
-        with open(filepath) as f:
+        with open(filepath, "r") as f:
             data = json.load(f)
     except FileNotFoundError:
         print(f"Error: File '{filepath}' not found.")
@@ -122,15 +125,14 @@ photos = [
     {
         "photo": "local_assets/free-photo-of-iconic-big-ben-and-red-buses-in-london.jpeg",
         "audio": "pages/explore_london.json",
-        "credit": "Laura Meinhardt, Pexels",
+        "credit": "Laura Meinhardt, Pexels"
     },
     {
         "photo": "local_assets/pexels-thorsten-technoman-109353-338515.jpg",
         "audio": "pages/explore_paris.json",
-        "credit": "Thorsten technoman, Pexels",
+        "credit": "Thorsten technoman, Pexels"
     },
 ]
-
 
 def change_location(e: me.ClickEvent):
     """Change location"""
@@ -139,12 +141,15 @@ def change_location(e: me.ClickEvent):
 
     if e.key == "back":
         state.location -= 1
-        state.location = max(state.location, 0)
-    elif state.location + 1 >= len(photos):
-        state.location = len(photos) - 1
+        if state.location < 0:
+            state.location = 0
     else:
-        state.location += 1
+        if state.location + 1 >= len(photos):
+            state.location = len(photos) - 1
+        else:
+            state.location += 1
     print(f"index: {state.location}")
+
 
 
 def explore_page(app_state: me.state):
@@ -175,44 +180,33 @@ def explore_page(app_state: me.state):
                 ),
             )
         with me.box(
-            style=me.Style(
-                text_align="center",
-                flex_direction="row",
-                display="flex",
-                justify_content="center",
-                align_items="center",
-            ),
+            style=me.Style(text_align="center", flex_direction="row", display="flex", justify_content="center", align_items="center")
         ):
             with me.content_button(
-                on_click=change_location,
-                key="back",
+                on_click=change_location, key="back",
             ):
                 me.icon("navigate_before")
             location_image = photos[state.location]["photo"].replace(
                 "local_assets/",
-                "static/",
+                "static/"
             )
             location_credit = photos[state.location]["credit"]
             location_audio = photos[state.location]["audio"]
             print(f"{location_audio} & {location_image}")
             state.audio_output_metadata = filter_babel_metadata(location_audio)
-            with me.box(style=me.Style(display="flex", flex_direction="column", gap=5)):
+            with me.box(style=me.Style(display="flex", flex_direction="column", gap=5  )):
                 me.image(
                     src=location_image,
                     style=me.Style(
                         width="600px",
-                        # height="400px",
+                        #height="400px",
                         border_radius="16px",
                     ),
                 )
-                me.text(
-                    location_credit,
-                    style=me.Style(font_style="italic", font_size="10pt"),
-                )
+                me.text(location_credit, style=me.Style(font_style="italic", font_size="10pt"))
 
             with me.content_button(
-                on_click=change_location,
-                key="forward",
+                on_click=change_location, key="forward",
             ):
                 me.icon("navigate_next")
         # me.text("Enter text to voice", type="headline-6")
@@ -228,10 +222,8 @@ def explore_page(app_state: me.state):
         elif state.audio_output_metadata:
             with me.box(
                 style=me.Style(
-                    display="grid",
-                    grid_template_columns="1fr 1fr",
-                    text_align="center",
-                ),
+                    display="grid", grid_template_columns="1fr 1fr", text_align="center"
+                )
             ):
                 # for uri in state.audio_output_infos:
                 #  me.audio(src=uri)
@@ -249,10 +241,10 @@ def explore_page(app_state: me.state):
                             flex_direction="column",
                             gap=5,
                             padding=me.Padding(top=10, left=10, right=10, bottom=12),
-                        ),
+                        )
                     ):
                         me.text(
-                            f"{item['language_code']} ({item['gender'].lower()}, {item['voice_name']})",
+                            f"{item["language_code"]} ({item["gender"].lower()}, {item["voice_name"]})",
                             style=me.Style(font_weight="bold"),
                         )
                         me.audio(src=audio_url)
@@ -261,7 +253,7 @@ def explore_page(app_state: me.state):
 
 @me.component
 def subtle_chat_input_journey():
-    """Input component"""
+    """input component"""
     with me.box(
         style=me.Style(
             border_radius=16,
@@ -269,12 +261,12 @@ def subtle_chat_input_journey():
             background=BACKGROUND_COLOR,
             display="flex",
             width="100%",
-        ),
+        )
     ):
         with me.box(
             style=me.Style(
                 flex_grow=1,
-            ),
+            )
         ):
             me.native_textarea(
                 autosize=True,
@@ -305,13 +297,15 @@ def subtle_chat_input_journey():
 
 
 def on_blur_statement(e: me.InputBlurEvent):
-    """Updates the statement to synthesize"""
+    """updates the statement to synthesize"""
+
     state = me.state(PageState)
     state.statement = e.value
 
 
 def on_click_clear_babel(e: me.ClickEvent):  # pylint: disable=unused-argument
-    """Clear babel input event"""
+    """clear babel input event"""
+
     state = me.state(PageState)
     state.is_loading = False
     state.audio_output_infos.clear()
@@ -319,7 +313,7 @@ def on_click_clear_babel(e: me.ClickEvent):  # pylint: disable=unused-argument
 
 
 def regenerate_welcome(e: me.ClickEvent):  # pylint: disable=unused-argument
-    """Regenerate welcome statement"""
+    """regenerate welcome statement"""
     state = me.state(PageState)
     state.is_loading = True
     state.audio_output_infos.clear()
@@ -391,11 +385,10 @@ def generate_audio(statement: str):
 
 
 def on_click_babel(e: me.ClickEvent):  # pylint: disable=unused-argument
-    """Invokes the babel endpoint
+    """invokes the babel endpoint
 
     Args:
         e (me.ClickEvent): event click
-
     """
     state = me.state(PageState)
     state.is_loading = True

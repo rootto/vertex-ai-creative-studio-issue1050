@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Request contract definitions and models for GenMedia Creative Studio API."""
 
 from pydantic import BaseModel, Field
 
@@ -25,6 +26,7 @@ class APIReferenceImage(BaseModel):
 
 class VideoGenerationRequest(BaseModel):
     """Defines the contract for a video generation request.
+
     This schema is used by the UI to call the model layer and will be
     the schema for the future FastAPI endpoint.
     """
@@ -39,6 +41,7 @@ class VideoGenerationRequest(BaseModel):
     model_version_id: str
     person_generation: str
     negative_prompt: str | None = None
+    seed: int | None = None
     rewriter_type: str | None = None
 
     # For I2V and Interpolation
@@ -54,6 +57,35 @@ class VideoGenerationRequest(BaseModel):
     # For Video Extension
     video_input_gcs: str | None = None
     video_input_mime_type: str | None = None
+
+    # Branding Guidelines
+    team_id: str | None = None
+
+
+class OmniVideoGenerationRequest(BaseModel):
+    """Defines the contract for a Gemini Omni video generation or editing request."""
+
+    prompt: str
+    duration_seconds: int = Field(..., gt=0)
+    aspect_ratio: str
+    resolution: str
+    omni_mode: str  # "t2v", "i2v", "ref2v", "edit"
+    model_version_id: str
+
+    # Reference Image GCS URIs
+    reference_image_gcs: str | None = None
+    reference_image_mime_type: str | None = None
+
+    # Reference Video GCS URIs (for editing)
+    reference_video_gcs: str | None = None
+    reference_video_mime_type: str | None = None
+
+    # Reference Media List (for ref2v)
+    r2v_references: list[APIReferenceImage] | None = None
+
+    # Multi-turn interaction context
+    previous_interaction_id: str | None = None
+    chat_history_json: str | None = None
 
     # Branding Guidelines
     team_id: str | None = None

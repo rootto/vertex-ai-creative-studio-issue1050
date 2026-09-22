@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	common "github.com/GoogleCloudPlatform/vertex-ai-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
+	common "github.com/GoogleCloudPlatform/genmedia-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"google.golang.org/genai"
@@ -230,6 +230,9 @@ func imagenEditHandler(ctx context.Context, request mcp.CallToolRequest, client 
 
 	// Process the response
 	var statusText string
+	// editedGCSURI/editedMime capture the single edited-image GCS artifact so the
+	// result can carry a resource_link in addition to the text (design #483).
+	var editedGCSURI, editedMime string
 
 	if len(response.GeneratedImages) > 0 {
 		genImg := response.GeneratedImages[0]
@@ -243,9 +246,16 @@ func imagenEditHandler(ctx context.Context, request mcp.CallToolRequest, client 
 			}
 			gcsURI := fmt.Sprintf("gs://%s/%s", appConfig.GenmediaBucket, filename)
 			statusText = fmt.Sprintf("Image edited successfully. Edited image URI: %s", gcsURI)
+			editedGCSURI = gcsURI
+			editedMime = "image/png"
 		} else if genImg.Image != nil && genImg.Image.GCSURI != "" {
 			// The image is already in GCS.
 			statusText = fmt.Sprintf("Image edited successfully. Edited image URI: %s", genImg.Image.GCSURI)
+			editedGCSURI = genImg.Image.GCSURI
+			editedMime = "image/png"
+			if genImg.Image.MIMEType != "" {
+				editedMime = genImg.Image.MIMEType
+			}
 		} else {
 			statusText = "Image editing did not produce any images."
 		}
@@ -262,5 +272,24 @@ func imagenEditHandler(ctx context.Context, request mcp.CallToolRequest, client 
 	}
 	resultText += statusText
 
-	return mcp.NewToolResultText(resultText), nil
+	// Text output is unchanged; append one resource_link for the edited GCS
+	// artifact (design #483). content[0]=text, content[1]=resource_link.
+	content := []mcp.Content{mcp.TextContent{Type: "text", Text: resultText}}
+	content = appendImagenEditResourceLink(content, editedGCSURI, editedMime)
+	return &mcp.CallToolResult{Content: content}, nil
+}
+
+// appendImagenEditResourceLink appends the resource_link for the single edited GCS
+// image artifact to items (design #483), described as "imagen output 1 of 1".
+// It returns items unchanged when there is no GCS URI (e.g. editing produced no
+// image). This only ADDS a link; the caller's text content is unchanged.
+func appendImagenEditResourceLink(items []mcp.Content, editedGCSURI, editedMime string) []mcp.Content {
+	if editedGCSURI == "" {
+		return items
+	}
+	return common.AppendMediaContent(items, []common.MediaResult{{
+		GCSURI:      editedGCSURI,
+		MimeType:    editedMime,
+		Description: "imagen output 1 of 1",
+	}})
 }

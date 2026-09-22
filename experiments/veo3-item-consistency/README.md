@@ -18,16 +18,26 @@ The application follows a multi-step process to generate the final video:
 
 This demo uses the following Google AI models:
 
-*   **Gemini 2.5 Pro:** For image analysis, description generation, and video prompt generation.
+*   **Gemini 3.1 Pro:** For image analysis, description generation, and video prompt generation.
 *   **Imagen:** For generating the still images of the character in the new scene.
 *   **Veo:** For generating the final video.
+
+> **Deprecation notice:** the Gemini and Veo model IDs have been modernized to
+> `gemini-3.1-pro-preview` and `veo-3.1-generate-001`. The image edit/outpaint step
+> still uses `imagen-3.0-capability-001`, which is on Google's **2026-06-30 sunset
+> list** and has **no drop-in Imagen 4.0 successor** for its mask-based edit/capability
+> calls. The forward path is a behavior-changing port to Nano Banana (Gemini
+> prompt-based editing) — the same decision the core app shipped in PR #1659 —
+> documented in [`MIGRATION.md`](./MIGRATION.md). That port remains outstanding and is
+> tracked by
+> [#1673](https://github.com/GoogleCloudPlatform/genmedia-creative-studio/issues/1673).
 
 ## How to Run
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/GoogleCloudPlatform/vertex-ai-creative-studio.git
-    cd vertex-ai-creative-studio/experiments/veo3-character-consistency
+    git clone https://github.com/GoogleCloudPlatform/genmedia-creative-studio.git
+    cd genmedia-creative-studio/experiments/veo3-character-consistency
     ```
 
 2.  **Set up the Python environment and install dependencies:**

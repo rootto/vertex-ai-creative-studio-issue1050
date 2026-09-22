@@ -15,15 +15,14 @@
 
 import datetime
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 
 import mesop as me
 
 from common.analytics import log_ui_click
 from common.metadata import MediaItem, get_media_for_page, get_media_item_by_id
-from common.utils import create_display_url, https_url_to_gcs_uri
+from common.utils import create_display_url, get_media_type, https_url_to_gcs_uri
 from components.header import header
-from components.feedback.feedback import feedback
 from components.interior_design.storyboard_video_tile import storyboard_video_tile
 from components.library.image_details import CarouselState
 from components.lightbox_dialog.lightbox_dialog import lightbox_dialog
@@ -42,7 +41,7 @@ class PageState:
     """State for the library page."""
 
     is_loading: bool = True
-    media_items: list[MediaItem] = field(default_factory=list)
+    media_items_json: str = ""
     show_details_dialog: bool = False
     selected_media_item_id: str | None = None
     initial_load_complete: bool = False
@@ -87,7 +86,7 @@ def _load_media(pagestate: PageState, is_filter_change: bool = False):
 
     if is_filter_change:
         pagestate.current_page = 1
-        pagestate.media_items = []
+        pagestate.media_items_json = "[]"
         pagestate.all_items_loaded = False
 
     pagestate.is_loading = True
@@ -104,10 +103,22 @@ def _load_media(pagestate: PageState, is_filter_change: bool = False):
 
     if not new_items:
         pagestate.all_items_loaded = True
-    elif is_filter_change:
-        pagestate.media_items = new_items
     else:
-        pagestate.media_items.extend(new_items)
+        existing_items = []
+        if pagestate.media_items_json and pagestate.media_items_json != "[]":
+            try:
+                existing_items = json.loads(pagestate.media_items_json)
+            except json.JSONDecodeError:
+                existing_items = []
+
+        new_items_dicts = [asdict(item) for item in new_items]
+
+        if is_filter_change:
+            combined = new_items_dicts
+        else:
+            combined = existing_items + new_items_dicts
+
+        pagestate.media_items_json = json.dumps(combined, default=str)
 
     pagestate.is_loading = False
     yield
@@ -213,40 +224,62 @@ def library_content():
                 width="100%",
             ),
         ):
-            if not pagestate.media_items and not pagestate.is_loading:
+            items_dicts = (
+                json.loads(pagestate.media_items_json)
+                if pagestate.media_items_json
+                else []
+            )
+            media_items = []
+            for d in items_dicts:
+                valid_keys = {f.name for f in fields(MediaItem)}
+                clean_d = {k: v for k, v in d.items() if k in valid_keys}
+                if "timestamp" in clean_d and isinstance(clean_d["timestamp"], str):
+                    try:
+                        clean_d["timestamp"] = datetime.datetime.fromisoformat(
+                            clean_d["timestamp"],
+                        )
+                    except ValueError:
+                        pass
+                media_items.append(MediaItem(**clean_d))
+
+            if not media_items and not pagestate.is_loading:
                 with me.box(
                     style=me.Style(padding=me.Padding.all(20), text_align="center"),
                 ):
                     me.text("No media items found for the selected filters.")
             else:
-                for item in pagestate.media_items:
+                for item in media_items:
                     gcs_uri = (
                         item.gcsuri
                         if item.gcsuri
                         else (item.gcs_uris[0] if item.gcs_uris else None)
                     )
-                    # Construct the display URL on the fly.
                     https_url = create_display_url(gcs_uri) if gcs_uri else ""
+                    render_type = get_media_type(
+                        mime_type=item.mime_type,
+                        url=https_url,
+                    )
 
-                    # Determine the render type based on mime_type for reliability
-                    render_type = "image"  # Default to image
-                    if item.mime_type:
-                        if item.mime_type.startswith("video/"):
-                            render_type = "video"
-                        elif item.mime_type.startswith("audio/"):
-                            render_type = "audio"
-                    # Fallback to URL check if mime_type is missing
-                    elif https_url:
-                        if ".mp4" in https_url or ".webm" in https_url:
-                            render_type = "video"
-                        elif ".wav" in https_url or ".mp3" in https_url:
-                            render_type = "audio"
+                    # Use thumbnail as a static preview for video tiles when available
+                    thumbnail_url = ""
+                    if getattr(item, "thumbnail_uri", None):
+                        thumbnail_url = create_display_url(item.thumbnail_uri)
+
+                    display_url = https_url
+                    display_type = render_type
+                    if render_type == "video" and thumbnail_url:
+                        if not any(
+                            thumbnail_url.lower().endswith(ext)
+                            for ext in [".mp4", ".mov", ".avi", ".webm", ".mkv"]
+                        ):
+                            display_url = thumbnail_url
+                            display_type = "image"
 
                     media_tile(
                         key=item.id,
                         on_click=on_media_item_click,
-                        media_type=render_type,
-                        https_url=https_url,
+                        media_type=display_type,
+                        https_url=display_url,
                         pills_json=get_pills_for_item(item, https_url),
                     )
 
@@ -523,7 +556,14 @@ def render_tour_detail_dialog(storyboard: dict):
                     me.text(f"Created: {storyboard.get('timestamp')}")
 
                 if pagestate.tour_dialog_active_tab == "raw":
-                    me.code(json.dumps(storyboard, indent=2), language="json")
+                    me.code(
+                        json.dumps(
+                            storyboard,
+                            indent=2,
+                            default=json_default_serializer,
+                        ),
+                        language="json",
+                    )
 
         with me.box(
             style=me.Style(
@@ -567,20 +607,10 @@ def render_default_detail_dialog(item: MediaItem):
         "Generation Time (s)": item.generation_time,
     }
 
-    # Determine the render type based on mime_type for reliability
-    render_type = "image"  # Default to image
-    if item.mime_type:
-        if item.mime_type.startswith("video/"):
-            render_type = "video"
-        elif item.mime_type.startswith("audio/"):
-            render_type = "audio"
-    # Fallback to URL check if mime_type is missing
-    elif primary_urls:
-        url = primary_urls[0]
-        if ".mp4" in url or ".webm" in url:
-            render_type = "video"
-        elif ".wav" in url or ".mp3" in url:
-            render_type = "audio"
+    render_type = get_media_type(
+        mime_type=item.mime_type,
+        url=primary_urls[0] if primary_urls else "",
+    )
 
     # The main detail viewer now only shows the primary asset and metadata
     media_detail_viewer(
@@ -598,16 +628,6 @@ def render_default_detail_dialog(item: MediaItem):
         on_veo_click=on_veo_click,
         on_extend_click=on_extend_click,
     )
-
-    if item.id:
-        with me.box(
-            style=me.Style(
-                margin=me.Margin(top=24),
-                display="flex",
-                justify_content="center",
-            ),
-        ):
-            feedback(media_item_id=item.id)
 
     # Add a button to link back to the object rotation page if applicable
     if item.object_rotation_project_id:
@@ -679,12 +699,7 @@ def _render_source_section(title: str, uris: list[str]):
                 # Construct the display URL
                 https_url = create_display_url(source_uri)
 
-                # Determine media type from URL extension
-                render_type = "image"  # Default
-                if ".mp4" in https_url or ".webm" in https_url:
-                    render_type = "video"
-                elif ".wav" in https_url or ".mp3" in https_url:
-                    render_type = "audio"
+                render_type = get_media_type(url=https_url)
 
                 # Create a dummy MediaItem for pill generation if needed,
                 # though for source assets pills might be overkill.

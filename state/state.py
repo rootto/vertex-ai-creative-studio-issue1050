@@ -13,13 +13,16 @@
 # limitations under the License.
 
 import json
-from collections.abc import Generator
 from dataclasses import asdict
 
 import mesop as me
 from flask import request
 
 from common.analytics import get_logger
+from common.identity import (
+    ANONYMOUS_USER_EMAIL,
+    get_authenticated_user_email,
+)
 from services.team_service import get_teams_for_user
 from services.user_service import bootstrap_user, get_user_role
 
@@ -32,7 +35,7 @@ class AppState:
 
     sidenav_open: bool = False
     theme_mode: str = "dark"
-    user_email: str = "anonymous@google.com"
+    user_email: str = ANONYMOUS_USER_EMAIL
     session_id: str = ""
     current_page: str = ""
     user_role: str = "contributor"
@@ -43,27 +46,21 @@ class AppState:
         """Initializes the AppState, reading user info from the request context."""
         self.managed_teams_json = "[]"  # Initialize to avoid AttributeError
 
-        # Read user email directly from IAP or environment headers
-        user_email = None
-        if "HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL" in request.environ:
-            user_email = request.environ["HTTP_X_GOOG_AUTHENTICATED_USER_EMAIL"]
-            if user_email.startswith("accounts.google.com:"):
-                user_email = user_email.split(":")[-1]
-        elif "MESOP_USER_EMAIL" in request.environ:
+        user_email = get_authenticated_user_email(
+            headers=request.headers,
+            environ=request.environ,
+        )
+        if not user_email and "MESOP_USER_EMAIL" in request.environ:
             user_email = request.environ["MESOP_USER_EMAIL"]
 
-        if user_email:
-            self.user_email = user_email
-        else:
-            self.user_email = "anonymous@google.com"
-
+        self.user_email = user_email or ANONYMOUS_USER_EMAIL
         self.session_id = request.environ.get(
             "MESOP_SESSION_ID",
             request.cookies.get("session_id", ""),
         )
 
         # Bootstrap and fetch role/teams
-        if self.user_email != "anonymous@google.com":
+        if self.user_email != ANONYMOUS_USER_EMAIL:
             bootstrap_user(self.user_email)
             self.user_role = get_user_role(self.user_email)
             teams = get_teams_for_user(self.user_email, self.user_role)
@@ -121,9 +118,7 @@ def toggle_theme(event: me.ClickEvent):
 
 
 def get_app_state() -> AppState:
-    """-
-    Returns the current application state.
-    """
+    """Returns the current application state."""
     return me.state(AppState)
 
 
@@ -170,26 +165,17 @@ def get_user_and_session_info() -> tuple[str, str]:
     return app_state.user_email, app_state.session_id
 
 
-def update_user_and_session_info(user_email: str, session_id: str) -> Generator:
-    """Update the user's email and session ID in the application state."""
+def update_user_and_session_info(user_email: str, session_id: str):
+    """Updates the user's email and session ID in the application state."""
     app_state = me.state(AppState)
     app_state.user_email = user_email
     app_state.session_id = session_id
-
-    if user_email != "anonymous@google.com":
-        bootstrap_user(user_email)
-        app_state.user_role = get_user_role(user_email)
-        teams = get_teams_for_user(user_email, app_state.user_role)
-        app_state.managed_teams_json = json.dumps(
-            [asdict(t) for t in teams],
-            default=str,
-        )
     yield
 
 
 def is_logged_in() -> bool:
     """Returns whether the user is logged in."""
-    return me.state(AppState).user_email != "anonymous@google.com"
+    return me.state(AppState).user_email != ANONYMOUS_USER_EMAIL
 
 
 def get_current_user_id() -> str:
@@ -219,7 +205,7 @@ def reset_app_state():
     app_state = me.state(AppState)
     app_state.sidenav_open = False
     app_state.theme_mode = "light"
-    app_state.user_email = "anonymous@google.com"
+    app_state.user_email = ANONYMOUS_USER_EMAIL
     app_state.session_id = ""
     yield
 

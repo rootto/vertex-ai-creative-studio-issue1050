@@ -2,7 +2,7 @@
 title: "MCP Veo Server (Version: 3.7.0)"
 ---
 
-This tool provides video generation capabilities using Google's Veo models (via Vertex AI). It is one of the MCP tools for Google Cloud Genmedia services, acting as an MCP server component to allow LLMs and other MCP clients to generate videos from text prompts or source images.
+This tool provides video generation capabilities using Google's Veo models (via Google Cloud AI). It is one of the MCP tools for Google Cloud Genmedia services, acting as an MCP server component to allow LLMs and other MCP clients to generate videos from text prompts or source images.
 
 ## MCP Tool Definitions
 
@@ -15,11 +15,14 @@ The server exposes the following tools:
 *   **Parameters**:
     *   `prompt` (string, required): Text prompt for video generation.
     *   `bucket` (string, optional): Google Cloud Storage bucket where the API will save the generated video(s) (e.g., "your-bucket/output-folder" or "gs://your-bucket/output-folder"). If not provided, and `GENMEDIA_BUCKET` env var is set, `gs://<GENMEDIA_BUCKET>/veo_outputs/` will be used. One of these (param or env var) is effectively required.
-    *   `output_directory` (string, optional): If provided, specifies a local directory to download the generated video(s) to. Filenames will be generated automatically.
+    *   `output_directory` (string, optional): If provided, specifies a local directory to download the generated video(s) to. Filenames will be generated automatically unless `output_filename` is set.
+    *   `output_filename` (string, optional): Base name for the output(s), e.g. `clip.mp4`. The extension is forced to the true video type and, when more than one video is returned, a `_1..n` suffix is inserted before the extension. Veo lets the API write the objects to GCS and then renames them to this name (no `sample_*` originals remain on success). See [Naming Outputs](../index.md#naming-outputs-output_filename).
     *   `model` (string, optional): Model to use for video generation. Can be a full model ID or a common alias. See the `mcp-common/models.go` file for a complete list of supported models and aliases.
     *   `num_videos` (number, optional): Number of videos to generate. Note: the maximum is model-dependent.
     *   `aspect_ratio` (string, optional): Aspect ratio of the generated videos. Note: supported aspect ratios are model-dependent.
     *   `duration` (number, optional): Duration of the generated video in seconds. Note: the supported duration range is model-dependent.
+
+Because Veo always writes to GCS, every Veo tool appends one MCP `resource_link` content item per generated video (`uri` = the `gs://` URI, plus `name`, `mimeType`, and a 1-based `description`); the text summary is unchanged. See [Resource Links for GCS Outputs](../index.md#resource-links-for-gcs-outputs).
 
 ### 2. `veo_i2v` (Image-to-Video)
 
@@ -31,6 +34,7 @@ The server exposes the following tools:
     *   `prompt` (string, optional): Optional text prompt to guide video generation from the image.
     *   `bucket` (string, optional): Google Cloud Storage bucket for output. Same logic as `veo_t2v`.
     *   `output_directory` (string, optional): Local directory for download. Same logic as `veo_t2v`.
+    *   `output_filename` (string, optional): Base output name. Same logic as `veo_t2v`.
     *   `model` (string, optional): Model to use. Default: `"veo-3.1-fast-generate-001"`.
     *   `num_videos` (number, optional): Number of videos. Default: `1`. Min: `1`, Max: `4`.
     *   `aspect_ratio` (string, optional): Aspect ratio. Default: `"16:9"`.
@@ -46,6 +50,7 @@ The server exposes the following tools:
     *   `prompt` (string, optional): Optional text prompt to guide video extension.
     *   `bucket` (string, optional): Google Cloud Storage bucket for output. Same logic as `veo_t2v`.
     *   `output_directory` (string, optional): Local directory for download. Same logic as `veo_t2v`.
+    *   `output_filename` (string, optional): Base output name. Same logic as `veo_t2v`.
     *   `model` (string, optional): Model to use. Supported by Veo 3.1 models.
     *   `num_videos` (number, optional): Number of videos. Default: `1`. Min: `1`, Max: `4`.
 
@@ -59,7 +64,7 @@ The tool utilizes the following environment variables:
 
 *   `GOOGLE_CLOUD_PROJECT` (string): **Required**. Your Google Cloud Project ID. The application will terminate if this is not set. Note: `PROJECT_ID` is also supported as a fallback.
     *   **Override**: You can override this globally for this specific server by setting `VEO_PROJECT_ID`.
-*   `GOOGLE_CLOUD_LOCATION` (string): The preferred Google Cloud location/region for Vertex AI services.
+*   `GOOGLE_CLOUD_LOCATION` (string): The preferred Google Cloud location/region for Google Cloud AI services.
     *   Default: `"us-central1"`
     *   **Fallback**: `LOCATION` is also supported as a fallback for `GOOGLE_CLOUD_LOCATION`.
     *   **Override**: You can override this globally for this specific server by setting `VEO_LOCATION`.

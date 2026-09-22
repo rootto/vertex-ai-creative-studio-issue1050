@@ -1,5 +1,5 @@
 ---
-title: "GenMedia Creative Studio | Vertex AI"
+title: "GenMedia Creative Studio | Google Cloud AI"
 ---
 
 > ###### _This is not an officially supported Google product. This project is not eligible for the [Google Open Source Software Vulnerability Rewards Program](https://bughunters.google.com/open-source-security). This project is intended for demonstration purposes only. It is not intended for use in a production environment._
@@ -10,7 +10,7 @@ title: "GenMedia Creative Studio | Vertex AI"
 
 ## Table of Contents
 
-- [GenMedia Creative Studio | Vertex AI](#genmedia-creative-studio--vertex-ai)
+- [GenMedia Creative Studio | Google Cloud AI](#genmedia-creative-studio--google-cloud-ai)
 - [Table of Contents](#table-of-contents)
 - [GenMedia Creative Studio](#genmedia-creative-studio)
   - [Experiments](#experiments)
@@ -47,14 +47,18 @@ title: "GenMedia Creative Studio | Vertex AI"
 
 ## GenMedia Creative Studio
 
+> [!IMPORTANT]
+> **Git History Reset Notice**: The repository history on `main` was scrubbed in August 2026 to remove legacy compiled binaries, reducing clone size by ~60%. If you have an existing clone, please see the [Git History Reset Instructions on our Changelog](/core/changelog/) for steps to synchronize your local checkout.
+
 > **Browser Compatibility:** For the best experience, we recommend using Google Chrome. Some features may not work as expected on other browsers, such as Safari or Firefox.
 
-GenMedia Creative Studio is a web application showcasing Google Cloud's generative media - Veo, Lyria, Chirp, Gemini 2.5 Flash Image Generation (nano-banana), and Gemini TTS along with custom workflows and techniques for creative exploration and inspiration. We're looking forward to see what you create!
+
+GenMedia Creative Studio is a web application showcasing Google Cloud's generative media - Gemini Omni, Veo, Lyria, Chirp, Gemini Image Generation (Nano Banana), and Gemini TTS along with custom workflows and techniques for creative exploration and inspiration. We're looking forward to see what you create!
 
 Current featureset
 
-- Image: Gemini 3.1 Flash Image Generation (Nano Banana 2), Gemini 3 Pro Image (Nano Banana Pro), Imagen 3, Imagen 4, Virtual Try-On
-- Video: Veo 3.1, Veo 3, Veo 2
+- Image: Gemini 3.1 Flash-Lite Image (Nano Banana 2 Lite), Gemini 3.1 Flash Image Generation (Nano Banana 2), Gemini 3 Pro Image (Nano Banana Pro), Virtual Try-On. (Imagen was [deprecated across Google, including Vertex AI, around August 17, 2026](https://firebase.google.com/docs/ai-logic/imagen-models-migration?api=dev) — use Nano Banana instead.)
+- Video: Gemini Omni Flash, Veo 3.1, Veo 3
 - Music: Lyria
 - Speech: Chirp 3 HD, Gemini Text to Speech
 - Workflows: Character Consistency, Shop the Look, Starter Pack Moodboard, Interior Designer
@@ -73,13 +77,13 @@ Here's a glimpse of what you'll find:
 - **MCP Tools for Genmedia:** Model Context Protocol servers for Veo, Imagen, Lyria, Chirp, and Gemini to bring creativity to your agents.
   - ⚡ **Instant Installation:** You can now install all MCP servers directly using our pre-compiled binaries:
     ```bash
-    curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/vertex-ai-creative-studio/main/experiments/mcp-genmedia/mcp-genmedia-go/install-online.sh | bash
+    curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/genmedia-creative-studio/main/experiments/mcp-genmedia/mcp-genmedia-go/install-online.sh | bash
     ```
 
 **Combined Workflows**
 
 - **Countdown Workflow:** An automated two-stage pipeline to create branded countdown videos.
-- **Storycraft:** An AI-powered video storyboard generation platform that transforms text descriptions into complete video narratives.
+- **Storycraft:** An AI-powered video storyboard generation platform that transforms text descriptions into complete video narratives. (Now maintained at [mblanc/storycraft](https://github.com/mblanc/storycraft).)
     - **Creative GenMedia Workflow:** An end-to-end workflow to produce high-quality, on-brand creative media.
     - **Run, Veo, Run:** A real-time, multimodal video generation experiment that creates a branching narrative loop using Veo 3.1 for video extension and Gemini 3 for context awareness.
 

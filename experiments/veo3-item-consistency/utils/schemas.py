@@ -12,17 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
-
 from pydantic import BaseModel, Field
-
+from typing import List, Optional
+from enum import Enum
 
 # --- Enumerations for Constrained Choices ---
 class SexEnum(str, Enum):
     MALE = "Male"
     FEMALE = "Female"
     INDETERMINATE = "Indeterminate / Androgynous"
-
 
 class AncestryEnum(str, Enum):
     WHITE_CAUCASIAN = "White / Caucasian"
@@ -36,14 +34,12 @@ class AncestryEnum(str, Enum):
     PACIFIC_ISLANDER = "Pacific Islander"
     MIXED_RACE_AMBIGUOUS = "Mixed Race / Ambiguous"
 
-
 class FacialBuildEnum(str, Enum):
     SLENDER = "Slender / Bony"
     ATHLETIC = "Athletic / Toned"
     AVERAGE = "Average"
     HEAVY_SET = "Heavy-set / Fleshy"
     GAUNT = "Gaunt / Emaciated"
-
 
 class FaceShapeEnum(str, Enum):
     OVAL = "Oval"
@@ -54,7 +50,6 @@ class FaceShapeEnum(str, Enum):
     RECTANGULAR_LONG = "Rectangular / Long"
     TRIANGULAR = "Triangular"
 
-
 class HairLengthEnum(str, Enum):
     BALD_SHAVED = "Bald / Shaved"
     BUZZ_CUT = "Buzz cut"
@@ -64,13 +59,11 @@ class HairLengthEnum(str, Enum):
     SHOULDER_LENGTH = "Shoulder-length"
     LONG = "Long (past shoulders)"
 
-
 class HairTextureEnum(str, Enum):
     STRAIGHT = "Straight"
     WAVY = "Wavy"
     CURLY = "Curly"
     KINKY_COILY = "Kinky / Coily"
-
 
 class HairlineEnum(str, Enum):
     STRAIGHT = "Straight"
@@ -78,7 +71,6 @@ class HairlineEnum(str, Enum):
     WIDOWS_PEAK = "Widow's Peak"
     RECEDING = "Receding"
     UNEVEN = "Uneven"
-
 
 class HairstyleEnum(str, Enum):
     """A detailed and comprehensive categorization of hairstyles across all genders."""
@@ -129,10 +121,9 @@ class HairstyleEnum(str, Enum):
     # Styles defined primarily by their unique texture or structure.
     AFRO = "Afro"
     MULLET = "Mullet"
-
+    
     # ============== Other ==============
     OTHER = "Other"
-
 
 class HairlineEnum(str, Enum):
     STRAIGHT = "Straight"
@@ -140,7 +131,6 @@ class HairlineEnum(str, Enum):
     WIDOWS_PEAK = "Widow's Peak"
     RECEDING = "Receding"
     UNEVEN = "Uneven"
-
 
 class EyeShapeEnum(str, Enum):
     ALMOND = "Almond"
@@ -151,13 +141,11 @@ class EyeShapeEnum(str, Enum):
     MONOLID = "Monolid"
     DEEP_SET = "Deep-set"
 
-
 class EyebrowShapeEnum(str, Enum):
     STRAIGHT = "Straight"
     ARCHED = "Arched"
     CURVED = "Curved"
     ANGLED = "Angled"
-
 
 class FacialHairTypeEnum(str, Enum):
     CLEAN_SHAVEN = "Clean-shaven"
@@ -165,7 +153,6 @@ class FacialHairTypeEnum(str, Enum):
     MOUSTACHE = "Moustache"
     BEARD = "Beard"
     GOATEE = "Goatee"
-
 
 # --- Nested Feature Models ---
 class OverallImpression(BaseModel):
@@ -175,14 +162,12 @@ class OverallImpression(BaseModel):
     facial_build: FacialBuildEnum
     most_memorable_feature: str
 
-
 class HeadAndFaceStructure(BaseModel):
     face_shape: FaceShapeEnum
     forehead_description: str
     cheekbones_description: str
     jawline_description: str
     chin_description: str
-
 
 class HairFeatures(BaseModel):
     color: str
@@ -192,44 +177,37 @@ class HairFeatures(BaseModel):
     hairline: HairlineEnum
     density_and_condition: str
 
-
 class EyeAndEyebrowFeatures(BaseModel):
     eyebrow_description: str
     eye_color: str
     eye_shape: EyeShapeEnum
     eye_details: str
 
-
 class NoseFeatures(BaseModel):
     bridge_description: str
     tip_description: str
     nostril_description: str
 
-
 class MouthAndLipFeatures(BaseModel):
     lip_fullness: str
     mouth_shape: str
     resting_expression: str
-    teeth_description: str | None
-
+    teeth_description: Optional[str]
 
 class SkinFeatures(BaseModel):
     complexion_and_tone: str
     texture_and_condition: str
-    distinguishing_marks: list[str]
-
+    distinguishing_marks: List[str]
 
 class FacialHairFeatures(BaseModel):
     type: FacialHairTypeEnum
     style_and_condition: str
     color: str
 
-
 class AccessoryFeatures(BaseModel):
-    eyeglasses: str | None
-    headwear: str | None
-    piercings: list[str]
-
+    eyeglasses: Optional[str]
+    headwear: Optional[str]
+    piercings: List[str]
 
 # --- The Master Schema ---
 class FacialCompositeProfile(BaseModel):
@@ -240,71 +218,51 @@ class FacialCompositeProfile(BaseModel):
     nose: NoseFeatures
     mouth_and_lips: MouthAndLipFeatures
     skin: SkinFeatures
-    facial_hair: FacialHairFeatures | None
-    accessories: AccessoryFeatures | None
-
+    facial_hair: Optional[FacialHairFeatures]
+    accessories: Optional[AccessoryFeatures]
 
 # --- Machine Profile Schema ---
 class MachineProfile(BaseModel):
     """A detailed profile of a machine or robotic entity."""
-
-    machine_type: str = Field(
-        description="The type of machine, e.g., 'humanoid robot', 'industrial arm', 'cybernetic drone'.",
-    )
-    primary_materials: list[str] = Field(
-        description="List of primary materials, e.g., ['brushed steel', 'carbon fiber', 'matte black polymer'].",
-    )
-    color_palette: list[str] = Field(description="The main colors of the machine.")
-    form_factor: str = Field(
-        description="Overall shape and build, e.g., 'bipedal and slender', 'bulky and utilitarian', 'aerodynamic'.",
-    )
-    key_features: list[str] = Field(
-        description="Distinctive features, e.g., ['glowing mono-eye', 'exposed hydraulic pistons', 'multiple sensor arrays'].",
-    )
-    aesthetic: str = Field(
-        description="The overall design style, e.g., 'cyberpunk', 'steampunk', 'minimalist', 'brutalist'.",
-    )
-    condition: str | None = Field(
-        "pristine",
-        description="The condition of the machine, e.g., 'pristine', 'weathered', 'battle-damaged'.",
-    )
+    machine_type: str = Field(description="The type of machine, e.g., 'humanoid robot', 'industrial arm', 'cybernetic drone'.")
+    primary_materials: List[str] = Field(description="List of primary materials, e.g., ['brushed steel', 'carbon fiber', 'matte black polymer'].")
+    color_palette: List[str] = Field(description="The main colors of the machine.")
+    form_factor: str = Field(description="Overall shape and build, e.g., 'bipedal and slender', 'bulky and utilitarian', 'aerodynamic'.")
+    key_features: List[str] = Field(description="Distinctive features, e.g., ['glowing mono-eye', 'exposed hydraulic pistons', 'multiple sensor arrays'].")
+    aesthetic: str = Field(description="The overall design style, e.g., 'cyberpunk', 'steampunk', 'minimalist', 'brutalist'.")
+    condition: Optional[str] = Field("pristine", description="The condition of the machine, e.g., 'pristine', 'weathered', 'battle-damaged'.")
 
 
 # --- Prompt Generation Schema ---
 class GeneratedPrompts(BaseModel):
     prompt: str = Field(
-        description="A single, comprehensive, photorealistic prompt describing the entire scene with the character and machine.",
+        description="A single, comprehensive, photorealistic prompt describing the entire scene with the character and machine."
     )
     negative_prompt: str = Field(
         default="blurry, cartoon, deformed, watermark, text, signature, low quality",
-        description="A prompt describing unwanted elements to exclude from the generated image.",
+        description="A prompt describing unwanted elements to exclude from the generated image."
     )
-
 
 # --- Modified Top-Level Class ---
 # This class now includes both the analysis profiles and the generated prompts.
 
-
 class SceneAnalysis(BaseModel):
-    """A comprehensive schema to hold both the structured analysis of a scene
+    """
+    A comprehensive schema to hold both the structured analysis of a scene
     and the generated prompts for image generation.
     """
-
-    character: FacialCompositeProfile | None = Field(
+    character: Optional[FacialCompositeProfile] = Field(
         None,
-        description="Forensic profile of the human character in the image, if present.",
+        description="Forensic profile of the human character in the image, if present."
     )
-    machine: MachineProfile | None = Field(
+    machine: Optional[MachineProfile] = Field(
         None,
-        description="Technical profile of the machine in the image, if present.",
+        description="Technical profile of the machine in the image, if present."
     )
-
 
 # Define a structured output for the model
 class BestFrameSelection(BaseModel):
-    best_frame_index: int = Field(
-        description="The 0-based index of the best frame from the list.",
-    )
-    reasoning: str = Field(
-        description="A brief explanation for why this frame was chosen.",
-    )
+    best_frame_index: int = Field(description="The 0-based index of the best frame from the list.")
+    reasoning: str = Field(description="A brief explanation for why this frame was chosen.")
+
+

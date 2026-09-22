@@ -1,5 +1,5 @@
 # Stage 1: Build the UI
-FROM node:20-slim as ui-builder
+FROM node:24-slim as ui-builder
 WORKDIR /app/ui
 COPY ui/package*.json ./
 RUN npm install
@@ -18,20 +18,19 @@ RUN apt-get update && apt-get install -y \
 # Copy application files
 COPY api /app/api
 COPY core /app/core
-COPY .env /app/.env
 
 # Copy built UI from Stage 1
 COPY --from=ui-builder /app/ui/dist /app/ui/dist
 
 # Install app dependencies
-RUN pip install \
+RUN pip install --no-cache-dir \
     fastapi \
     uvicorn \
     python-dotenv \
     google-genai \
     google-cloud-storage \
     pyiqa \
-    opencv-python \
+    opencv-python-headless \
     c2pa-python \
     requests \
     google-auth \

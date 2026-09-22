@@ -16,10 +16,10 @@ Generates content (text and/or images) based on a multimodal prompt.
 - `model` (string, optional): The specific NanoBanana (Gemini Image) model to use. Defaults to `gemini-3.1-flash-image`.
 - `images` (string array, optional): A list of local file paths or GCS URIs for input images.
 - `output_directory` (string, optional): Local directory to save any generated image(s) to.
+- `output_filename` (string, optional): Base name for the output(s), e.g. `hero.png`. The extension is forced to the true image type and, when more than one image is generated, a `_1..n` suffix is inserted before the extension. Applied identically to local files and GCS objects. See [Naming Outputs](../index.md#naming-outputs-output_filename).
 - `gcs_bucket_uri` (string, optional): GCS URI prefix to store any generated images.
 
-
-
+When images are uploaded to GCS, the tool appends one MCP `resource_link` content item per image (`uri` = the `gs://` URI, plus `name`, `mimeType`, and a 1-based `description`); the text summary is unchanged. See [Resource Links for GCS Outputs](../index.md#resource-links-for-gcs-outputs).
 
 ## Environment Variable Configuration
 
@@ -27,7 +27,7 @@ The tool utilizes the following environment variables:
 
 *   `GOOGLE_CLOUD_PROJECT` (string): **Required**. Your Google Cloud Project ID.
     *   **Override**: You can override this globally for this specific server by setting `NANOBANANA_PROJECT_ID`.
-*   `GOOGLE_CLOUD_LOCATION` (string): The preferred Google Cloud location/region for Vertex AI services.
+*   `GOOGLE_CLOUD_LOCATION` (string): The preferred Google Cloud location/region for Google Cloud AI services.
     *   Default: `"us-central1"`
     *   **Fallback**: `LOCATION` is also supported as a fallback for `GOOGLE_CLOUD_LOCATION`.
     *   **Override**: You can override this globally for this specific server by setting `NANOBANANA_LOCATION`.

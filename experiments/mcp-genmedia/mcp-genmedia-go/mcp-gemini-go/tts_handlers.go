@@ -15,8 +15,55 @@ import (
 
 	texttospeech "cloud.google.com/go/texttospeech/apiv1"
 	"cloud.google.com/go/texttospeech/apiv1/texttospeechpb"
+	common "github.com/GoogleCloudPlatform/genmedia-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// resolveGeminiTTSFilename decides the saved audio filename. The canonical
+// output_filename wins over the deprecated output_filename_prefix (design §4a):
+// when set, it yields a client-predictable base name with the extension forced to
+// the true audio MIME for the selected encoding (design §4b) — a single artifact
+// is used as-is (<stem>.<ext>), multiple would be suffixed _1..n by the shared
+// helper. When only the legacy prefix (or neither) is provided, the historical
+// <prefix>-<voice>-<timestamp><ext> scheme is preserved byte-for-byte.
+func resolveGeminiTTSFilename(args map[string]any, voiceName, legacyExt, mimeType string) (string, error) {
+	if base := common.ResolveOutputFilename(args); base != "" {
+		names, err := common.BuildOutputFilenames(base, 1, mimeType)
+		if err != nil {
+			return "", err
+		}
+		return names[0], nil
+	}
+	prefix, _ := args["output_filename_prefix"].(string)
+	if prefix == "" {
+		prefix = "gemini_tts_audio"
+	}
+	return fmt.Sprintf("%s-%s-%s%s", prefix, voiceName, time.Now().Format(timeFormatForTTSFilename), legacyExt), nil
+}
+
+// saveGeminiTTSAudio wires the resolved output_filename through to the local file
+// write: it resolves the client-predictable name (output_filename wins over the
+// legacy output_filename_prefix; extension forced to the true audio MIME — §4a/§4b),
+// joins it under outputDir, applies the collision-overwrite warning (§4e), and
+// writes the bytes through the injectable writeFileFn seam. It returns the full
+// saved path. A name-resolution failure is returned as nameErr (fatal to the
+// caller); a write failure as writeErr (the caller falls back to returning the
+// audio inline). Splitting the two errors mirrors the handler's original behavior.
+func saveGeminiTTSAudio(args map[string]any, audioBytes []byte, outputDir, voiceName, legacyExt, mimeType string) (savedFilename string, nameErr, writeErr error) {
+	filename, err := resolveGeminiTTSFilename(args, voiceName, legacyExt, mimeType)
+	if err != nil {
+		return "", err, nil
+	}
+	savedFilename = filepath.Join(outputDir, filename)
+	// Collision policy: overwrite with a warning (design §4e).
+	if _, statErr := os.Stat(savedFilename); statErr == nil {
+		log.Printf("Warning: output file %q already exists in %s; overwriting (collision policy).", filename, outputDir)
+	}
+	if werr := writeFileFn(savedFilename, audioBytes, 0644); werr != nil {
+		return savedFilename, nil, werr
+	}
+	return savedFilename, nil, nil
+}
 
 const (
 	geminiTTSAPIEndpoint     = "https://texttospeech.googleapis.com/v1/text:synthesize"
@@ -255,10 +302,6 @@ func geminiAudioTTSHandler(ctx context.Context, request mcp.CallToolRequest) (*m
 	}
 
 	outputDir, _ := request.GetArguments()["output_directory"].(string)
-	filenamePrefix, _ := request.GetArguments()["output_filename_prefix"].(string)
-	if filenamePrefix == "" {
-		filenamePrefix = "gemini_tts_audio"
-	}
 
 	// --- 2. Call the TTS API ---
 	audioBytes, err := callGeminiTTSAPI(ctx, text, prompt, voiceName, modelName, audioEncoding, languageCode)
@@ -287,10 +330,12 @@ func geminiAudioTTSHandler(ctx context.Context, request mcp.CallToolRequest) (*m
 			base64AudioData := base64.StdEncoding.EncodeToString(audioBytes)
 			contentItems = append(contentItems, mcp.AudioContent{Type: "audio", Data: base64AudioData, MIMEType: mimeType})
 		} else {
-			filename := fmt.Sprintf("%s-%s-%s%s", filenamePrefix, voiceName, time.Now().Format(timeFormatForTTSFilename), fileExtension)
-			savedFilename := filepath.Join(outputDir, filename)
-			if err := os.WriteFile(savedFilename, audioBytes, 0644); err != nil {
-				fileSaveMessage = fmt.Sprintf("Error writing audio file %s: %v. Audio data will be returned in response instead.", savedFilename, err)
+			savedFilename, nameErr, writeErr := saveGeminiTTSAudio(request.GetArguments(), audioBytes, outputDir, voiceName, fileExtension, mimeType)
+			if nameErr != nil {
+				return mcp.NewToolResultError(nameErr.Error()), nil
+			}
+			if writeErr != nil {
+				fileSaveMessage = fmt.Sprintf("Error writing audio file %s: %v. Audio data will be returned in response instead.", savedFilename, writeErr)
 				log.Print(fileSaveMessage)
 				base64AudioData := base64.StdEncoding.EncodeToString(audioBytes)
 				contentItems = append(contentItems, mcp.AudioContent{Type: "audio", Data: base64AudioData, MIMEType: mimeType})

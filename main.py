@@ -18,20 +18,62 @@ import inspect
 import os
 import uuid
 
+try:
+    import urllib3.contrib.pyopenssl
+
+    urllib3.contrib.pyopenssl.extract_from_urllib3()
+except (ImportError, AttributeError):
+    pass
+
+try:
+    import OpenSSL.SSL
+
+    for _attr_name in dir(OpenSSL.SSL.Context):
+        _attr = getattr(OpenSSL.SSL.Context, _attr_name)
+        if callable(_attr) and not _attr_name.startswith("__"):
+
+            def _make_wrapper(orig_func):
+                def _wrapper(*args, **kwargs):
+                    try:
+                        return orig_func(*args, **kwargs)
+                    except ValueError as e:
+                        if "already been used" in str(e):
+                            return None
+                        raise
+
+                return _wrapper
+
+            setattr(OpenSSL.SSL.Context, _attr_name, _make_wrapper(_attr))
+except (ImportError, AttributeError):
+    pass
+
 import google.auth
 import mesop as me
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.wsgi import WSGIMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from google.auth import impersonated_credentials
 from google.cloud import storage
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
+import pages.brand_adherence
+import pages.character_sheet
+import pages.imagen_upscale
+import pages.shop_the_look
+import pages.storyboarder
 from app_factory import app
-from common.storage import get_session
+from common.identity import (
+    ANONYMOUS_USER_EMAIL,
+    get_authenticated_user_email,
+)
 from common.utils import create_display_url
 from config import default as config
 from models.video_processing import convert_mp4_to_gif
@@ -46,23 +88,22 @@ from pages import gemini_tts as gemini_tts_page
 from pages import gemini_writers_workshop as gemini_writers_workshop_page
 from pages import guideline_analysis as guideline_analysis_page
 from pages import home as home_page
+from pages import imagen as imagen_page
 from pages import interior_design_v2 as interior_design_page
 from pages import library_v4 as library_v4_page
+from pages import login as login_page
 from pages import lyria as lyria_page
-from pages import object_rotation as object_rotation_page
 from pages import pixie_compositor as pixie_compositor_page
 from pages import portraits as motion_portraits
 from pages import recontextualize as recontextualize_page
 from pages import selfie as selfie_page
 from pages import starter_pack as starter_pack_page
-from pages import storyboarder as storyboarder_page
 from pages import team_assets as team_assets_page
 from pages import team_management as team_management_page
 from pages import test_proxy_caching as test_proxy_caching_page
 from pages import veo
 from pages import vto as vto_page
 from pages import welcome as welcome_page
-from pages.edit_images import content as edit_images_content
 from pages.library_v2 import page as library_v2_page
 from pages.library_v3 import page as library_v3_page
 from pages.test_async_veo import page as test_async_veo_page
@@ -75,14 +116,21 @@ from pages.test_svg import test_svg_page
 from pages.test_uploader import test_uploader_page
 from pages.test_vto_prompt_generator import page as test_vto_prompt_generator_page
 from routers import (
-    asset_handler,  # Import asset handler
+    asset_handler,
     veo_router,
 )
+from workflows.retro_games import page as retro_games
+
+if config.Default.EDIT_IMAGES_ENABLED:
+    from pages import object_rotation as object_rotation_page
 
 
 class UserInfo(BaseModel):
     email: str | None
     agent: str | None
+
+
+PUBLIC_PATH_PREFIXES = ("/healthz", "/readyz", "/favicon.ico")
 
 
 # FastAPI server with Mesop
@@ -95,36 +143,44 @@ async def favicon():
     return FileResponse("assets/favicon.ico")
 
 
-# Define allowed origins for CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"https://.*\.cloudshell\.dev|http://localhost:8080",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+@app.get("/healthz", include_in_schema=False)
+async def healthz():
+    return {"status": "ok"}
 
 
-class HostMiddleware(BaseHTTPMiddleware):
+@app.get("/readyz", include_in_schema=False)
+async def readyz():
+    return {"status": "ok"}
+
+
+class ForwardedHostMiddleware(BaseHTTPMiddleware):
     """Middleware to rewrite Host header to match X-Forwarded-Host.
 
     Required to bypass Mesop strict Origin validation/CSRF under proxies.
     """
 
     async def dispatch(self, request: Request, call_next):
-        forwarded_host = request.headers.get("x-forwarded-host")
+        forwarded_host = request.headers.get("X-Forwarded-Host")
         if forwarded_host:
-            new_headers = []
-            for k, v in request.scope["headers"]:
-                if k == b"host":
-                    new_headers.append((b"host", forwarded_host.encode("latin1")))
-                else:
-                    new_headers.append((k, v))
-            request.scope["headers"] = new_headers
+            request.scope["headers"] = [
+                (k, v) if k != b"host" else (k, forwarded_host.encode("latin1"))
+                for k, v in request.scope["headers"]
+            ]
         return await call_next(request)
 
 
-app.add_middleware(HostMiddleware)
+app.add_middleware(ForwardedHostMiddleware)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=os.environ.get(
+        "CORS_ORIGIN_REGEX",
+        r"https://.*|http://localhost:8080",
+    ),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/api/convert_to_gif")
@@ -195,13 +251,19 @@ async def add_global_csp(request: Request, call_next):
 
 @app.middleware("http")
 async def set_request_context(request: Request, call_next):
-    user_email = request.headers.get("X-Goog-Authenticated-User-Email")
-    if user_email and user_email.startswith("accounts.google.com:"):
-        user_email = user_email.split(":")[-1]
-
-    # Fallback to local dev user if IAP header not present
+    user_email = get_authenticated_user_email(request.headers)
     if not user_email:
-        user_email = os.environ.get("DEV_USER_EMAIL", "anonymous@google.com")
+        user_email = os.environ.get("DEV_USER_EMAIL", ANONYMOUS_USER_EMAIL)
+
+    if (
+        config.Default.REQUIRE_AUTHENTICATED_USER
+        and user_email == ANONYMOUS_USER_EMAIL
+        and not request.url.path.startswith(PUBLIC_PATH_PREFIXES)
+    ):
+        return JSONResponse(
+            {"detail": "Authentication required"},
+            status_code=401,
+        )
 
     session_id = request.cookies.get("session_id")
     if not session_id:
@@ -255,17 +317,15 @@ def get_proxy_storage_client():
     return _proxy_storage_client
 
 
-# Add a new endpoint to proxy GCS media for better caching and automatic URL refreshing.
 @app.get("/media/{bucket_name}/{object_path:path}")
 def get_media_proxy(request: Request, bucket_name: str, object_path: str):
     """Securely redirects to a short-lived signed URL for a GCS object, checking for IAP authentication."""
     user_email = request.scope.get("MESOP_USER_EMAIL")
     app_env = config.Default().APP_ENV
 
-    # Enforce IAP authentication in any environment that is not explicitly a local dev environment.
     development_envs = ["", "dev", "local"]
     if app_env not in development_envs and (
-        not user_email or user_email == "anonymous@google.com"
+        not user_email or user_email == ANONYMOUS_USER_EMAIL
     ):
         raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -282,7 +342,6 @@ def get_media_proxy(request: Request, bucket_name: str, object_path: str):
         bucket = storage_client.bucket(bucket_name)
         blob = bucket.blob(object_path)
 
-        # Generate a signed URL valid for 15 minutes
         signed_url = blob.generate_signed_url(
             version="v4",
             expiration=datetime.timedelta(minutes=15),
@@ -290,7 +349,6 @@ def get_media_proxy(request: Request, bucket_name: str, object_path: str):
             credentials=signing_credentials,
         )
 
-        # Instruct browser NOT to cache the redirect itself, so it always asks us for a fresh URL
         headers = {
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Pragma": "no-cache",

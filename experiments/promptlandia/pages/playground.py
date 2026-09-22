@@ -19,11 +19,13 @@ handling user input, adjusting model parameters, and interacting with the
 generative AI model.
 """
 
-import random
-import time
-from collections.abc import Callable
+from typing import Callable
 
 import mesop as me
+from google.genai.types import GenerateContentConfig
+
+from config.default import Default
+from services.llm_client import LLMClient
 
 _TEMPERATURE_MIN = 0.0
 _TEMPERATURE_MAX = 2.0
@@ -43,8 +45,8 @@ class PageState:
     prompt_tab: bool = True
     response_tab: bool = True
     # Model configs
-    selected_model: str = "gemini-1.5"
-    selected_region: str = "us-east4"
+    selected_model: str = ""
+    selected_region: str = "global"
     temperature: float = 1.0
     temperature_for_input: float = 1.0
     token_limit: int = _TOKEN_LIMIT_MAX
@@ -63,70 +65,56 @@ def playground_page_content(app_state: me.state):
 
     Args:
         app_state: The global application state.
-
     """
     state = me.state(PageState)
+    config = Default()
+
+    # Default to the app's configured strongest model on first render.
+    if not state.selected_model:
+        state.selected_model = config.MODEL_ID
 
     # Modal
     with modal(modal_open=state.modal_open):  # pylint: disable=not-context-manager
         me.text("Get code", type="headline-5")
-        if "gemini" in state.selected_model:
-            me.text(
-                "Use the following code in your application to request a model response.",
-            )
-            with me.box(style=_STYLE_CODE_BOX):
-                me.markdown(
-                    _GEMINI_CODE_TEXT.format(
-                        content=state.input.replace('"', '"'),
-                        model=state.selected_model,
-                        region=state.selected_region,
-                        stop_sequences=make_stop_sequence_str(state.stop_sequences),
-                        token_limit=state.token_limit,
-                        temperature=state.temperature,
-                    ),
+        me.text(
+            "Use the following code in your application to request a model response."
+        )
+        with me.box(style=_STYLE_CODE_BOX):
+            me.markdown(
+                _GEMINI_CODE_TEXT.format(
+                    content=state.input,
+                    model=state.selected_model,
+                    region=state.selected_region,
+                    stop_sequences=make_stop_sequence_str(state.stop_sequences),
+                    token_limit=state.token_limit,
+                    temperature=state.temperature,
                 )
-        else:
-            me.text(
-                "You can use the following code to start integrating your current prompt and settings into your application.",
             )
-            with me.box(style=_STYLE_CODE_BOX):
-                me.markdown(
-                    _GPT_CODE_TEXT.format(
-                        content=state.input.replace('"', '"').replace("\n", "\\n"),
-                        model=state.selected_model,
-                        stop_sequences=make_stop_sequence_str(state.stop_sequences),
-                        token_limit=state.token_limit,
-                        temperature=state.temperature,
-                    ),
-                )
         me.button(label="Close", type="raised", on_click=on_click_modal)
 
     # Main content
     with me.box(style=_STYLE_CONTAINER):
         # Main Header
-        with me.box(style=_STYLE_MAIN_HEADER), me.box(style=_STYLE_TITLE_BOX):
-            me.text(
-                state.title,
-                type="headline-6",
-                style=me.Style(line_height="24px", margin=me.Margin(bottom=0)),
-            )
+        with me.box(style=_STYLE_MAIN_HEADER):
+            with me.box(style=_STYLE_TITLE_BOX):
+                me.text(
+                    state.title,
+                    type="headline-6",
+                    style=me.Style(line_height="24px", margin=me.Margin(bottom=0)),
+                )
 
         # Toolbar Header
         with me.box(style=_STYLE_CONFIG_HEADER):
             icon_button(
-                icon="code",
-                tooltip="Code",
-                label="CODE",
-                on_click=on_click_show_code,
+                icon="code", tooltip="Code", label="CODE", on_click=on_click_show_code
             )
 
         # Main Content
         with me.box(style=_STYLE_MAIN_COLUMN):
             # Prompt Tab
             with tab_box(  # pylint: disable=not-context-manager
-                header="Prompt",
-                key="prompt_tab",
-            ):
+                header="Prompt", key="prompt_tab"
+            ):  
                 me.textarea(
                     label="Write your prompt here, insert media and then click Submit",
                     # Workaround: update key to clear input.
@@ -143,15 +131,21 @@ def playground_page_content(app_state: me.state):
                     me.markdown(state.response)
                 else:
                     me.markdown(
-                        "The model will generate a response after you click Submit.",
+                        "The model will generate a response after you click Submit."
                     )
 
         # LLM Config
         with me.box(style=_STYLE_CONFIG_COLUMN):
             me.select(
                 options=[
-                    me.SelectOption(label="Gemini 3.1 Pro Preview", value="gemini-3.1-pro-preview"),
-                    me.SelectOption(label="Chat-GPT Turbo", value="gpt-3.5-turbo"),
+                    me.SelectOption(
+                        label=f"{config.MODEL_ID} (strongest)",
+                        value=config.MODEL_ID,
+                    ),
+                    me.SelectOption(
+                        label=f"{config.ALTERNATIVE_MODEL_ID} (flash-lite)",
+                        value=config.ALTERNATIVE_MODEL_ID,
+                    ),
                 ],
                 label="Model",
                 style=_STYLE_INPUT_WIDTH,
@@ -159,23 +153,19 @@ def playground_page_content(app_state: me.state):
                 value=state.selected_model,
             )
 
-            if "gemini" in state.selected_model:
-                me.select(
-                    options=[
-                        me.SelectOption(
-                            label="us-central1 (Iowa)",
-                            value="us-central1",
-                        ),
-                        me.SelectOption(
-                            label="us-east4 (North Virginia)",
-                            value="us-east4",
-                        ),
-                    ],
-                    label="Region",
-                    style=_STYLE_INPUT_WIDTH,
-                    on_selection_change=on_region_select,
-                    value=state.selected_region,
-                )
+            me.select(
+                options=[
+                    me.SelectOption(label="global", value="global"),
+                    me.SelectOption(label="us-central1 (Iowa)", value="us-central1"),
+                    me.SelectOption(
+                        label="us-east4 (North Virginia)", value="us-east4"
+                    ),
+                ],
+                label="Region",
+                style=_STYLE_INPUT_WIDTH,
+                on_selection_change=on_region_select,
+                value=state.selected_region,
+            )
 
             me.text("Temperature", style=_STYLE_SLIDER_LABEL)
             with me.box(style=_STYLE_SLIDER_INPUT_BOX):
@@ -219,14 +209,12 @@ def playground_page_content(app_state: me.state):
                         # Workaround: update key to clear input.
                         key=f"input-sequence-{state.clear_sequence_count}",
                     )
-                with (
-                    me.content_button(
-                        style=me.Style(margin=me.Margin(left=10)),
-                        on_click=on_click_add_stop_sequence,
-                    ),
-                    me.tooltip(message="Add stop Sequence"),
+                with me.content_button(
+                    style=me.Style(margin=me.Margin(left=10)),
+                    on_click=on_click_add_stop_sequence,
                 ):
-                    me.icon(icon="add_circle")
+                    with me.tooltip(message="Add stop Sequence"):
+                        me.icon(icon="add_circle")
 
             # Stop sequence "chips"
             for index, sequence in enumerate(state.stop_sequences):
@@ -245,13 +233,13 @@ def playground_page_content(app_state: me.state):
 @me.component
 def icon_button(*, icon: str, label: str, tooltip: str, on_click: Callable):
     """Icon button with text and tooltip."""
-    with me.content_button(on_click=on_click), me.tooltip(message=tooltip):
-        with me.box(style=me.Style(display="flex")):
-            me.icon(icon=icon)
-            me.text(
-                label,
-                style=me.Style(line_height="24px", margin=me.Margin(left=5)),
-            )
+    with me.content_button(on_click=on_click):
+        with me.tooltip(message=tooltip):
+            with me.box(style=me.Style(display="flex")):
+                me.icon(icon=icon)
+                me.text(
+                    label, style=me.Style(line_height="24px", margin=me.Margin(left=5))
+                )
 
 
 @me.content_component
@@ -261,32 +249,28 @@ def tab_box(*, header: str, key: str):
     tab_open = getattr(state, key)
     with me.box(style=me.Style(width="100%", margin=me.Margin(bottom=20))):
         # Tab Header
-        with (
-            me.box(
-                key=key,
-                on_click=on_click_tab_header,
-                style=me.Style(padding=_DEFAULT_PADDING, border=_DEFAULT_BORDER),
-            ),
-            me.box(style=me.Style(display="flex")),
+        with me.box(
+            key=key,
+            on_click=on_click_tab_header,
+            style=me.Style(padding=_DEFAULT_PADDING, border=_DEFAULT_BORDER),
         ):
-            me.icon(
-                icon="keyboard_arrow_down" if tab_open else "keyboard_arrow_right",
-            )
-            me.text(
-                header,
-                style=me.Style(
-                    line_height="24px",
-                    margin=me.Margin(left=5),
-                    font_weight="bold",
-                ),
-            )
+            with me.box(style=me.Style(display="flex")):
+                me.icon(
+                    icon="keyboard_arrow_down" if tab_open else "keyboard_arrow_right"
+                )
+                me.text(
+                    header,
+                    style=me.Style(
+                        line_height="24px", margin=me.Margin(left=5), font_weight="bold"
+                    ),
+                )
         # Tab Content
         with me.box(
             style=me.Style(
                 padding=_DEFAULT_PADDING,
                 border=_DEFAULT_BORDER,
                 display="block" if tab_open else "none",
-            ),
+            )
         ):
             me.slot()
 
@@ -406,96 +390,57 @@ def on_click_modal(e: me.ClickEvent):
 
 
 def on_click_submit(e: me.ClickEvent):
-    """Submits prompt to test model configuration.
-
-    This example returns canned text. A real implementation
-    would call APIs against the given configuration.
-    """
+    """Submits the prompt to the selected model and shows the real response."""
     state = me.state(PageState)
-    for line in transform(state.input):
-        state.response += line
-        yield
+    if not state.input:
+        return
 
+    state.response = ""
+    yield
 
-def transform(input: str):
-    """Transform function that returns canned responses."""
-    for line in random.sample(LINES, random.randint(3, len(LINES) - 1)):
-        time.sleep(0.3)
-        yield line + " "
-
-
-LINES = [
-    "Mesop is a Python-based UI framework designed to simplify web UI development for engineers without frontend experience.",
-    "It leverages the power of the Angular web framework and Angular Material components, allowing rapid construction of web demos and internal tools.",
-    "With Mesop, developers can enjoy a fast build-edit-refresh loop thanks to its hot reload feature, making UI tweaks and component integration seamless.",
-    "Deployment is straightforward, utilizing standard HTTP technologies.",
-    "Mesop's component library aims for comprehensive Angular Material component coverage, enhancing UI flexibility and composability.",
-    "It supports custom components for specific use cases, ensuring developers can extend its capabilities to fit their unique requirements.",
-    "Mesop's roadmap includes expanding its component library and simplifying the onboarding processs.",
-]
+    try:
+        client = LLMClient(location=state.selected_region)
+        response = client.generate_content(
+            model=state.selected_model,
+            contents=state.input,
+            config=GenerateContentConfig(
+                temperature=state.temperature,
+                max_output_tokens=state.token_limit,
+                stop_sequences=list(state.stop_sequences) or None,
+                response_modalities=["TEXT"],
+            ),
+            log_success_msg="Playground generation successful",
+        )
+        state.response = response.text or "(The model returned no text.)"
+    except Exception as ex:  # pylint: disable=broad-except
+        state.response = f"Error generating response: {ex}"
+    yield
 
 
 # HELPERS
 
 _GEMINI_CODE_TEXT = """
 ```python
-import base64
-import vertexai
-from vertexai.generative_models import GenerativeModel, Part, FinishReason
-import vertexai.preview.generative_models as generative_models
+from google import genai
+from google.genai.types import GenerateContentConfig
 
-def generate():
-  vertexai.init(project="<YOUR-PROJECT-ID>", location="{region}")
-  model = GenerativeModel("{model}")
-  responses = model.generate_content(
-      [\"\"\"{content}\"\"\"],
-      generation_config=generation_config,
-      safety_settings=safety_settings,
-      stream=True,
-  )
-
-  for response in responses:
-    print(response.text, end="")
-
-
-generation_config = {{
-    "max_output_tokens": {token_limit},
-    "stop_sequences": [{stop_sequences}],
-    "temperature": {temperature},
-    "top_p": 0.95,
-}}
-
-safety_settings = {{
-    generative_models.HarmCategory.HARM_CATEGORY_HATE_SPEECH: generative_models.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-    generative_models.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: generative_models.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-    generative_models.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: generative_models.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-    generative_models.HarmCategory.HARM_CATEGORY_HARASSMENT: generative_models.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-}}
-
-generate()
-```
-""".strip()
-
-_GPT_CODE_TEXT = """
-```python
-from openai import OpenAI
-client = OpenAI()
-
-response = client.chat.completions.create(
-  model="{model}",
-  messages=[
-    {{
-      "role": "user",
-      "content": "{content}"
-    }}
-  ],
-  temperature={temperature},
-  max_tokens={token_limit},
-  top_p=1,
-  frequency_penalty=0,
-  presence_penalty=0,
-  stop=[{stop_sequences}]
+client = genai.Client(
+    vertexai=True,
+    project="<YOUR-PROJECT-ID>",
+    location="{region}",
 )
+
+response = client.models.generate_content(
+    model="{model}",
+    contents=\"\"\"{content}\"\"\",
+    config=GenerateContentConfig(
+        temperature={temperature},
+        max_output_tokens={token_limit},
+        stop_sequences=[{stop_sequences}],
+    ),
+)
+
+print(response.text)
 ```
 """.strip()
 
@@ -513,7 +458,6 @@ def _make_modal_background_style(modal_open: bool) -> me.Style:
 
     Args:
       modal_open: Whether the modal is open.
-
     """
     return me.Style(
         display="block" if modal_open else "none",
@@ -529,7 +473,7 @@ def _make_modal_background_style(modal_open: bool) -> me.Style:
 
 _DEFAULT_PADDING = me.Padding.all(15)
 _DEFAULT_BORDER = me.Border.all(
-    me.BorderSide(color=me.theme_var("outline-variant"), width=1, style="solid"),
+    me.BorderSide(color=me.theme_var("outline-variant"), width=1, style="solid")
 )
 
 _STYLE_INPUT_WIDTH = me.Style(width="100%")

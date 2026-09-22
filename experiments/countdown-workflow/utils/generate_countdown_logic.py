@@ -12,106 +12,112 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 import os
-import pathlib
+import json
 import time
-from typing import Literal
-
+import pathlib
+import logging
+from typing import List, Optional, Literal, Tuple
+import config
+from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
-from pydantic import BaseModel, Field
 from utils.extract_frame import extract_last_frame
 from utils.video_processing import create_final_video
-
-import config
 
 # Set up logging for this module
 logger = logging.getLogger(__name__)
 
 # --- Pydantic Schemas for AI Output ---
 
-
 class CompanyInfo(BaseModel):
     """Schema for the company's inferred identity."""
-
     name: str = Field(description="The name of the company.")
-    core_business: str = Field(
-        description="A brief summary of the company's core business and industry.",
-    )
-    visual_identity: str = Field(
-        description="A description of the company's visual style, colors, and aesthetic.",
-    )
-
+    core_business: str = Field(description="A brief summary of the company's core business and industry.")
+    visual_identity: str = Field(description="A description of the company's visual style, colors, and aesthetic.")
 
 class ScenePrompt(BaseModel):
     """Schema for the prompts for a single countdown scene."""
-
     scene_number: int = Field(description="The countdown number for this scene.")
-    image_prompt: str | None = Field(
-        default=None,
-        description="The detailed Imagen prompt for the first scene's static image. Should only be present for the first number in the countdown.",
-    )
-    video_prompt: str = Field(
-        description="The detailed Veo prompt for this scene's video, including action, camera movement, and style.",
-    )
-
+    image_prompt: Optional[str] = Field(default=None, description="The detailed Imagen prompt for the first scene's static image. Should only be present for the first number in the countdown.")
+    video_prompt: str = Field(description="The detailed Veo prompt for this scene's video, including action, camera movement, and style.")
 
 class CountdownScriptResponse(BaseModel):
     """The root schema for the AI's structured JSON output."""
-
     company_info: CompanyInfo
-    script: list[ScenePrompt]
-
+    script: List[ScenePrompt]
 
 class ImageChoiceResponse(BaseModel):
     """Schema for the selector model's output when choosing an image."""
-
-    chosen_image: Literal["0", "1", "2", "3"]
+    chosen_image: Literal['0', '1', '2', '3']
     reasoning: str
-
 
 class VideoChoiceResponse(BaseModel):
     """Schema for the selector model's output when choosing a video."""
-
     chosen_video: Literal["0", "1"]
     reasoning: str
 
-
 class VideoDigitCheck(BaseModel):
     """Schema for checking a single video for a digit."""
-
-    is_visible: bool = Field(
-        description="True if the digit is clearly visible, False otherwise.",
-    )
+    is_visible: bool = Field(description="True if the digit is clearly visible, False otherwise.")
     reasoning: str
-
 
 class DigitCheckResponse(BaseModel):
     """Schema for the response when checking two videos for a digit."""
-
     video_0_check: VideoDigitCheck
     video_1_check: VideoDigitCheck
 
-
 # --- AI Client and Model Configuration ---
-def get_genai_client() -> genai.Client:
-    """Initializes and returns the GenAI client."""
+def get_genai_client(location: Optional[str] = None) -> genai.Client:
+    """Initializes and returns a GenAI client for a given Vertex AI location.
+
+    Args:
+        location (Optional[str]): The Vertex AI location to target. Defaults to
+            ``config.GEMINI_LOCATION`` (the ``global`` endpoint), which is
+            required by the Gemini text models and the Nano Banana image model.
+            Pass ``config.GOOGLE_CLOUD_LOCATION`` for the regional Veo endpoint.
+
+    Returns:
+        genai.Client: A configured Vertex AI GenAI client.
+    """
     return genai.Client(
         vertexai=True,
         project=config.GOOGLE_CLOUD_PROJECT,
-        location=config.GOOGLE_CLOUD_LOCATION,
+        location=location or config.GEMINI_LOCATION,
     )
 
 
+def _extract_image_bytes(response: types.GenerateContentResponse) -> Optional[bytes]:
+    """Extracts the first inline image payload from a Gemini image response.
+
+    Args:
+        response (types.GenerateContentResponse): The response from a Nano Banana
+            (Gemini image) ``generate_content`` call.
+
+    Returns:
+        Optional[bytes]: The raw image bytes of the first image part, or ``None``
+            if the response contained no image.
+    """
+    if not response.candidates:
+        return None
+    candidate = response.candidates[0]
+    if not candidate.content or not candidate.content.parts:
+        return None
+    for part in candidate.content.parts:
+        inline_data = getattr(part, "inline_data", None)
+        if inline_data and getattr(inline_data, "data", None):
+            return inline_data.data
+    return None
+
 # --- AI-Powered Script Adaptation ---
 def adapt_countdown_script(
-    client: genai.Client,
-    company_name: str,
-    countdown_range: tuple[int, int],
-    example_script_path: str,
+    client: genai.Client, 
+    company_name: str, 
+    countdown_range: Tuple[int, int], 
+    example_script_path: str
 ) -> CountdownScriptResponse:
-    """Generates a structured countdown script for a company by adapting from an example.
+    """
+    Generates a structured countdown script for a company by adapting from an example.
 
     Args:
         client (genai.Client): The GenAI client instance.
@@ -121,11 +127,10 @@ def adapt_countdown_script(
 
     Returns:
         CountdownScriptResponse: A Pydantic model instance containing the generated script.
-
     """
     logger.info(f"--- Adapting Countdown Script for '{company_name}' ---")
-
-    with open(example_script_path) as f:
+    
+    with open(example_script_path, 'r') as f:
         example_content = f.read()
 
     start, end = countdown_range
@@ -159,27 +164,36 @@ def adapt_countdown_script(
         contents=[prompt],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
-            response_schema=CountdownScriptResponse,
-        ),
+            response_schema=CountdownScriptResponse
+        )
     )
     logger.info("  - Structured script received.")
-
+    
     return CountdownScriptResponse.model_validate_json(response.text)
-
 
 # --- Core Local Generation & Selection Logic ---
 
-
 def generate_candidate_images_locally(
-    client: genai.Client,
-    prompt: str,
-    num_candidates: int,
-    output_prefix: str,
-) -> list[str]:
-    """Generates multiple candidate images using Imagen and saves them to local paths.
+    client: genai.Client, 
+    prompt: str, 
+    num_candidates: int, 
+    output_prefix: str
+) -> List[str]:
+    """
+    Generates multiple candidate images using Nano Banana (Gemini image) and
+    saves them to local paths.
+
+    Uses the Gemini image-generation ``generate_content`` call shape (mirroring
+    the core app's ``models/gemini.py::generate_image_from_prompt_and_images``).
+    Nano Banana returns a single image per call, so ``num_candidates`` calls are
+    issued to build the candidate set that downstream best-image selection
+    expects. The 16:9 aspect ratio is preserved via ``types.ImageConfig``; the
+    Imagen-only ``person_generation`` control has no Gemini-image equivalent and
+    is dropped (the script prompt already forbids depicting children).
 
     Args:
-        client (genai.Client): The GenAI client instance.
+        client (genai.Client): The GenAI client instance (Nano Banana / Gemini
+            image requires the ``global`` location — see ``get_genai_client``).
         prompt (str): The text prompt for image generation.
         num_candidates (int): The number of images to generate.
         output_prefix (str): The base path and filename prefix for saving images.
@@ -187,35 +201,44 @@ def generate_candidate_images_locally(
     Returns:
         List[str]: A list of file paths to the generated images.
 
+    Raises:
+        RuntimeError: If every candidate call comes back without an image, so an
+            empty candidate set never silently flows into best-image selection.
     """
-    logger.info(
-        f"  - Generating {num_candidates} candidate images for prompt: '{prompt[:50]}...'",
-    )
-    response = client.models.generate_images(
-        model=config.IMAGE_GENERATION_MODEL,
-        prompt=prompt,
-        config=types.GenerateImagesConfig(
-            number_of_images=num_candidates,
-            aspect_ratio="16:9",
-            person_generation="allow_adult",
-        ),
-    )
+    logger.info(f"  - Generating {num_candidates} candidate images for prompt: '{prompt[:50]}...'")
     candidate_paths = []
-    for i, img_data in enumerate(response.generated_images):
+    for i in range(num_candidates):
+        response = client.models.generate_content(
+            model=config.IMAGE_GENERATION_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_modalities=["IMAGE", "TEXT"],
+                image_config=types.ImageConfig(aspect_ratio="16:9"),
+            ),
+        )
+        image_bytes = _extract_image_bytes(response)
+        if not image_bytes:
+            logger.warning(f"  - Candidate {i} returned no image; skipping.")
+            continue
         path = f"{output_prefix}_candidate_{i}.png"
         with open(path, "wb") as f:
-            f.write(img_data.image.image_bytes)
+            f.write(image_bytes)
         candidate_paths.append(path)
         logger.info(f"  - Saved candidate image to: {path}")
+
+    if not candidate_paths:
+        raise RuntimeError(
+            f"Nano Banana image generation returned no images for prompt: {prompt[:80]!r}"
+        )
     return candidate_paths
 
-
 def select_best_image_locally(
-    client: genai.Client,
-    prompt: str,
-    candidate_paths: list[str],
+    client: genai.Client, 
+    prompt: str, 
+    candidate_paths: List[str]
 ) -> str:
-    """Uses a multimodal model to select the best image from a list of local file paths.
+    """
+    Uses a multimodal model to select the best image from a list of local file paths.
 
     Args:
         client (genai.Client): The GenAI client instance.
@@ -224,42 +247,34 @@ def select_best_image_locally(
 
     Returns:
         str: The file path of the chosen best image.
-
     """
     logger.info("  - Selecting the best image...")
     text_part = f'You will be provided with {len(candidate_paths)} images and a prompt. Select the image that best fits the prompt: "{prompt}"'
-    image_parts = [
-        types.Part.from_bytes(data=pathlib.Path(p).read_bytes(), mime_type="image/png")
-        for p in candidate_paths
-    ]
-    contents = [text_part] + [
-        elem for i, part in enumerate(image_parts) for elem in (f". Image {i}: ", part)
-    ]
+    image_parts = [types.Part.from_bytes(data=pathlib.Path(p).read_bytes(), mime_type="image/png") for p in candidate_paths]
+    contents = [text_part] + [elem for i, part in enumerate(image_parts) for elem in (f". Image {i}: ", part)]
     response = client.models.generate_content(
-        model=config.SELECTOR_MODEL,
-        contents=contents,
+        model=config.SELECTOR_MODEL, 
+        contents=contents, 
         config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=ImageChoiceResponse,
-        ),
+            response_mime_type="application/json", 
+            response_schema=ImageChoiceResponse
+        )
     )
     choice_data = ImageChoiceResponse.model_validate_json(response.text)
     chosen_path = candidate_paths[int(choice_data.chosen_image)]
-    logger.info(
-        f"  - Model chose image {choice_data.chosen_image}. Reason: {choice_data.reasoning}",
-    )
+    logger.info(f"  - Model chose image {choice_data.chosen_image}. Reason: {choice_data.reasoning}")
     return chosen_path
 
-
 def generate_candidate_videos_locally(
-    client: genai.Client,
-    prompt: str,
-    input_image_path: str,
-    num_candidates: int,
+    client: genai.Client, 
+    prompt: str, 
+    input_image_path: str, 
+    num_candidates: int, 
     output_prefix: str,
-    max_retries: int = 3,
-) -> list[str]:
-    """Generates multiple candidate videos using Veo, with retries, and saves them locally.
+    max_retries: int = 3
+) -> List[str]:
+    """
+    Generates multiple candidate videos using Veo, with retries, and saves them locally.
 
     Args:
         client (genai.Client): The GenAI client instance.
@@ -271,70 +286,65 @@ def generate_candidate_videos_locally(
 
     Returns:
         List[str]: A list of file paths to the generated videos, or an empty list if all retries fail.
-
     """
-    logger.info(
-        f"  - Generating {num_candidates} candidate videos for prompt: '{prompt[:50]}...'",
-    )
+    logger.info(f"  - Generating {num_candidates} candidate videos for prompt: '{prompt[:50]}...'")
     input_image = types.Image.from_file(location=input_image_path)
-
+    
     for attempt in range(max_retries):
         try:
             logger.info(f"    - Generation attempt {attempt + 1}/{max_retries}...")
             video_op = client.models.generate_videos(
-                model=config.VIDEO_GENERATION_MODEL,
-                image=input_image,
-                prompt=prompt,
+                model=config.VIDEO_GENERATION_MODEL, 
+                image=input_image, 
+                prompt=prompt, 
                 config=types.GenerateVideosConfig(
-                    number_of_videos=num_candidates,
-                    duration_seconds=8,
-                    aspect_ratio="16:9",
-                    person_generation="allow_all",
-                    enhance_prompt=True,
-                ),
+                    number_of_videos=num_candidates, 
+                    duration_seconds=8, 
+                    aspect_ratio="16:9", 
+                    person_generation="allow_all", 
+                    enhance_prompt=True
+                )
             )
             logger.info("    - Video generation started. This may take a moment...")
             while not video_op.done:
                 time.sleep(5)
                 video_op = client.operations.get(video_op)
-                logger.info(".", extra={"end": "", "flush": True})
+                logger.info(".", extra={'end': '', 'flush': True})
             logger.info("\n    - Operation finished.")
-
+            
             video_response = video_op.response
-
+            
             # Gracefully handle cases where the response is None or lacks the expected attribute
-            if not video_response or not hasattr(video_response, "generated_videos"):
-                raise AttributeError(
-                    "API response is None or does not contain 'generated_videos'.",
-                )
+            if not video_response or not hasattr(video_response, 'generated_videos'):
+                raise AttributeError("API response is None or does not contain 'generated_videos'.")
 
             candidate_paths = []
             for i, vid_data in enumerate(video_response.generated_videos):
                 path = f"{output_prefix}_candidate_{i}.mp4"
-                with open(path, "wb") as f:
+                with open(path, "wb") as f: 
                     f.write(vid_data.video.video_bytes)
                 candidate_paths.append(path)
                 logger.info(f"    - Saved candidate video to: {path}")
-
-            return candidate_paths  # Success, exit the retry loop
+            
+            return candidate_paths # Success, exit the retry loop
 
         except Exception as e:
             logger.error(f"    - ERROR on attempt {attempt + 1}: {e}")
             if attempt < max_retries - 1:
                 logger.info("    - Retrying after a short delay...")
-                time.sleep(5)  # Wait before retrying
+                time.sleep(5) # Wait before retrying
             else:
                 logger.error("    - All retry attempts failed.")
-
-    return []  # Return empty list if all retries fail
-
+    
+    return [] # Return empty list if all retries fail
 
 def select_best_video_locally(
-    client: genai.Client,
-    prompt: str,
-    candidate_paths: list[str],
+    client: genai.Client, 
+    prompt: str, 
+    candidate_paths: List[str]
 ) -> str:
-    """Uses a multimodal model to select the best video from a list of local file paths.
+    """
+    Uses a multimodal model to select the best video from a list of local file paths.
 
     Args:
         client (genai.Client): The GenAI client instance.
@@ -343,39 +353,31 @@ def select_best_video_locally(
 
     Returns:
         str: The file path of the chosen best video.
-
     """
     logger.info("  - Selecting the best video...")
     text_part = f"You will be provided with {len(candidate_paths)} videos. Select the one that best fits the following prompt: {prompt}"
-    video_parts = [
-        types.Part.from_bytes(data=pathlib.Path(p).read_bytes(), mime_type="video/mp4")
-        for p in candidate_paths
-    ]
-    contents = [text_part] + [
-        elem for i, part in enumerate(video_parts) for elem in (f". Video {i}: ", part)
-    ]
+    video_parts = [types.Part.from_bytes(data=pathlib.Path(p).read_bytes(), mime_type="video/mp4") for p in candidate_paths]
+    contents = [text_part] + [elem for i, part in enumerate(video_parts) for elem in (f". Video {i}: ", part)]
     response = client.models.generate_content(
-        model=config.SELECTOR_MODEL,
-        contents=contents,
+        model=config.SELECTOR_MODEL, 
+        contents=contents, 
         config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=VideoChoiceResponse,
-        ),
+            response_mime_type="application/json", 
+            response_schema=VideoChoiceResponse
+        )
     )
     choice_data = VideoChoiceResponse.model_validate_json(response.text)
     chosen_path = candidate_paths[int(choice_data.chosen_video)]
-    logger.info(
-        f"  - Model chose video {choice_data.chosen_video}. Reason: {choice_data.reasoning}",
-    )
+    logger.info(f"  - Model chose video {choice_data.chosen_video}. Reason: {choice_data.reasoning}")
     return chosen_path
 
-
 def check_videos_for_digit(
-    client: genai.Client,
-    digit: int,
-    candidate_paths: list[str],
+    client: genai.Client, 
+    digit: int, 
+    candidate_paths: List[str]
 ) -> DigitCheckResponse:
-    """Uses a multimodal model to check if a specific digit is visible in two videos.
+    """
+    Uses a multimodal model to check if a specific digit is visible in two videos.
 
     Args:
         client (genai.Client): The GenAI client instance.
@@ -384,7 +386,6 @@ def check_videos_for_digit(
 
     Returns:
         DigitCheckResponse: A Pydantic model instance indicating visibility for each video.
-
     """
     logger.info(f"  - Checking for digit '{digit}' in candidate videos...")
     prompt = f"""
@@ -395,98 +396,75 @@ def check_videos_for_digit(
     For each video, provide a boolean `is_visible` and a brief `reasoning`.
     Your entire response MUST be a single, valid JSON object that conforms to the provided `DigitCheckResponse` schema.
     """
-    video_parts = [
-        types.Part.from_bytes(data=pathlib.Path(p).read_bytes(), mime_type="video/mp4")
-        for p in candidate_paths
-    ]
-    contents = [prompt] + [
-        elem for i, part in enumerate(video_parts) for elem in (f". Video {i}: ", part)
-    ]
-
+    video_parts = [types.Part.from_bytes(data=pathlib.Path(p).read_bytes(), mime_type="video/mp4") for p in candidate_paths]
+    contents = [prompt] + [elem for i, part in enumerate(video_parts) for elem in (f". Video {i}: ", part)]
+    
     response = client.models.generate_content(
-        model=config.SELECTOR_MODEL,  # Using the same powerful model for this check
+        model=config.SELECTOR_MODEL, # Using the same powerful model for this check
         contents=contents,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
-            response_schema=DigitCheckResponse,
-        ),
+            response_schema=DigitCheckResponse
+        )
     )
     logger.info("  - Digit check response received.")
     return DigitCheckResponse.model_validate_json(response.text)
 
-
 # --- Main Service Function ---
 def generate_video_from_prompts_service(
-    company_name: str,
-    countdown_range: tuple[int, int],
-    example_script_path: str,
+    company_name: str, 
+    countdown_range: Tuple[int, int], 
+    example_script_path: str
 ) -> None:
-    """Orchestrates the generation of a branded countdown video based on AI-adapted prompts.
+    """
+    Orchestrates the generation of a branded countdown video based on AI-adapted prompts.
 
     Args:
         company_name (str): The name of the company for the branded video.
         countdown_range (Tuple[int, int]): A tuple (start_number, end_number) for the countdown.
         example_script_path (str): Path to the text file containing the example script for style adaptation.
-
     """
-    base_output_dir = pathlib.Path(
-        f"{config.GENERATED_VIDEO_BASE_OUTPUT_DIR}_{company_name.replace(' ', '_')}",
-    )
+    base_output_dir = pathlib.Path(f"{config.GENERATED_VIDEO_BASE_OUTPUT_DIR}_{company_name.replace(' ', '_')}")
     scenes_dir = base_output_dir / "scenes"
     os.makedirs(scenes_dir, exist_ok=True)
-
+    
+    # Gemini text models and the Nano Banana image model are served from the
+    # global endpoint; Veo (video) is served from the regional endpoint.
     client = get_genai_client()
+    veo_client = get_genai_client(config.GOOGLE_CLOUD_LOCATION)
 
     # 1. Generate the structured script by adapting from the example
-    script_response = adapt_countdown_script(
-        client,
-        company_name,
-        countdown_range,
-        example_script_path,
-    )
+    script_response = adapt_countdown_script(client, company_name, countdown_range, example_script_path)
 
     # Save the generated script to a file
     script_path = base_output_dir / f"{company_name.replace(' ', '_')}_script.json"
-    with open(script_path, "w") as f:
+    with open(script_path, 'w') as f:
         f.write(script_response.model_dump_json(indent=4))
     logger.info(f"--- Saved generated script to {script_path} ---")
-
+    
     logger.info("\n--- Parsed Company & Script Information ---")
     logger.info(f"Company Name: {script_response.company_info.name}")
     logger.info(f"Core Business: {script_response.company_info.core_business}")
     logger.info(f"Visual Identity: {script_response.company_info.visual_identity}")
     logger.info("-------------------------------------------")
 
-    last_frame_path: str | None = None
-    chosen_video_paths: list[str] = []
+    last_frame_path: Optional[str] = None
+    chosen_video_paths: List[str] = []
     scenes_data = script_response.script
     total_scenes = len(scenes_data)
     countdown_start = countdown_range[0]
 
     for i, scene_data in enumerate(scenes_data):
-        logger.info(
-            f"\n--- Processing Scene {i + 1}/{total_scenes} (Countdown Num: {scene_data.scene_number}) ---",
-        )
+        logger.info(f"\n--- Processing Scene {i+1}/{total_scenes} (Countdown Num: {scene_data.scene_number}) ---")
         scene_output_prefix = str(scenes_dir / f"scene_{scene_data.scene_number:02d}")
 
-        input_image_path: str | None = None
-        candidate_image_paths: list[
-            str
-        ] = []  # Initialize here to be accessible for cleanup
+        input_image_path: Optional[str] = None
+        candidate_image_paths: List[str] = [] # Initialize here to be accessible for cleanup
 
         if i == 0 and scene_data.image_prompt:
-            candidate_image_paths = generate_candidate_images_locally(
-                client,
-                scene_data.image_prompt,
-                4,
-                scene_output_prefix,
-            )
-            input_image_path = select_best_image_locally(
-                client,
-                scene_data.image_prompt,
-                candidate_image_paths,
-            )
-
+            candidate_image_paths = generate_candidate_images_locally(client, scene_data.image_prompt, 4, scene_output_prefix)
+            input_image_path = select_best_image_locally(client, scene_data.image_prompt, candidate_image_paths)
+            
             # Cleanup unselected images
             for p in candidate_image_paths:
                 if p != input_image_path:
@@ -499,80 +477,51 @@ def generate_video_from_prompts_service(
         elif last_frame_path:
             input_image_path = last_frame_path
         else:
-            logger.warning(
-                "Warning: No image prompt for the first scene and no previous frame. Cannot generate video.",
-            )
+            logger.warning("Warning: No image prompt for the first scene and no previous frame. Cannot generate video.")
             continue
 
         # --- Digit Validation Loop ---
-        chosen_video_path: str | None = None
+        chosen_video_path: Optional[str] = None
         max_attempts = 5
-        candidate_video_paths: list[
-            str
-        ] = []  # Initialize here to be accessible for cleanup
+        candidate_video_paths: List[str] = [] # Initialize here to be accessible for cleanup
 
         for attempt in range(max_attempts):
-            logger.info(
-                f"    - Attempt {attempt + 1}/{max_attempts} to generate a valid video...",
-            )
-
-            # Generate 2 candidate videos for digit checking
-            candidate_video_paths = generate_candidate_videos_locally(
-                client,
-                scene_data.video_prompt,
-                input_image_path,
-                2,
-                scene_output_prefix,
-            )
-
+            logger.info(f"    - Attempt {attempt + 1}/{max_attempts} to generate a valid video...")
+            
+            # Generate 2 candidate videos for digit checking (Veo uses the regional client)
+            candidate_video_paths = generate_candidate_videos_locally(veo_client, scene_data.video_prompt, input_image_path, 2, scene_output_prefix)
+            
             # If generation failed after retries, skip to the next attempt of the digit validation loop
             if not candidate_video_paths:
-                logger.warning(
-                    "    - Video generation failed, continuing to next attempt...",
-                )
+                logger.warning("    - Video generation failed, continuing to next attempt...")
                 continue
 
             # Check if the digit is present in the generated videos
             expected_digit = countdown_start - i
-            digit_check_result = check_videos_for_digit(
-                client,
-                expected_digit,
-                candidate_video_paths,
-            )
-
+            digit_check_result = check_videos_for_digit(client, expected_digit, candidate_video_paths)
+            
             video_0_ok = digit_check_result.video_0_check.is_visible
             video_1_ok = digit_check_result.video_1_check.is_visible
 
             if video_0_ok and video_1_ok:
-                logger.info(
-                    "    - Both videos contain the digit. Selecting the best one.",
-                )
-                chosen_video_path = select_best_video_locally(
-                    client,
-                    scene_data.video_prompt,
-                    candidate_video_paths,
-                )
+                logger.info("    - Both videos contain the digit. Selecting the best one.")
+                chosen_video_path = select_best_video_locally(client, scene_data.video_prompt, candidate_video_paths)
                 break
-            if video_0_ok:
+            elif video_0_ok:
                 logger.info("    - Only video 0 contains the digit. Selecting it.")
                 chosen_video_path = candidate_video_paths[0]
                 break
-            if video_1_ok:
+            elif video_1_ok:
                 logger.info("    - Only video 1 contains the digit. Selecting it.")
                 chosen_video_path = candidate_video_paths[1]
                 break
-            logger.info("    - Neither video contains the digit. Retrying...")
-
+            else:
+                logger.info("    - Neither video contains the digit. Retrying...")
+        
         if not chosen_video_path:
-            logger.warning(
-                f"  - WARNING: Failed to generate a valid video for scene {scene_data.scene_number} after {max_attempts} attempts. Selecting best from last attempt.",
-            )
+            logger.warning(f"  - WARNING: Failed to generate a valid video for scene {scene_data.scene_number} after {max_attempts} attempts. Selecting best from last attempt.")
             # Fallback: if no valid video was found after retries, still select the "best" from the last attempt
-            chosen_video_path = select_best_video_locally(
-                client,
-                scene_data.video_prompt,
-                candidate_video_paths,
-            )
+            chosen_video_path = select_best_video_locally(client, scene_data.video_prompt, candidate_video_paths)
 
         # Cleanup unselected videos for the current scene
         for p in candidate_video_paths:
@@ -588,46 +537,31 @@ def generate_video_from_prompts_service(
         # Extract the last frame of the chosen video for continuity in the next scene
         last_frame_path = f"{scene_output_prefix}_chosen_last_frame.png"
         extract_last_frame(chosen_video_path, last_frame_path)
-
+        
     # Final video composition
-    final_video_path = str(
-        base_output_dir / f"{company_name.replace(' ', '_')}_countdown.mp4",
-    )
-    create_final_video(
-        chosen_video_paths,
-        final_video_path,
-        speed_factor=4,
-        fade_duration=1,
-    )
+    final_video_path = str(base_output_dir / f"{company_name.replace(' ', '_')}_countdown.mp4")
+    create_final_video(chosen_video_paths, final_video_path, speed_factor=4, fade_duration=1)
 
     logger.info("\n--- All steps completed successfully! ---")
-
 
 if __name__ == "__main__":
     # This block is for standalone testing of generate_countdown_logic.py
     # In the full pipeline, this function is called from main.py
-
+    
     # Parameters for the service
     _company_name_param = "The Burger Company"
     _countdown_start_param = 20
-
+    
     # Constants
     _COUNTDOWN_END_NUMBER = 1
-    _EXAMPLE_SCRIPT_PATH = os.path.join(
-        config.ENGINEERED_PROMPTS_OUTPUT_DIR,
-        "Google I⧸O '25 Keynote_analysis.txt",
-    )
+    _EXAMPLE_SCRIPT_PATH = os.path.join(config.ENGINEERED_PROMPTS_OUTPUT_DIR, "Google I⧸O '25 Keynote_analysis.txt")
 
     if not os.path.exists(_EXAMPLE_SCRIPT_PATH):
-        logger.fatal(
-            f"FATAL: Example script file not found at '{_EXAMPLE_SCRIPT_PATH}'.",
-        )
-        logger.fatal(
-            "Please run 'main.py' first to generate the reverse-engineered prompts.",
-        )
+        logger.fatal(f"FATAL: Example script file not found at '{_EXAMPLE_SCRIPT_PATH}'.")
+        logger.fatal("Please run 'main.py' first to generate the reverse-engineered prompts.")
     else:
         generate_video_from_prompts_service(
             company_name=_company_name_param,
             countdown_range=(_countdown_start_param, _COUNTDOWN_END_NUMBER),
-            example_script_path=_EXAMPLE_SCRIPT_PATH,
+            example_script_path=_EXAMPLE_SCRIPT_PATH
         )

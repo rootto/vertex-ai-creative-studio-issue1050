@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Configuration and registry for Gemini Image Generation models."""
+
 from dataclasses import dataclass, field
 
 
@@ -22,7 +24,7 @@ class GeminiImageModelConfig:
     version_id: str  # Short ID for UI/Logic (e.g., "2.5-flash", "3.0-pro")
     model_name: str  # Full API Model ID (e.g., "gemini-2.5-flash-image")
     display_name: str  # Human-readable name (e.g., "Gemini 2.5 Flash")
-    button_label: str # Label for the UI button (e.g., "Flash", "Pro", "2")
+    button_label: str  # Label for the UI button (e.g., "Flash", "Pro", "2")
 
     # Capabilities
     max_input_images: int
@@ -46,8 +48,13 @@ class GeminiImageModelConfig:
     supported_image_sizes: list[str] = field(
         default_factory=lambda: ["1K", "2K"],
     )
-    supported_input_mime_types: List[str] = field(
-        default_factory=lambda: ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+    supported_input_mime_types: list[str] = field(
+        default_factory=lambda: [
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "application/pdf",
+        ],
     )
 
     # Future-proofing
@@ -89,10 +96,72 @@ GEMINI_IMAGE_MODELS: list[GeminiImageModelConfig] = [
         max_input_images=14,
         max_output_images=1,
         requires_base_url=True,
-        supported_aspect_ratios=["1:1", "3:2", "2:3", "3:4", "4:3", "1:4", "4:1", "4:5", "5:4", "1:8", "8:1", "9:16", "16:9", "21:9"],
+        supported_aspect_ratios=[
+            "1:1",
+            "3:2",
+            "2:3",
+            "3:4",
+            "4:3",
+            "1:4",
+            "4:1",
+            "4:5",
+            "5:4",
+            "1:8",
+            "8:1",
+            "9:16",
+            "16:9",
+            "21:9",
+        ],
         supported_image_sizes=["512", "1K", "2K", "4K"],
-        supported_input_mime_types=["image/jpeg", "image/png", "image/webp", "application/pdf", "video/mp4", "video/quicktime", "video/x-matroska", "video/webm"],
+        supported_input_mime_types=[
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "application/pdf",
+            "video/mp4",
+            "video/quicktime",
+            "video/x-matroska",
+            "video/webm",
+        ],
         supports_search=True,
+        supports_thinking=True,
+    ),
+    GeminiImageModelConfig(
+        version_id="3.1-flash-lite",
+        model_name="gemini-3.1-flash-lite-image",
+        display_name="Gemini 3.1 Flash-Lite",
+        button_label="2 Lite",
+        max_input_images=14,
+        max_output_images=1,
+        requires_base_url=True,
+        supported_aspect_ratios=[
+            "1:1",
+            "3:2",
+            "2:3",
+            "3:4",
+            "4:3",
+            "1:4",
+            "4:1",
+            "4:5",
+            "5:4",
+            "1:8",
+            "8:1",
+            "9:16",
+            "16:9",
+            "21:9",
+        ],
+        supported_image_sizes=["1K"],
+        supported_input_mime_types=[
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "application/pdf",
+            "video/mp4",
+            "video/quicktime",
+            "video/x-matroska",
+            "video/webm",
+        ],
+        supports_search=False,
         supports_thinking=True,
     ),
 ]
@@ -101,11 +170,8 @@ GEMINI_IMAGE_MODELS: list[GeminiImageModelConfig] = [
 def get_gemini_image_model_config(
     model_name_or_version: str,
 ) -> GeminiImageModelConfig | None:
-    """Finds config by either full model name or short version ID."""
+    """Find config by either full model name or short version ID."""
     for model in GEMINI_IMAGE_MODELS:
-        if (
-            model.model_name == model_name_or_version
-            or model.version_id == model_name_or_version
-        ):
+        if model_name_or_version in (model.model_name, model.version_id):
             return model
     return None

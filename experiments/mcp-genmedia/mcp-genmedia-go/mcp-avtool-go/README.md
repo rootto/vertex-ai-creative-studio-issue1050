@@ -56,6 +56,26 @@ The `avtool` provides the following functionalities, exposed as MCP tools:
     *   Input: Array of URIs for the input audio files.
     *   Output: Mixed audio file. Can be saved locally and/or to a GCS bucket.
 
+*   **`ffmpeg_trim_media`**:
+    *   Trims (cuts) a single segment from an audio or video file, keeping only the portion between a start time and an end time (or for a given duration). Works identically for audio and video.
+    *   Inputs: URI of the input media file, start time (seconds), and either a duration or an end time (seconds). Optional `re_encode` flag.
+    *   By default the segment is extracted with a fast, lossless stream copy (`-c copy`). Because a stream copy can only begin on a keyframe, the cut may start at the nearest keyframe at or before the requested start time, so it may not be exactly frame-accurate. Set `re_encode=true` for a frame-accurate cut (slower, slightly lossy). If a stream copy is not possible for the chosen output container, the tool automatically falls back to a re-encode.
+    *   Output: The trimmed media file (input container/extension preserved by default). Can be saved locally and/or to a GCS bucket.
+
+*   **`ffmpeg_normalize_loudness`**:
+    *   Normalizes the perceived loudness of an audio file (or the audio track of a video file) to a target level using EBU R128 loudness normalization. Works for both pure-audio inputs and videos with an audio track.
+    *   Uses the accurate two-pass `loudnorm` method: a first pass measures the input's actual integrated loudness, true peak, loudness range and threshold, and a second pass applies a linear correction toward the target using those measurements. This is more accurate than a single-pass normalize.
+    *   Inputs: URI of the input media file. Optional `target_loudness` (integrated LUFS, default `-16`), `target_true_peak` (dBTP, default `-1.5`), and `target_loudness_range` (LU, default `11`). The `-16` LUFS default suits streaming/web/podcast playback; use `-23` for EBU R128 broadcast delivery.
+    *   When the input is a video, its video stream is copied unchanged and only the audio is normalized. The audio sample rate is preserved. Fails if the input has no audio stream.
+    *   Output: The loudness-normalized media file (input container/extension preserved by default). Can be saved locally and/or to a GCS bucket.
+
+*   **`ffmpeg_resize_reframe`**:
+    *   Resizes and reframes an image or a video to a target geometry. A single image is treated as a one-frame stream, so the same tool handles both image and video inputs.
+    *   Inputs: URI of the input image or video file, plus a target specified as an explicit `width` and/or `height` (pixels) and/or an `aspect_ratio` shorthand (`16:9`, `9:16`, `1:1`). Providing both `width` and `height` sets the exact frame (any `aspect_ratio` is ignored). An `aspect_ratio` combined with a single `width` or `height` computes the other side; used alone it keeps the input's width. A single `width` or `height` alone performs a proportional resize that keeps the input's aspect ratio.
+    *   `reframe_mode` selects how an aspect-ratio mismatch is reconciled: `pad` (default) scales the whole picture to fit and fills the remainder with bars (letterbox/pillarbox), preserving all content; `crop` scales to fill the frame edge-to-edge and trims the overflow. `pad` is the default because it never discards picture content. The pad fill colour is configurable via `pad_color` (default `black`).
+    *   Target dimensions are automatically rounded to even numbers, which many video codecs (e.g. H.264/yuv420p) require. Any audio stream is copied through unchanged.
+    *   Output: The resized/reframed media file (input container/extension preserved by default). Can be saved locally and/or to a GCS bucket.
+
 ## Requirements
 
 *   **Go**: Version 1.18 or higher (as per `go.mod` if specified, otherwise latest stable).
@@ -106,6 +126,20 @@ Run the compiled executable with a transport flag:
 
 Input files can be specified as local file system paths or as GCS URIs (e.g., `gs://your-bucket/path/to/file.mp4`).
 Output files can be saved to a specified local directory and/or uploaded to a GCS bucket. If no output locations are specified, temporary files are created for processing and then cleaned up.
+
+### Output naming (`output_filename`)
+
+Each tool accepts an optional `output_filename` (string) to name its output,
+consistent with the rest of the genmedia suite (see
+[Naming Outputs](../README.md#naming-outputs-output_filename)). **AVTool is
+intentionally exempt from extension-forcing**: because the extension selects the
+`ffmpeg` output container/codec, the extension you supply is honored (e.g.
+`clip.mkv` stays `.mkv`); a missing extension falls back to the tool's default.
+AVTool produces a single output, so no `_1..n` suffix is applied.
+
+The legacy `output_file_name` parameter is still accepted but is
+**deprecated — prefer `output_filename`** (`output_filename` wins when both are
+set). No removal is planned in this release.
 
 ## Development
 

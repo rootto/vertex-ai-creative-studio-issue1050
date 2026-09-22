@@ -1,16 +1,22 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import catppuccin from '@catppuccin/starlight';
 
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://GoogleCloudPlatform.github.io',
-	base: '/vertex-ai-creative-studio/',
+	base: '/genmedia-creative-studio/',
 	integrations: [
 		starlight({
 			title: 'GenMedia Creative Studio',
 			favicon: '/favicon.ico',
-			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/GoogleCloudPlatform/vertex-ai-creative-studio' }],
+			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/GoogleCloudPlatform/genmedia-creative-studio' }],
+			// Bright Catppuccin theme: Latte (light) forward, with Mocha for dark mode.
+			plugins: [catppuccin({
+				light: { flavor: 'latte', accent: 'blue' },
+				dark: { flavor: 'mocha', accent: 'blue' },
+			})],
 			sidebar: [
 				{
 					label: 'Core Application',
@@ -70,6 +76,7 @@ export default defineConfig({
 					label: 'Developer Tools',
 					items: [
 						{ label: 'Promptlandia', slug: 'experiments/promptlandia' },
+						{ label: 'Agent Tools for Genmedia', slug: 'experiments/agent-tools' },
 						{
 							label: 'MCP GenMedia',
 							items: [
@@ -84,6 +91,8 @@ export default defineConfig({
 										{ label: 'mcp-chirp3-go', slug: 'experiments/mcp-genmedia/mcp-chirp3-go' },
 										{ label: 'mcp-nanobanana-go', slug: 'experiments/mcp-genmedia/mcp-nanobanana-go' },
 										{ label: 'mcp-gemini-go', slug: 'experiments/mcp-genmedia/mcp-gemini-go' },
+										{ label: 'mcp-gemini-transcribe-go', slug: 'experiments/mcp-genmedia/mcp-gemini-transcribe-go' },
+										{ label: 'mcp-omni-go', slug: 'experiments/mcp-genmedia/mcp-omni-go' },
 										{ label: 'mcp-avtool-go', slug: 'experiments/mcp-genmedia/mcp-avtool-go' },
 									]
 								},

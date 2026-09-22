@@ -1,7 +1,7 @@
 [project]
-name = "vertex-ai-genmedia-creative-studio"
-version = "1.10.0"
-description = "GenMedia Creative Studio - Veo, Lyria, Nano Banana, Imagen, Gemini, Gemini TTS"
+name = "genmedia-creative-studio"
+version = "1.13.1"
+description = "GenMedia Creative Studio - Veo, Lyria, Nano Banana, Gemini, Gemini TTS"
 readme = "README.md"
 requires-python = ">=3.14, <3.15"
 dependencies = [
@@ -30,8 +30,16 @@ dependencies = [
     "librosa>=0.11.0",
     "praat-parselmouth>=0.4.6",
     "c2pa-python>=0.27.1",
-    "pillow>=11.3.0",
+    "pillow>=12.3.0",
     "pyOpenSSL",
+]
+
+[tool.uv]
+# MoviePy 2.2.1 caps Pillow below 12, but the local audit requires the
+# vulnerability-fixed Pillow 12.2.0 release line. Remove this once MoviePy
+# publishes compatible dependency metadata.
+override-dependencies = [
+    "pillow>=12.3.0",
 ]
 
 [[tool.uv.index]]
@@ -40,8 +48,10 @@ url = "https://pypi.org/simple"
 default = true
 
 [tool.ruff]
-# Python version (optional, defaults to auto-detect)
-# target-version = "py310"
+# No explicit target-version: ruff infers it from `requires-python` above, so the
+# lint target tracks the declared Python floor automatically. Pinning it here (it
+# was "py311") contradicted `requires-python = ">=3.14"` and made ruff report
+# valid 3.12+ syntax (e.g. PEP 701 f-string quote reuse) as invalid. See #1863.
 
 [tool.ruff.lint]
 # Enable Pyflakes ("F") and Pycodestyle ("E", "W") categories by default.
@@ -59,6 +69,7 @@ indent-style = "space"
 line-ending = "auto"
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 markers = [
     "integration: marks tests as integration tests (slow, requires network)",
 ]
@@ -66,3 +77,6 @@ markers = [
 [tool.ruff.lint.per-file-ignores]
 "main.py" = ["F401"]
 "utils/migration/migrate.py" = ["ANN", "D", "BLE", "PL", "TRY", "E402"]
+"test/**/*.py" = ["S101", "PLR2004"]
+"test/*.py" = ["S101", "PLR2004"]
+

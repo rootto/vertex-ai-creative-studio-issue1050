@@ -12,23 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 from dataclasses import field
 
+import logging
 import mesop as me
 
 from common.storage import store_to_gcs
 from common.utils import create_display_url, https_url_to_gcs_uri
-from components.dialog import dialog
 from components.header import header
-from components.library.events import LibrarySelectionChangeEvent
-from components.library.library_chooser_button import library_chooser_button
 from components.page_scaffold import page_frame, page_scaffold
 from components.stepper import stepper
 from models.character_consistency import generate_character_video
 from state.state import AppState
+from components.library.library_chooser_button import library_chooser_button
+from components.library.events import LibrarySelectionChangeEvent
+from components.dialog import dialog
 
 logger = logging.getLogger(__name__)
+
+SELECT_IMAGE_STEP = 2
+CREATE_VIDEO_STEP = 3
 
 
 @me.stateclass
@@ -37,8 +40,8 @@ class PageState:
 
     current_step: int = 1
     max_completed_step: int = 1
-    uploaded_image_gcs_uris: list[str] = field(default_factory=list)  # pylint: disable=invalid-field-call
-    uploaded_image_display_urls: list[str] = field(default_factory=list)  # pylint: disable=invalid-field-call
+    uploaded_image_gcs_uris: list[str] = field(default_factory=list) # pylint: disable=invalid-field-call
+    uploaded_image_display_urls: list[str] = field(default_factory=list) # pylint: disable=invalid-field-call
     scene_prompt: str = ""
     video_prompt: str = ""
     character_description: str = ""
@@ -46,7 +49,7 @@ class PageState:
     candidate_image_urls: list[str] = field(default_factory=list)
     best_image_gcs_uri: str = ""
     best_image_url: str = ""
-    user_selected_image_url: str = ""  # This will be a display URL
+    user_selected_image_url: str = "" # This will be a display URL
     outpainted_image_gcs_uri: str = ""
     outpainted_image_display_url: str = ""
     final_video_gcs_uri: str = ""
@@ -101,19 +104,8 @@ This page allows you to test the character consistency workflow step-by-step.
 
             with me.box(style=me.Style(margin=me.Margin(top=24))):
                 if state.current_step == 1:
-                    me.text(
-                        "Step 1: Upload Reference Images and Provide a Scene Prompt",
-                        style=me.Style(margin=me.Margin(bottom=16)),
-                    )
-                    with me.box(
-                        style=me.Style(
-                            display="flex",
-                            flex_direction="row",
-                            gap=16,
-                            margin=me.Margin(bottom=16),
-                            justify_content="center",
-                        ),
-                    ):
+                    me.text("Step 1: Upload Reference Images and Provide a Scene Prompt", style=me.Style(margin=me.Margin(bottom=16)))
+                    with me.box(style=me.Style(display="flex", flex_direction="row", gap=16, margin=me.Margin(bottom=16), justify_content="center")):
                         me.uploader(
                             label="Upload Reference Images",
                             on_upload=on_upload,
@@ -125,24 +117,11 @@ This page allows you to test the character consistency workflow step-by-step.
                             button_label="Choose from Library",
                         )
                     if state.uploaded_image_gcs_uris:
-                        with me.box(
-                            style=me.Style(
-                                display="flex",
-                                flex_wrap="wrap",
-                                gap=10,
-                                justify_content="center",
-                                margin=me.Margin(bottom=16),
-                            ),
-                        ):
+                        with me.box(style=me.Style(display="flex", flex_wrap="wrap", gap=10, justify_content="center", margin=me.Margin(bottom=16))):
                             for uri in state.uploaded_image_display_urls:
                                 me.image(
                                     src=uri,
-                                    style=me.Style(
-                                        width=200,
-                                        height=200,
-                                        object_fit="contain",
-                                        border_radius=8,
-                                    ),
+                                    style=me.Style(width=200, height=200, object_fit="contain", border_radius=8),
                                 )
                     me.textarea(
                         label="Scene Prompt",
@@ -150,17 +129,10 @@ This page allows you to test the character consistency workflow step-by-step.
                         on_input=on_prompt_input,
                         style=me.Style(width="100%", margin=me.Margin(bottom=16)),
                     )
-                    me.button(
-                        "Generate Alternatives",
-                        on_click=generate_alternatives,
-                        type="raised",
-                    )
+                    me.button("Generate Alternatives", on_click=generate_alternatives, type="raised")
 
-                if state.current_step == 2:
-                    me.text(
-                        "Step 2: Select the Best Image",
-                        style=me.Style(margin=me.Margin(bottom=16)),
-                    )
+                if state.current_step == SELECT_IMAGE_STEP:
+                    me.text("Step 2: Select the Best Image", style=me.Style(margin=me.Margin(bottom=16)))
                     if state.character_description:
                         with me.expansion_panel(title="Character Description"):
                             me.text(state.character_description)
@@ -171,7 +143,7 @@ This page allows you to test the character consistency workflow step-by-step.
                                 flex_wrap="wrap",
                                 gap=10,
                                 justify_content="center",
-                            ),
+                            )
                         ):
                             for url in state.candidate_image_urls:
                                 is_system_selected = url == state.best_image_url
@@ -185,28 +157,22 @@ This page allows you to test the character consistency workflow step-by-step.
                                             me.BorderSide(
                                                 width=4,
                                                 style="solid",
-                                                color=me.theme_var("primary")
-                                                if is_user_selected
-                                                else "transparent",
-                                            ),
+                                                color=me.theme_var("primary") if is_user_selected else "transparent",
+                                            )
                                         ),
                                         border_radius=12,
                                         cursor="pointer",
                                     ),
                                 ):
-                                    with me.box(
-                                        style=me.Style(
-                                            border=me.Border(
-                                                bottom=me.BorderSide(
-                                                    width=4,
-                                                    style="solid",
-                                                    color=me.theme_var("secondary")
-                                                    if is_system_selected
-                                                    else "transparent",
-                                                ),
-                                            ),
-                                        ),
-                                    ):
+                                    with me.box(style=me.Style(
+                                        border=me.Border(
+                                            bottom=me.BorderSide(
+                                                width=4,
+                                                style="solid",
+                                                color=me.theme_var("secondary") if is_system_selected else "transparent",
+                                            )
+                                        )
+                                    )):
                                         me.image(
                                             src=url,
                                             style=me.Style(
@@ -217,19 +183,9 @@ This page allows you to test the character consistency workflow step-by-step.
                                         )
                         me.button("Continue", on_click=next_step, type="raised")
 
-                if state.current_step == 3:
-                    me.text(
-                        "Step 3: Create Video",
-                        style=me.Style(margin=me.Margin(bottom=16)),
-                    )
-                    with me.box(
-                        style=me.Style(
-                            display="flex",
-                            flex_direction="row",
-                            gap=16,
-                            margin=me.Margin(bottom=16),
-                        ),
-                    ):
+                if state.current_step == CREATE_VIDEO_STEP:
+                    me.text("Step 3: Create Video", style=me.Style(margin=me.Margin(bottom=16)))
+                    with me.box(style=me.Style(display="flex", flex_direction="row", gap=16, margin=me.Margin(bottom=16))):
                         with me.box(style=me.Style(flex_grow=1)):
                             me.textarea(
                                 label="Video Prompt",
@@ -238,35 +194,10 @@ This page allows you to test the character consistency workflow step-by-step.
                                 on_blur=on_video_prompt_blur,
                                 style=me.Style(width="100%"),
                             )
-                            with me.box(
-                                style=me.Style(
-                                    display="flex",
-                                    flex_direction="row",
-                                    gap=16,
-                                    margin=me.Margin(top=16),
-                                ),
-                            ):
-                                me.button(
-                                    "dancing in the rain",
-                                    on_click=lambda e: on_modify_prompt_click(
-                                        "dancing in the rain",
-                                    ),
-                                    type="flat",
-                                )
-                                me.button(
-                                    "camera zooms out to show the earth",
-                                    on_click=lambda e: on_modify_prompt_click(
-                                        "camera zooms out to show the earth",
-                                    ),
-                                    type="flat",
-                                )
-                                me.button(
-                                    "person turns magically invisible",
-                                    on_click=lambda e: on_modify_prompt_click(
-                                        "person turns magically invisible",
-                                    ),
-                                    type="flat",
-                                )
+                            with me.box(style=me.Style(display="flex", flex_direction="row", gap=16, margin=me.Margin(top=16))):
+                                me.button("dancing in the rain", on_click=lambda e: on_modify_prompt_click("dancing in the rain"), type="flat")
+                                me.button("camera zooms out to show the earth", on_click=lambda e: on_modify_prompt_click("camera zooms out to show the earth"), type="flat")
+                                me.button("person turns magically invisible", on_click=lambda e: on_modify_prompt_click("person turns magically invisible"), type="flat")
                         if state.user_selected_image_url:
                             me.image(
                                 src=state.user_selected_image_url,
@@ -274,10 +205,7 @@ This page allows you to test the character consistency workflow step-by-step.
                             )
                     me.button("Generate Video", on_click=generate_video, type="raised")
                     if state.final_video_url:
-                        me.video(
-                            src=state.final_video_url,
-                            style=me.Style(width=600, height=338),
-                        )
+                        me.video(src=state.final_video_url, style=me.Style(width=600, height=338))
 
             me.text(state.status_message, style=me.Style(margin=me.Margin(top=24)))
 
@@ -335,13 +263,27 @@ def on_modify_prompt_click(modifier: str):
     yield
 
 
+def _default_selected_image_url(state: PageState) -> str:
+    """Return the current selection, falling back to generated candidates."""
+    if state.user_selected_image_url:
+        return state.user_selected_image_url
+    if state.best_image_url:
+        return state.best_image_url
+    if state.candidate_image_urls:
+        return state.candidate_image_urls[0]
+    return ""
+
+
 def next_step(e: me.ClickEvent):
     """Move to the next step."""
     state = me.state(PageState)
+    if state.current_step == SELECT_IMAGE_STEP and not state.user_selected_image_url:
+        state.user_selected_image_url = _default_selected_image_url(state)
     state.current_step += 1
-    state.max_completed_step = max(state.max_completed_step, state.current_step)
+    if state.current_step > state.max_completed_step:
+        state.max_completed_step = state.current_step
     state.status_message = f"Moved to step {state.current_step}"
-    if state.current_step == 3:
+    if state.current_step == CREATE_VIDEO_STEP:
         state.video_prompt = state.scene_prompt
     yield
 
@@ -381,25 +323,25 @@ def generate_alternatives(e: me.ClickEvent):
             if "candidate_image_gcs_uris" in step_result.data:
                 gcs_uris = step_result.data["candidate_image_gcs_uris"]
                 state.candidate_image_gcs_uris = gcs_uris
-                state.candidate_image_urls = [
-                    create_display_url(uri) for uri in gcs_uris
-                ]
+                state.candidate_image_urls = [create_display_url(uri) for uri in gcs_uris]
             if "best_image_gcs_uri" in step_result.data:
                 gcs_uri = step_result.data["best_image_gcs_uri"]
                 state.best_image_gcs_uri = gcs_uri
                 state.best_image_url = create_display_url(gcs_uri)
+                state.user_selected_image_url = _default_selected_image_url(state)
                 break
     except Exception as e:
         logger.error("Error during character consistency generation", exc_info=True)
-        state.status_message = f"Error: {e!s}"
+        state.status_message = f"Error: {str(e)}"
         state.is_generating = False
         yield
         return
 
     state.is_generating = False
     state.status_message = "Generated alternatives."
-    state.current_step = 2
-    state.max_completed_step = max(state.max_completed_step, state.current_step)
+    state.current_step = SELECT_IMAGE_STEP
+    if state.current_step > state.max_completed_step:
+        state.max_completed_step = state.current_step
     yield
 
 
@@ -411,7 +353,14 @@ def generate_video(e: me.ClickEvent):
     yield
 
     # Convert the display URL back to a GCS URI before passing it to the model.
-    gcs_uri = https_url_to_gcs_uri(state.user_selected_image_url)
+    selected_image_url = _default_selected_image_url(state)
+    if not selected_image_url:
+        state.status_message = "Select an image before generating video."
+        state.is_generating = False
+        yield
+        return
+    state.user_selected_image_url = selected_image_url
+    gcs_uri = https_url_to_gcs_uri(selected_image_url)
 
     for step_result in generate_character_video(
         user_email=app_state.user_email,

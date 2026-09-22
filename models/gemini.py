@@ -86,6 +86,23 @@ class RoomList(BaseModel):
     )
 
 
+def _extract_usage_metadata(response: Any) -> dict[str, int]:
+    """Extracts prompt, candidate, and total token counts from a response."""
+    units = {}
+    if hasattr(response, "usage_metadata") and response.usage_metadata:
+        um = response.usage_metadata
+        if hasattr(um, "prompt_token_count") and um.prompt_token_count is not None:
+            units["prompt_tokens"] = um.prompt_token_count
+        if (
+            hasattr(um, "candidates_token_count")
+            and um.candidates_token_count is not None
+        ):
+            units["candidates_tokens"] = um.candidates_token_count
+        if hasattr(um, "total_token_count") and um.total_token_count is not None:
+            units["total_tokens"] = um.total_token_count
+    return units
+
+
 # Initialize client and default model ID for rewriter
 client = GeminiModelSetup.init()
 cfg = Default()  # Instantiate config
@@ -156,11 +173,21 @@ def generate_image_from_prompt_and_images(
             thinking_budget=-1 if thinking_level == "HIGH" else 1024,
         )
 
+    billing_units = {
+        "aspect_ratio": aspect_ratio,
+        "input_asset_count": len(images),
+    }
+    if use_search:
+        billing_units["grounding_web_search"] = True
+    if use_image_search:
+        billing_units["grounding_image_search"] = True
+
     with track_model_call(
         model_name=active_model_name,
+        billing_units=billing_units,
         aspect_ratio=aspect_ratio,
         num_images=len(images),
-    ):
+    ) as ctx:
         response = client.models.generate_content(
             model=active_model_name,
             contents=contents,
@@ -172,6 +199,7 @@ def generate_image_from_prompt_and_images(
                 # candidate_count=candidate_count,
             ),
         )
+        ctx["billing_units"].update(_extract_usage_metadata(response))
 
     end_time = time.time()
     execution_time = end_time - start_time
@@ -273,31 +301,82 @@ def extract_room_names_from_image(image_uri: str) -> list[str]:
     retry=retry_if_exception_type(Exception),  # Retry on all exceptions for robustness
     reraise=True,  # re-raise the last exception if all retries fail
 )
-def rewriter(original_prompt: str, rewriter_prompt: str) -> str:
+def rewriter(
+    original_prompt: str,
+    rewriter_prompt: str,
+    images: list[tuple[str, str]] | None = None,
+) -> str:
     """A Gemini rewriter.
 
     Args:
         original_prompt: The original prompt to be rewritten.
         rewriter_prompt: The rewriter prompt.
+        images: Optional list of ``(gcs_uri, mime_type)`` pairs for reference
+            images to give the rewriter visual context (e.g. Veo i2v /
+            first-last / r2v reference images). When empty or omitted the call
+            is text-only and behaves exactly as before (backward compatible for
+            callers such as Lyria that pass no images). The rewriter model
+            (``REWRITER_MODEL_ID = cfg.MODEL_ID``) is vision-capable; each image
+            is attached as a ``types.Part.from_uri`` part alongside the text
+            prompt, mirroring the ``describe_image`` pattern.
 
     Returns:
         The rewritten prompt text.
 
     """
     full_prompt = f"{rewriter_prompt} {original_prompt}"
-    analytics_logger.info(f"Rewriter: '{full_prompt}' with model {REWRITER_MODEL_ID}")
-    try:
-        with track_model_call(model_name=REWRITER_MODEL_ID, task="rewriter"):
+
+    # Build multimodal parts for any supplied reference images. Skip empty URIs
+    # and fall back to image/png when a mime type is missing.
+    image_parts = [
+        types.Part.from_uri(file_uri=uri, mime_type=mime or "image/png")
+        for uri, mime in (images or [])
+        if uri
+    ]
+
+    analytics_logger.info(
+        f"Rewriter: '{full_prompt}' with model {REWRITER_MODEL_ID} "
+        f"({len(image_parts)} reference image(s))"
+    )
+
+    def _call(contents: Any) -> str:
+        with track_model_call(model_name=REWRITER_MODEL_ID, task="rewriter") as ctx:
             response = client.models.generate_content(
                 model=REWRITER_MODEL_ID,  # Explicitly use the configured model
-                contents=full_prompt,
+                contents=contents,
                 config=types.GenerateContentConfig(
                     response_modalities=["TEXT"],
                 ),
             )
-        analytics_logger.info(f"Rewriter success! {response.text}")
+            ctx["billing_units"].update(_extract_usage_metadata(response))
         return response.text
+
+    try:
+        contents = [full_prompt, *image_parts] if image_parts else full_prompt
+        result = _call(contents)
+        analytics_logger.info(f"Rewriter success! {result}")
+        return result
     except Exception as e:
+        # Vision-support guard: if we attached image parts and the multimodal
+        # call failed (e.g. an operator pointed MODEL_ID at a non-vision model,
+        # or the API rejected the image parts), fall back to a text-only rewrite
+        # rather than breaking the whole rewrite feature.
+        if image_parts:
+            analytics_logger.warning(
+                f"Rewriter multimodal call failed ({e}); "
+                "falling back to text-only rewrite."
+            )
+            try:
+                result = _call(full_prompt)
+                analytics_logger.info(
+                    f"Rewriter success (text-only fallback)! {result}"
+                )
+                return result
+            except Exception as fallback_error:
+                analytics_logger.error(
+                    f"Rewriter error (text-only fallback): {fallback_error}"
+                )
+                raise
         analytics_logger.error(f"Rewriter error: {e}")
         raise
 
@@ -527,8 +606,12 @@ def image_critique(original_prompt: str, img_uris: list[str]) -> str:
                 f"Sending critique request to Gemini model: {critique_model_id} with {len(contents_payload)} parts.",
             )
 
-            with track_model_call(model_name=critique_model_id, task="image_critique"):
-                response = client.models.generate_content(
+            critique_client = GeminiModelSetup.init(location=critique_location)
+
+            with track_model_call(
+                model_name=critique_model_id, task="image_critique",
+            ) as ctx:
+                response = critique_client.models.generate_content(
                     model=critique_model_id,
                     contents=contents_payload,
                     config=types.GenerateContentConfig(
@@ -537,6 +620,7 @@ def image_critique(original_prompt: str, img_uris: list[str]) -> str:
                         max_output_tokens=8192,
                     ),
                 )
+                ctx["billing_units"].update(_extract_usage_metadata(response))
 
             analytics_logger.info("Received critique response from Gemini.")
 
@@ -1199,15 +1283,16 @@ def generate_text(
     contents = [types.Content(role="user", parts=parts)]
 
     client = GeminiModelSetup.init(
-        location="global",
+        location=cfg.GEMINI_LOCATION,
     )
 
     # print(f"Sending request to model: {model_name}")
-    with track_model_call(model_name=model_name, task="generate_text"):
+    with track_model_call(model_name=model_name, task="generate_text") as ctx:
         response = client.models.generate_content(
             model=model_name,
             contents=contents,
         )
+        ctx["billing_units"].update(_extract_usage_metadata(response))
     # print(f"Received raw response from model: {response}")
 
     # end_time = time.time()
@@ -1379,7 +1464,7 @@ def get_best_video_frame_timestamp(video_uri: str) -> float:
 
     prompt_text = "Analyze this video and identify the single frame that best represents the overall content, action, or most interesting visual moment. Return the exact timestamp in seconds."
 
-    config = types.GenerateContentConfig(
+    frame_config = types.GenerateContentConfig(
         response_mime_type="application/json",
         response_schema=BestFrameTimestamp.model_json_schema(),
         temperature=0.2,
@@ -1390,7 +1475,7 @@ def get_best_video_frame_timestamp(video_uri: str) -> float:
             response = client.models.generate_content(
                 model=model_name,
                 contents=[prompt_text, video_part],
-                config=config,
+                config=frame_config,
             )
 
         result = BestFrameTimestamp.model_validate_json(response.text)
