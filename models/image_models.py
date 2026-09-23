@@ -22,7 +22,11 @@
 #    ImagenModelSetup,
 # )
 
+import base64
+import uuid
+
 from google import genai
+from google.cloud import aiplatform
 from google.genai import types
 from tenacity import (
     retry,
@@ -33,6 +37,7 @@ from tenacity import (
 
 import models.gemini as gemini
 from common.analytics import get_logger, track_model_call
+from common.storage import store_to_gcs
 from config.default import Default
 
 logger = get_logger(__name__)
@@ -261,3 +266,116 @@ def generate_image_for_vto(prompt: str) -> bytes:
     if response.generated_images and response.generated_images[0].image.image_bytes:
         return response.generated_images[0].image.image_bytes
     raise ValueError("Image generation failed or returned no data.")
+
+
+def recontextualize_product_in_scene(
+    image_uris_list: list[str],
+    prompt: str,
+    sample_count: int,
+) -> list[str]:
+    """Recontextualizes a product in a scene and returns a list of GCS URIs."""
+    cfg = Default()
+    if cfg.LOCATION == "global":
+        api_endpoint = "aiplatform.googleapis.com"
+    else:
+        api_endpoint = f"{cfg.LOCATION}-aiplatform.googleapis.com"
+    client_options = {"api_endpoint": api_endpoint}
+    client = aiplatform.gapic.PredictionServiceClient(client_options=client_options)
+
+    model_endpoint = f"projects/{cfg.PROJECT_ID}/locations/{cfg.LOCATION}/publishers/google/models/{cfg.MODEL_IMAGEN_PRODUCT_RECONTEXT}"
+
+    instance = {"productImages": []}
+    for product_image_uri in image_uris_list:
+        product_image = {"image": {"gcsUri": product_image_uri}}
+        instance["productImages"].append(product_image)
+
+    if prompt:
+        instance["prompt"] = prompt
+
+    parameters = {"sampleCount": sample_count}
+
+    response = client.predict(
+        endpoint=model_endpoint,
+        instances=[instance],
+        parameters=parameters,
+    )
+
+    gcs_uris = []
+    for prediction in response.predictions:
+        if prediction.get("bytesBase64Encoded"):
+            encoded_mask_string = prediction["bytesBase64Encoded"]
+            mask_bytes = base64.b64decode(encoded_mask_string)
+
+            gcs_uri = store_to_gcs(
+                folder="recontext_results",
+                file_name=f"recontext_result_{uuid.uuid4()}.png",
+                mime_type="image/png",
+                contents=mask_bytes,
+                decode=False,
+            )
+            gcs_uris.append(gcs_uri)
+
+    return gcs_uris
+
+
+@retry(
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    stop=stop_after_attempt(3),
+    retry=retry_if_exception_type(Exception),
+    reraise=True,
+)
+def edit_image(
+    model: str,
+    prompt: str,
+    edit_mode: str,
+    mask_mode: str,
+    reference_image_bytes: bytes,
+    number_of_images: int,
+):
+    """Edits an image using the Google GenAI client."""
+    client = ImagenModelSetup.init(model_id=model)
+    cfg = Default()
+    gcs_output_directory = f"gs://{cfg.IMAGE_BUCKET}/{cfg.IMAGEN_EDITED_SUBFOLDER}"
+
+    raw_ref_image = types.RawReferenceImage(
+        reference_id=1,
+        reference_image=reference_image_bytes,
+    )
+
+    mask_ref_image = types.MaskReferenceImage(
+        reference_id=2,
+        config=types.MaskReferenceConfig(
+            mask_mode=mask_mode,
+            mask_dilation=0,
+        ),
+    )
+
+    try:
+        response = client.models.edit_image(
+            model=model,
+            prompt=prompt,
+            reference_images=[raw_ref_image, mask_ref_image],
+            config=types.EditImageConfig(
+                edit_mode=edit_mode,
+                number_of_images=number_of_images,
+                include_rai_reason=True,
+                output_gcs_uri=gcs_output_directory,
+                output_mime_type="image/jpeg",
+            ),
+        )
+
+        if (
+            response
+            and hasattr(response, "generated_images")
+            and response.generated_images
+        ):
+            return [
+                img.image.gcs_uri
+                for img in response.generated_images
+                if hasattr(img, "image") and hasattr(img.image, "gcs_uri")
+            ]
+        return []
+    except Exception as e:
+        logger.error(f"models.image_models.edit_image: API call failed: {e}")
+        raise
+
