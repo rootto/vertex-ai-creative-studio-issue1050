@@ -87,7 +87,7 @@ class Default:
     INIT_VERTEX: bool = True
     GEMINI_OMNI_MODEL_ID: str = os.environ.get(
         "GEMINI_OMNI_MODEL_ID",
-        "gemini-omni-1.1-flash-preview",
+        "gemini-omni-flash-preview",
     )
     GEMINI_IMAGE_GEN_MODEL: str = os.environ.get(
         "GEMINI_IMAGE_GEN_MODEL",

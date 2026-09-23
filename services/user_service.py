@@ -36,7 +36,10 @@ def get_user_role(email: str) -> str:
         user_ref = db.collection(config.USERS_COLLECTION_NAME).document(email)
         doc = user_ref.get()
         if doc.exists:
-            return doc.to_dict().get("role", "contributor")
+            role = doc.to_dict().get("role", "contributor")
+            if role == "creator_admin":
+                return "administrator"
+            return role
         return "contributor"
     except Exception:
         logger.exception(f"Error fetching user role for {email}")
@@ -60,8 +63,9 @@ def set_user_role(email: str, role: str) -> None:
 def bootstrap_user(email: str) -> None:
     """Bootstrap a user upon login.
 
-    If the users collection is completely empty, the first user is bootstrapped as
-    an 'administrator'. Subsequent new users are bootstrapped as 'contributor'.
+    If the users collection is completely empty (or has no administrator yet),
+    the first user is bootstrapped as an 'administrator'. Subsequent new users
+    are bootstrapped as 'contributor'.
     Every user is checked to ensure they have their own individual team 'Team <email>'.
     If it is missing, it is created.
     """
@@ -73,13 +77,29 @@ def bootstrap_user(email: str) -> None:
         doc = users_ref.document(email).get()
 
         if not doc.exists:
-            # Check if this is the first user in the entire system
-            docs = users_ref.limit(1).stream()
-            doc_list = list(docs)
-
-            role = "administrator" if not doc_list else "contributor"
+            # Check if any administrator exists in the system
+            admin_docs = list(
+                users_ref.where("role", "==", "administrator").limit(1).stream()
+            )
+            role = "administrator" if not admin_docs else "contributor"
             set_user_role(email, role)
             logger.info(f"Bootstrapped new user {email} with role {role}")
+        else:
+            current_role = doc.to_dict().get("role", "contributor")
+            if current_role == "creator_admin":
+                set_user_role(email, "administrator")
+                logger.info(
+                    f"Upgraded user {email} role from creator_admin to administrator"
+                )
+            elif current_role != "administrator":
+                admin_docs = list(
+                    users_ref.where("role", "==", "administrator").limit(1).stream()
+                )
+                if not admin_docs:
+                    set_user_role(email, "administrator")
+                    logger.info(
+                        f"Promoted first active user {email} to administrator (no existing administrator found)"
+                    )
 
         # Ensure the user has their personal team "Team <email>"
         teams_ref = db.collection(config.TEAMS_COLLECTION_NAME)

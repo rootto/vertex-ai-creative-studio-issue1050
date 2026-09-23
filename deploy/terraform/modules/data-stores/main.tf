@@ -164,7 +164,7 @@ resource "google_firestore_document" "initial_user" {
   document_id = var.initial_user
   fields = jsonencode({
     email = { stringValue = var.initial_user }
-    role  = { stringValue = "creator_admin" }
+    role  = { stringValue = "administrator" }
     teams = { arrayValue = {} }
   })
 }

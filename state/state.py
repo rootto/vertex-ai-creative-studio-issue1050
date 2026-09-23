@@ -170,6 +170,15 @@ def update_user_and_session_info(user_email: str, session_id: str):
     app_state = me.state(AppState)
     app_state.user_email = user_email
     app_state.session_id = session_id
+
+    if user_email != ANONYMOUS_USER_EMAIL:
+        bootstrap_user(user_email)
+        app_state.user_role = get_user_role(user_email)
+        teams = get_teams_for_user(user_email, app_state.user_role)
+        app_state.managed_teams_json = json.dumps(
+            [asdict(t) for t in teams],
+            default=str,
+        )
     yield
 
 
