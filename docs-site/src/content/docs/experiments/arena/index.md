@@ -2,9 +2,18 @@
 title: "Image Generation Arena & Leaderboard"
 ---
 
+:::caution[Archived]
+This experiment has been archived (2026-09-13). It is retained for reference only and is not maintained. **The code does not run as-is.**
+
+It relies on unmaintained dependencies and its core image-battle feature is broken: the default battle pool depends on Imagen models that were [shut down across Vertex AI on 2026-08-17](https://firebase.google.com/docs/ai-logic/imagen-models-migration?api=dev), so every default battle fails. The experiment is not actively maintained (recent commits were almost entirely automated dependency bumps) and is not actively used.
+
+- **On 2026-09-13**, the experiment source was moved from `experiments/arena` to `archive/arena` in the repository.
+- **Approximately 2 months after archiving (around 2026-11-13)**, it will be considered for full removal from the repository.
+:::
+
 This is an example of an arena & leaderboard to compare different image generation tools.
 
-Currently, it uses Flux1, Stable Diffusion, Imagen 2, Imagen 3, image generation models with Gemini 2.0 experimental's image output model forthcoming.
+It supports comparing images from a range of image generation models, including Flux1, Stable Diffusion, and Gemini image models (Nano Banana). Note that Imagen models were [deprecated across Google, including Vertex AI, around August 17, 2026](https://firebase.google.com/docs/ai-logic/imagen-models-migration?api=dev); use Gemini Image Generation (Nano Banana) as the replacement.
 
 The application is written in [Mesop](https://google.github.io/mesop/), a python UX framework, with the [Studio Scaffold starter](https://github.com/ghchinoy/studio-scaffold).
 

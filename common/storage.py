@@ -14,16 +14,56 @@
 
 import base64
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from google.cloud import storage
 
+from common.analytics import get_logger
 from config.default import Default
 from config.firebase_config import FirebaseClient
 
 cfg = Default()
+logger = get_logger(__name__)
+
+try:
+    import urllib3.contrib.pyopenssl
+
+    urllib3.contrib.pyopenssl.extract_from_urllib3()
+except (ImportError, AttributeError):
+    pass
+
+try:
+    import OpenSSL.SSL
+
+    for _attr_name in dir(OpenSSL.SSL.Context):
+        _attr = getattr(OpenSSL.SSL.Context, _attr_name)
+        if callable(_attr) and not _attr_name.startswith("__"):
+
+            def _make_wrapper(orig_func):
+                def _wrapper(*args, **kwargs):
+                    try:
+                        return orig_func(*args, **kwargs)
+                    except ValueError as e:
+                        if "already been used" in str(e):
+                            return None
+                        raise
+
+                return _wrapper
+
+            setattr(OpenSSL.SSL.Context, _attr_name, _make_wrapper(_attr))
+except (ImportError, AttributeError):
+    pass
 
 db = FirebaseClient(cfg.GENMEDIA_FIREBASE_DB).get_client()
+_storage_client: storage.Client | None = None
+
+
+def get_storage_client() -> storage.Client:
+    """Returns a cached singleton GCS storage.Client."""
+    global _storage_client
+    if _storage_client is None:
+        _storage_client = storage.Client(project=cfg.PROJECT_ID)
+    return _storage_client
 
 
 @dataclass
@@ -37,7 +77,7 @@ class Session:
 
 
 def get_or_create_session(session_id: str, user_email: str) -> Session:
-    """Retrieve a session from Firestore or create a new one if it doesn't exist."""
+    """Retrieves a session from Firestore or creates a new one if it doesn't exist."""
     session_ref = db.collection(cfg.SESSIONS_COLLECTION_NAME).document(session_id)
     session_doc = session_ref.get()
 
@@ -83,18 +123,21 @@ def store_to_gcs(
     bucket_name: str | None = None,
 ):
     """Store contents to GCS"""
-    actual_bucket_name = bucket_name if bucket_name else cfg.GENMEDIA_BUCKET
-    if not actual_bucket_name:
+    raw_bucket_name = bucket_name if bucket_name else cfg.GENMEDIA_BUCKET
+    if not raw_bucket_name:
         raise ValueError(
             "GCS bucket name is not configured. Please set GENMEDIA_BUCKET environment variable or provide bucket_name.",
         )
-    print(
+    # Strip any leading 'gs://' scheme and subpath (e.g. 'gs://bucket/folder' -> 'bucket')
+    actual_bucket_name = raw_bucket_name.removeprefix("gs://").split("/")[0]
+
+    logger.info(
         f"store_to_gcs: Target project {cfg.PROJECT_ID}, target bucket {actual_bucket_name}",
     )
-    client = storage.Client(project=cfg.PROJECT_ID)
+    client = get_storage_client()
     bucket = client.get_bucket(actual_bucket_name)
     destination_blob_name = f"{folder}/{file_name}"
-    print(f"store_to_gcs: Destination {destination_blob_name}")
+    logger.info(f"store_to_gcs: Destination {destination_blob_name}")
     blob = bucket.blob(destination_blob_name)
     if decode:
         contents_bytes = base64.b64decode(contents)
@@ -110,21 +153,21 @@ def store_to_gcs(
 
 def download_from_gcs(gcs_uri: str) -> bytes:
     """Downloads a file from a GCS URI and returns its content as bytes."""
-    client = storage.Client(project=cfg.PROJECT_ID)
+    client = get_storage_client()
     blob = storage.Blob.from_string(gcs_uri, client=client)
     return blob.download_as_bytes()
 
 
 def download_from_gcs_as_string(gcs_uri: str):
     """Downloads a file from a GCS URI and returns its content as a string."""
-    client = storage.Client(project=cfg.PROJECT_ID)
+    client = get_storage_client()
     blob = storage.Blob.from_string(gcs_uri, client=client)
     return blob.download_as_string()
 
 
 def list_files_in_bucket(bucket_name, prefix=None):
     """Lists all blobs (files) in the specified GCS bucket, optionally filtered by a prefix."""
-    client = storage.Client(project=cfg.PROJECT_ID)
+    client = get_storage_client()
     bucket = client.get_bucket(bucket_name)
 
     # List blobs, optionally with a prefix to emulate a "folder"
@@ -135,3 +178,21 @@ def list_files_in_bucket(bucket_name, prefix=None):
         file_names.append(blob.name)
 
     return file_names
+
+
+def generate_upload_signed_url(
+    bucket_name: str,
+    blob_name: str,
+    content_type: str,
+) -> str:
+    """Generate a v4 signed URL for uploading a file via PUT request."""
+    client = get_storage_client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+
+    return blob.generate_signed_url(
+        version="v4",
+        expiration=timedelta(minutes=15),
+        method="PUT",
+        content_type=content_type,
+    )

@@ -2,28 +2,45 @@
 
 Example [Genkit](https://firebase.google.com/docs/genkit) AI application using Genmedia MCP servers.
 
+This sample wires three genmedia MCP servers over stdio: **Nano Banana**
+(`mcp-nanobanana-go`, text/image→image — the current image server that replaces
+the retired `imagen` server), **Veo** (`mcp-veo-go`), and **Chirp 3**
+(`mcp-chirp3-go`).
 
 ## Prerequisites
 
 * NodeJs (You can use the [nvm](https://github.com/nvm-sh/nvm) node manager to install this)
+* The genmedia MCP server binaries (`mcp-nanobanana-go`, `mcp-veo-go`,
+  `mcp-chirp3-go`) built and available on your `PATH`. See the
+  [`mcp-genmedia`](../../README.md) README for build/install instructions.
+* A Google Cloud project with the required APIs enabled. Export it before
+  running:
 
-Install Genkit client
+  ```bash
+  export GOOGLE_CLOUD_PROJECT="$(gcloud config get project)"
+  ```
 
-```bash
-npm install -D genkit-cli
-```
+## Install and run
 
-## Run Genkit MCP client
-
-Genkit js genmedia MCP client
+The app lives in `genkit-agent-js`. Installing its dependencies also pulls in
+`genkit-cli` (a devDependency), which `npm run start` uses to launch the Dev UI:
 
 ```bash
 cd genkit-agent-js
 npm i
-npm run start
+npm run start        # runs: genkit start -- node --watch src/index.js
 ```
 
-Open Genkit dev tools at localhost:4000
+`src/index.js` registers the three MCP clients and a Gemini model on Vertex AI; it
+does not call `generate` itself. Open the Genkit Dev UI at
+[localhost:4000](http://localhost:4000) and exercise the genmedia tools (and the
+model) from there — each call renders as a trace.
 
+![genkit devtools screenshot](./assets/genkit-devtools.png)
 
-![genkt devtools screenshot](./assets/genkit-devtools.png)
+## Contributing
+
+Contributions are welcome; see the monorepo's
+[`CONTRIBUTING.md`](../../../../CONTRIBUTING.md) — a signed Google
+[Contributor License Agreement](https://cla.developers.google.com/) and PR review
+are required.

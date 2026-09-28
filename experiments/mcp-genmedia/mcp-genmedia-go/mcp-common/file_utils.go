@@ -108,6 +108,10 @@ func ProcessOutputAfterFFmpeg(ctx context.Context, ffmpegOutputActualPath, final
 			return "", "", fmt.Errorf("failed to create specified output local directory %s: %w", outputLocalDir, errMkdir)
 		}
 		destLocalPath := filepath.Join(outputLocalDir, finalOutputFilename)
+		// Collision policy: overwrite with a warning (design #842 §4e).
+		if _, statErr := os.Stat(destLocalPath); statErr == nil {
+			log.Printf("Warning: output file %q already exists in %s; overwriting (collision policy).", finalOutputFilename, outputLocalDir)
+		}
 		log.Printf("Moving FFMpeg output from %s to %s", currentLocalPath, destLocalPath)
 		if errRename := os.Rename(currentLocalPath, destLocalPath); errRename != nil {
 			// If rename fails (e.g. different devices), try copy then remove original
@@ -181,4 +185,29 @@ func FormatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// NormalizeImageMIMEType returns a usable image MIME type for generated image
+// bytes when the model response omits one.
+func NormalizeImageMIMEType(mimeType string) string {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	if mimeType == "" {
+		return "image/png"
+	}
+	return mimeType
+}
+
+// ImageExtensionForMIMEType returns a suitable file extension for known image
+// MIME types and defaults to png.
+func ImageExtensionForMIMEType(mimeType string) string {
+	switch NormalizeImageMIMEType(mimeType) {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/webp":
+		return ".webp"
+	case "image/gif":
+		return ".gif"
+	default:
+		return ".png"
+	}
 }

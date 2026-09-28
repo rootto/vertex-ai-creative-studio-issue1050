@@ -37,7 +37,6 @@ class ThumbnailRequest(BaseModel):
 @router.post("/thumbnail")
 async def generate_thumbnail(request: ThumbnailRequest):
     """FastAPI endpoint triggered by Cloud Tasks to extract a thumbnail."""
-    # The extraction is already happening in a task/thread, so we call it synchronously.
     run_thumbnail_job(request.job_id, request.video_uri)
     return {"status": "ok"}
 
@@ -52,11 +51,11 @@ async def generate_veo_async(
 
     Returns a job ID immediately.
     """
-    # Extract user email from the request scope, set by middleware
     user_email = req.scope.get("MESOP_USER_EMAIL")
     if not user_email or user_email == "anonymous@google.com":
         raise HTTPException(
-            status_code=401, detail="Unauthorized: Authentication required"
+            status_code=401,
+            detail="Unauthorized: Authentication required",
         )
 
     # 1. Create the "Tracking Record" immediately

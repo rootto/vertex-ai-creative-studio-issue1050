@@ -1,0 +1,247 @@
+/**
+* Copyright 2024 Google LLC
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
+
+variable "project_id" {
+  type = string
+}
+
+variable "api_base_url" {
+  description = "Base URL for the application. If not provided, it will be inferred from the domain/LB config."
+  type        = string
+  default     = ""
+}
+
+variable "region" {
+  description = "Location for load balancer and Cloud Run resources"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "use_lb" {
+  description = "Run load balancer on HTTPS and provision managed certificate with provided `domain`."
+  type        = bool
+  default     = true
+}
+
+variable "domain" {
+  description = "Domain name to run the load balancer on. Used if `ssl` is `true`."
+  type        = string
+  default     = ""
+}
+
+variable "initial_container_image" {
+  description = "Container image to use for the Cloud Run service hosting Creative Studio. Because infra is deployed through Terraform this defaults to placeholder image; however, if you are applying Terraform template post initial deployment, use the latest built image to avoid reverting back to the placeholder."
+  type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/placeholder"
+}
+
+variable "model_id" {
+  description = "Primary Gemini model ID to use for text and multimodal reasoning tasks"
+  type        = string
+  default     = "gemini-3.5-flash"
+}
+
+variable "gemini_location" {
+  description = "Endpoint used for Gemini text/multimodal calls. Gemini 3.x models are not served from single regions such as us-central1 — keep this at 'global' (or a us/eu multi-region) even when region is regional."
+  type        = string
+  default     = "global"
+}
+
+variable "gemini_audio_analysis_model_id" {
+  description = "Gemini model ID to use for audio analysis features"
+  type        = string
+  default     = "gemini-3.1-flash-lite"
+}
+
+variable "veo_model_id" {
+  description = "Veo model ID to use for video generation"
+  type        = string
+  default     = "veo-3.1-fast-generate-001"
+}
+
+variable "veo_location" {
+  description = "Location for Veo model API calls. Defaults to the deployment region when unset."
+  type        = string
+  default     = null
+}
+
+variable "veo_exp_model_id" {
+  description = "Experimental Veo model ID to use for video generation"
+  type        = string
+  default     = "veo-3.1-generate-001"
+}
+
+variable "lyria_model_id" {
+  description = "Lyria model ID to use for audio generation"
+  type        = string
+  default     = "lyria-002"
+}
+
+variable "edit_images_enabled" {
+  description = "Feature flag for Edit Images feature"
+  type        = bool
+  default     = true
+}
+
+variable "team_and_branding" {
+  description = "Feature flag for Team and Branding Guidelines features"
+  type        = bool
+  default     = true
+}
+
+variable "enable_data_deletion" {
+  description = "Whether to allow force destroy on storage buckets. Should be false in production."
+  type        = bool
+  default     = false # Default to safe
+}
+
+variable "initial_user" {
+  description = "Email address of initial user that will be granted access to Creative Studio in IAP"
+  type        = string
+  nullable    = true
+  default     = null
+}
+
+variable "allow_local_domain_cors_requests" {
+  description = "Whether to allow local domain requests to the assets GCS bucket"
+  type        = bool
+  default     = false
+}
+
+variable "deployer_members" {
+  description = "Member-formatted IAM principal(s) for the deployer that runs `gcloud builds submit` and `deploy.sh list-versions`/deploy-by-tag during a deploy (e.g. [\"serviceAccount:deploy@PROJECT.iam.gserviceaccount.com\"]). Each is granted two additive bindings from this same list: a project-scoped roles/cloudbuild.builds.editor via the iam module, and a repo-scoped roles/artifactregistry.reader via the artifact-registry module. Defaults to [] (no bindings created); set per environment to codify the grants. Never a bare email."
+  type        = list(string)
+  default     = []
+}
+
+variable "sleep_time" {
+  description = "Amount of time to wait post service API enablement to allow for eventual consistency to trickly through GCP."
+  type        = number
+  default     = 45
+}
+
+variable "gemini_critique_model_id" {
+  description = "Gemini model ID to use for Imagen critiques"
+  type        = string
+  default     = "gemini-3-flash-preview"
+}
+
+variable "gemini_critique_location" {
+  description = "Location for the Gemini critique model"
+  type        = string
+  default     = "global"
+}
+
+
+variable "character_consistency_gemini_location" {
+  description = "Location for the Gemini character consistency model"
+  type        = string
+  default     = "global"
+}
+
+
+variable "gemini_tts_location" {
+  description = "Location for the Gemini TTS model"
+  default     = "global"
+}
+
+variable "cloud_run_cpu" {
+  description = "CPU limit for the Creative Studio Cloud Run service container."
+  type        = string
+  default     = "2000m"
+}
+
+variable "cloud_run_memory" {
+  description = "Memory limit for the Creative Studio Cloud Run service container. Raised above the previous 1024Mi to give headroom for in-process video thumbnail decode, which was observed peaking ~1133 MiB and OOM-killing the instance."
+  type        = string
+  default     = "4Gi"
+}
+
+variable "cloud_run_timeout" {
+  description = "Maximum request timeout for the Creative Studio Cloud Run service. Long-running media generation (e.g. Veo) can exceed the default 5 minutes, so this defaults to 30 minutes."
+  type        = string
+  default     = "1800s"
+}
+
+variable "cloud_run_max_concurrency" {
+  description = "Maximum number of concurrent requests handled by a single Cloud Run instance. Kept low because media generation is CPU/memory intensive per request."
+  type        = number
+  default     = 4
+}
+
+variable "max_instance_count" {
+  description = "Maximum number of Cloud Run instances (scaling.max_instance_count). Previously hardcoded to 1 (P1 preserved it as a variable defaulting to 1); raised to 10 in P3 to provide a realistic autoscaling ceiling for real traffic. Configurable per environment/apply."
+  type        = number
+  default     = 10
+}
+
+variable "asset_lifecycle_age_days" {
+  description = "Age in days after which objects in the assets bucket are deleted by a lifecycle rule. Set to 0 to disable the lifecycle rule."
+  type        = number
+  default     = 90
+}
+
+variable "reserved_ip_address" {
+  description = "Reserved (static) global IP address for the load balancer. When null, a static IP is created and managed by Terraform (google_compute_global_address) so it survives load balancer recreation."
+  type        = string
+  nullable    = true
+  default     = null
+}
+
+variable "environment" {
+  description = "Deployment environment label used for cost allocation and filtering (e.g. dev, staging, prod)."
+  type        = string
+  default     = "prod"
+}
+
+variable "team" {
+  description = "Owning team label used for cost allocation."
+  type        = string
+  default     = "creative-studio"
+}
+
+variable "owner" {
+  description = "Owner label used for cost allocation. Must be a valid GCP label value (lowercase letters, numbers, dashes, underscores)."
+  type        = string
+  default     = "creative-studio"
+}
+
+variable "cost_center" {
+  description = "Cost center label used for cost allocation and billing reports."
+  type        = string
+  default     = "creative-studio"
+}
+
+# --- Secret Manager adoption (Phase 4), dormant by default ---
+# These two inputs drive the P4 mechanism and both default to empty, so a
+# default apply creates zero secrets, zero bindings, and zero secret env blocks,
+# and leaves the API set unchanged. The set of variables to migrate is an owner
+# input decided in the P4b follow-up; secret *values* are never authored here.
+
+variable "secret_ids" {
+  description = "List of Secret Manager secret IDs to create as *containers* (one per migrated variable) with a per-secret accessor binding for the runtime SA. Defaults to [] (dormant: no secrets or bindings created, Secret Manager API not enabled). Values/versions are loaded out-of-band, never in Terraform."
+  type        = list(string)
+  default     = []
+}
+
+variable "secret_env" {
+  description = "Map of Cloud Run environment variable name => { secret = <secret id/resource>, version = <version, default \"latest\"> } sourced from Secret Manager. A variable migrated to a secret is removed from the plaintext env map and added here (1:1). Defaults to {} (no secret env rendered)."
+  type = map(object({
+    secret  = string
+    version = optional(string, "latest")
+  }))
+  default = {}
+}

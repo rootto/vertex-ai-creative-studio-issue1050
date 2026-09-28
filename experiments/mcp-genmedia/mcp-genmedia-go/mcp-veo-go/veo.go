@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	common "github.com/GoogleCloudPlatform/vertex-ai-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
+	common "github.com/GoogleCloudPlatform/genmedia-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/cors"
@@ -42,8 +42,13 @@ var (
 
 const (
 	serviceName = "mcp-veo-go"
-	version     = "3.9.0" // Synchronize release version
 )
+
+// version is overridden at build time via -ldflags "-X main.version=...".
+// The single source of truth for the version is the VERSION file at the root
+// of the mcp-genmedia-go tree (injected by the Makefile locally and by the git
+// tag through goreleaser for releases). Defaults to "dev" for un-injected builds.
+var version = "dev"
 
 // init handles command-line flags and initial logging setup.
 func init() {
@@ -52,7 +57,6 @@ func init() {
 	flag.StringVar(&transport, "transport", "stdio", "Transport type (stdio, sse, or http)")
 	flag.IntVar(&port, "p", 0, "Port for SSE/HTTP server (defaults to PORT env var or 8080/8081)")
 	flag.IntVar(&port, "port", 0, "Port for SSE/HTTP server (defaults to PORT env var or 8080/8081)")
-	flag.Parse()
 }
 
 // main is the entry point for the mcp-veo-go service.
@@ -60,6 +64,10 @@ func init() {
 // It then creates an MCP server, registers the 'veo_t2v' and 'veo_i2v' tools,
 // and starts listening for requests on the configured transport.
 func main() {
+	// Parse flags here (not in init) so `go test` flags are not consumed at
+	// package init, matching the sibling genmedia servers (e.g. mcp-imagen-go).
+	flag.Parse()
+
 	var err error
 
 	// Initialize OpenTelemetry
@@ -101,6 +109,9 @@ func main() {
 		mcp.WithString("output_directory",
 			mcp.Description("Optional. If provided, specifies a local directory to download the generated video(s) to. Filenames will be generated automatically."),
 		),
+		mcp.WithString("output_filename",
+			mcp.Description("Optional. Base name for the output file(s). The extension is forced to the true video type (e.g. .mp4). For a single video the name is used as-is (foo.mp4); for multiple videos a 1-based suffix is inserted before the extension (foo_1.mp4, foo_2.mp4, ...). For GCS output the API-written objects are copy-renamed to this name after generation (adds a short GCS copy latency; larger videos add copy time proportional to size)."),
+		),
 		mcp.WithString("model",
 			mcp.DefaultString("veo-3.1-fast-generate-001"),
 			mcp.Description(common.BuildVeoModelDescription()),
@@ -114,6 +125,9 @@ func main() {
 		),
 		mcp.WithNumber("duration",
 			mcp.Description("Duration of the generated video in seconds. Note: the supported duration range is model-dependent."),
+		),
+		mcp.WithNumber("seed",
+			mcp.Description("Optional. Non-negative integer seed for best-effort reproducible video generation."),
 		),
 		mcp.WithBoolean("generate_audio",
 			mcp.DefaultBool(true),
@@ -248,6 +262,9 @@ func main() {
 		mcp.WithString("output_directory",
 			mcp.Description("Optional. If provided, specifies a local directory to download the generated video(s) to. Filenames will be generated automatically."),
 		),
+		mcp.WithString("output_filename",
+			mcp.Description("Optional. Base name for the output file(s). The extension is forced to the true video type (e.g. .mp4). For a single video the name is used as-is (foo.mp4); for multiple videos a 1-based suffix is inserted before the extension (foo_1.mp4, foo_2.mp4, ...). For GCS output the API-written objects are copy-renamed to this name after generation (adds a short GCS copy latency; larger videos add copy time proportional to size)."),
+		),
 		mcp.WithString("model",
 			mcp.DefaultString("veo-3.1-fast-generate-001"),
 			mcp.Description(common.BuildVeoModelDescription()),
@@ -258,6 +275,9 @@ func main() {
 		),
 		mcp.WithString("aspect_ratio",
 			mcp.Description("Aspect ratio of the generated videos. Note: supported aspect ratios are model-dependent."),
+		),
+		mcp.WithNumber("seed",
+			mcp.Description("Optional. Non-negative integer seed for best-effort reproducible video generation."),
 		),
 		mcp.WithBoolean("generate_audio",
 			mcp.DefaultBool(true),
@@ -282,6 +302,7 @@ func main() {
 		mcp.WithArgument("duration", mcp.ArgumentDescription("The duration of the video in seconds.")),
 		mcp.WithArgument("aspect_ratio", mcp.ArgumentDescription("The aspect ratio of the generated video.")),
 		mcp.WithArgument("model", mcp.ArgumentDescription("The model to use for generation.")),
+		mcp.WithArgument("seed", mcp.ArgumentDescription("Optional seed for best-effort reproducible video generation.")),
 	), func(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		prompt, ok := request.Params.Arguments["prompt"]
 		if !ok || strings.TrimSpace(prompt) == "" {

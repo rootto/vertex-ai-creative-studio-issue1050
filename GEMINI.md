@@ -57,7 +57,7 @@ When importing, copying, or adding a new Agent Skill to the repository:
 *   **The Pattern:** 
     1. During data hydration (e.g., fetching from Firestore), serialize your list to JSON: `state.my_items_json = json.dumps([asdict(i) for i in items], default=str)`.
     2. During the UI render loop, safely unpack it back into python objects before generating your components.
-    3. **Warning:** Watch out for `datetime` objects. They serialize to ISO strings cleanly, but during the unpack phase, you MUST manually catch those strings and run `datetime.datetime.fromisoformat(val)` before attempting to use them in sorting logic.
+    3. **Warning (Firestore & DatetimeWithNanoseconds):** Watch out for `datetime` and Firestore `DatetimeWithNanoseconds` objects. They serialize to ISO strings cleanly, but standard `json.dumps()` without a default handler will crash with `TypeError: Object of type DatetimeWithNanoseconds is not JSON serializable`. **You MUST always pass `default=str` or a custom date serializer (e.g., `default=json_default_serializer`) to any `json.dumps` call that processes Firestore data or dictionary payloads stored in the Mesop state.**
 
 ### Cloud Run Deployment & CSRF
 *   **The Problem:** When deploying Mesop to Cloud Run behind a Google Cloud load balancer, the proxy rewrites the `Host` header (often to `127.0.0.1:8080`). Mesop's strict CSRF protection compares the browser's `Origin` header to this internal `Host` header, resulting in a silent `403 Forbidden` block on the `/__ui__` POST endpoint.
@@ -70,7 +70,13 @@ Mesop allows integrating custom Lit WebComponents, but the bridge between JavaSc
    - In Python, map the event string: `events={"myEventName": on_click}`
    - In JS, define a property to receive the generated event ID: `static properties = { myEventName: { type: String } };`
    - In JS, dispatch using Mesop's global class: `this.dispatchEvent(new MesopEvent(this.myEventName, { value: this.myValue }));`
-3. **Python Type Hinting (Critical):** In the python wrapper function (e.g. `@me.web_component(...) def my_component():`), the event handler argument *must* be strictly typed as a callable accepting a `WebEvent` (e.g. `on_click: Callable[[me.WebEvent], Any]`). If you type it as `None` or `Any`, Mesop's reflection engine will silently fail to register the listener, and the events will be dropped over the websocket bridge.
+3. **Python Type Hinting & Linter Suppressions (Critical):** In the python wrapper function (e.g. `@me.web_component(...) def my_component():`):
+   - The event handler arguments *must* be strictly typed as a callable accepting a `WebEvent` (e.g., `on_click: Callable[[me.WebEvent], object]`). **Do not use `Any` as the return type of the callback** as it triggers linter warnings (`ANN401`); use `object` or `None`. If you type it as `None` or `Any`, Mesop's reflection engine will silently fail to register the listener, and the events will be dropped over the websocket bridge.
+   - Omit the return type annotation of the wrapper function and append `# noqa: ANN201`.
+   - Add `# noqa: PLR0913` to suppress "too many arguments" warnings, as Mesop component wrappers naturally require many arguments to bind UI properties and event callbacks.
+
+### Top-Level vs. Local Imports (`PLC0415`)
+*   **Top-Level Preference:** In Mesop page files and event generators, always declare standard library and project imports (such as `json`, `uuid`, or utility functions) at the top of the file rather than locally inside event handler functions. This satisfies Ruff's `PLC0415` rule and prevents linting failures during CI/pre-commit checks.
 
 ### 🚨 The `git restore` Trap (Data Loss)
 When performing iterative, multi-step refactoring in a single session without intermediate commits, **do not use `git restore <file>` or `git checkout -- <file>`** to recover from a botched regex or Python script edit.
@@ -133,9 +139,11 @@ The project uses Starlight (Astro) for its primary documentation site, located i
 ### Modifying Starlight Documentation
 *   **Target Directory:** All Starlight markdown files reside in `docs-site/src/content/docs/`.
 *   **Mirrored Documentation Files (Crucial):** Certain key documentation files exist at both the root level and within the Starlight directory. When updating one, you MUST update its twin in tandem to prevent documentation drift:
+    *   `README.md` ↔ `docs-site/src/content/docs/core/index.md` (Primary landing page and featureset list)
     *   `environment_variables.md` ↔ `docs-site/src/content/docs/core/installation/environment_variables.md`
     *   `FAQ.md` ↔ `docs-site/src/content/docs/core/FAQ.md`
     *   `developers_guide.md` ↔ `docs-site/src/content/docs/core/developers_guide.md`
+*   **Feature Hierarchy & Usage:** When adding a new model or capability, ensure it is added to the featureset list in both `README.md`/`core/index.md` and detailed under the appropriate section in `docs-site/src/content/docs/core/usage.md`.
 *   **Frontmatter Requirement:** Every markdown file within the Starlight content directory MUST have YAML frontmatter with a `title` attribute. Example:
     ```markdown
     ---

@@ -13,7 +13,7 @@ For the fastest setup without needing the Go toolchain installed, you can use ou
 Run the following command in your terminal:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/vertex-ai-creative-studio/main/experiments/mcp-genmedia/mcp-genmedia-go/install-online.sh | bash
+curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/genmedia-creative-studio/main/experiments/mcp-genmedia/mcp-genmedia-go/install-online.sh | bash
 ```
 
 *Note: Ensure `~/.local/bin` is added to your system `PATH`.*
@@ -57,7 +57,7 @@ This project uses a Go workspace (`go.work`) to manage the multiple modules. The
 3.  **Install the Binaries**
     This command explicitly builds and installs all the MCP server applications into your Go bin directory (`$GOPATH/bin` or `$GOBIN`).
     ```bash
-    go install ./mcp-avtool-go ./mcp-chirp3-go ./mcp-gemini-go ./mcp-nanobanana-go ./mcp-imagen-go ./mcp-lyria-go ./mcp-veo-go
+    go install ./mcp-avtool-go ./mcp-chirp3-go ./mcp-gemini-go ./mcp-nanobanana-go ./mcp-lyria-go ./mcp-veo-go
     ```
 
 4.  **Verify the Installation**
@@ -78,11 +78,11 @@ export GOOGLE_CLOUD_PROJECT=$(gcloud config get project)
 With the MCP servers for genmedia installed, you can test that they're available by sending a STDIO "tools/list" command (substitute the MCP server in question as needed):
 
 ```bash
-echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | mcp-imagen-go
+echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | mcp-nanobanana-go
 ```
 For a more readable output, you can pipe it to `jq` (if installed):
 ```bash
-echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | mcp-imagen-go | jq .
+echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | mcp-nanobanana-go | jq .
 ```
 
 Either of these should result in a JSON response with a list of tools, similar to this (output truncated for brevity):
@@ -94,8 +94,8 @@ Either of these should result in a JSON response with a list of tools, similar t
   "result": {
     "tools": [
       {
-        "name": "imagen_t2i",
-        "description": "Generate an image with Imagen 3...",
+        "name": "nanobanana_image_generation",
+        "description": "Generates content (text and/or images) based on a multimodal prompt using Gemini Image generation models...",
         // ... more tool details
       }
     ]
@@ -118,20 +118,20 @@ In addition to tools, the MCP servers now support prompts, providing a more inte
 You can list the available prompts for a server using the `prompts/list` method:
 
 ```bash
-echo '{"jsonrpc":"2.0","method":"prompts/list","id":1}' | mcp-imagen-go | jq .
+echo '{"jsonrpc":"2.0","method":"prompts/list","id":1}' | mcp-veo-go | jq .
 ```
 
 To use a prompt, you call the `prompts/get` method with the prompt's name and any required arguments. If you omit a required argument, the server will respond with a message asking for it.
 
-**Example: Using the `generate-image` prompt with `mcp-imagen-go`**
+**Example: Using the `generate-video` prompt with `mcp-veo-go`**
 
 ```bash
 # Call the prompt with a required argument
 export GOOGLE_CLOUD_PROJECT=$(gcloud config get project)
-echo '{"jsonrpc":"2.0","method":"prompts/get","id":2,"params":{"name":"generate-image","arguments":{"prompt":"a futuristic cityscape at sunset"}}}' | mcp-imagen-go | jq .
+echo '{"jsonrpc":"2.0","method":"prompts/get","id":2,"params":{"name":"generate-video","arguments":{"prompt":"a futuristic cityscape at sunset"}}}' | mcp-veo-go | jq .
 
 # Call the prompt without a required argument
-echo '{"jsonrpc":"2.0","method":"prompts/get","id":3,"params":{"name":"generate-image"}}' | mcp-imagen-go | jq .
+echo '{"jsonrpc":"2.0","method":"prompts/get","id":3,"params":{"name":"generate-video"}}' | mcp-veo-go | jq .
 ```
 
 This will result in a more conversational interaction, making the servers easier to use for interactive clients.
@@ -165,7 +165,7 @@ This repository provides AI application samples for:
     *   Also includes the `list_gemini_voices` helper tool and the `gemini://language_codes` resource.
     *   Output can be saved to a local directory or GCS.
 
-*   **`mcp-imagen-go`**:
+*   **`mcp-imagen-go`** (Deprecated — use `mcp-nanobanana-go` or `mcp-gemini-go` for new work; Imagen models are deprecated as of June 30, 2026):
     *   Enables image generation using Google's Imagen models via Vertex AI.
     *   Tool: `imagen_t2i` for text-to-image generation.
     *   Supports various parameters like aspect ratio and number of images. Output can be directed to GCS, saved locally (including download from GCS if API saves there), or returned as base64 data.
@@ -186,10 +186,87 @@ This repository provides AI application samples for:
     *   Tools: `veo_t2v` (text-to-video) and `veo_i2v` (image-to-video).
     *   Supports parameters like aspect ratio and duration. Videos are saved to GCS by the API and can optionally be downloaded to a local directory.
 
+*   **`mcp-omni-go`**:
+    *   Provides video generation (with optional embedded audio) using Google's Gemini Omni model via the Vertex Interactions API.
+    *   Tool: `omni_video_generation` for generating video from a text prompt, optionally conditioned on input images and/or videos.
+    *   Uses Application Default Credentials (ADC) against the `global` Interactions endpoint. Output can be saved to a local directory and/or GCS (with a best-effort V4 signed URL).
+
 ## Common Features:
 
 *   **Transport Protocols**: Most servers support `stdio` (default), `http` (streamable HTTP with CORS), and `sse` (Server-Sent Events, legacy) transports.
 *   **Google Cloud Authentication**: Relies on Application Default Credentials (ADC) or service account keys.
+
+## Naming Outputs: `output_filename`
+
+Every media-generating tool accepts a single optional `output_filename` (string)
+with identical name and semantics, so a client can **predict the exact output
+name** from the tool and request. The same computed name is applied consistently
+across all sinks — the inline response, the local `output_directory`, and GCS.
+
+- **Precedence.** When more than one naming argument is supplied, `output_filename`
+  always wins. Otherwise the server's legacy parameter (with its legacy semantics)
+  is used, and otherwise the server's default naming scheme. When `output_filename`
+  is unset, behavior is byte-for-byte unchanged from before this feature.
+- **Extension is forced to the true output type.** You provide the file *stem*; the
+  extension is set from the model's actual output MIME type. `hero.jpeg` on a PNG
+  response becomes `hero.png`, and a missing extension is added. **`mcp-avtool-go`
+  is the one exception** — for `ffmpeg` the extension selects the output
+  container/codec, so avtool honors the extension you provide (and only warns if it
+  looks unexpected).
+- **Multiple outputs get a `_1..n` suffix.** For a single output the name is
+  exactly `<stem>.<ext>` (no suffix). For `n > 1` outputs the names are
+  `<stem>_1.<ext> … <stem>_n.<ext>` — 1-based, no zero-padding, contiguous, in
+  generation order.
+- **Collisions overwrite, with a warning.** If the computed name already exists
+  (local file or GCS object) it is overwritten and a warning is logged — no error
+  and no automatic renaming, so re-running with the same name is idempotent.
+- **Path traversal is sanitized.** Any directory components or `..` in
+  `output_filename` are stripped to a single safe name; use `output_directory` /
+  `gcs_bucket_uri` to choose the destination.
+- **Path-C servers (imagen, veo).** These let the Vertex API name the objects
+  (`sample_*`) in the output prefix, then copy each object to the requested name
+  and delete the original. On success no `sample_*` originals remain; the copy adds
+  a small amount of tool latency (a fast metadata operation for same-region
+  buckets, proportional to size for large/cross-region objects).
+
+### Deprecated legacy aliases
+
+The following per-server parameters are still accepted for backward compatibility
+but are **deprecated — prefer `output_filename`** (no removal is planned in this
+release):
+
+| Server | Legacy parameter | Notes |
+| --- | --- | --- |
+| `mcp-avtool-go` | `output_file_name` | Full output name (extension not forced). |
+| `mcp-lyria-go` | `file_name` | Full output name. |
+| `mcp-chirp3-go`, `mcp-gemini-go` (TTS) | `output_filename_prefix` | A *prefix* only (a timestamp/voice + extension is appended); `output_filename` provides the full name. |
+
+## Resource Links for GCS Outputs
+
+When a tool writes an artifact to Google Cloud Storage, it additionally returns
+one MCP [`resource_link`](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#resource-links)
+content item **per GCS artifact**, so an MCP client can address the output as a
+first-class resource rather than parsing it out of the text summary.
+
+- **GCS sink only.** A `resource_link` is emitted **only when the artifact was
+  uploaded to GCS** (`gcs_bucket_uri` or a server's bucket fallback). Inline-only
+  and local-only responses are unchanged — no link is added.
+- **One link per artifact,** appended after the existing content in generation
+  order (so for `n` GCS artifacts you get `n` links, aligned 1..n).
+- **`uri` is the `gs://` URI** — the durable identity of the object, **not** the
+  expiring V4-signed HTTPS URL. The signed URL (when generated) still appears in
+  the text summary as before; the `resource_link` gives clients a stable handle.
+- **`name`** is the object's name, **`mimeType`** is the artifact's true output
+  MIME type, and **`description`** is a 1-based human label (e.g.
+  `nanobanana output 1 of 1`).
+- **Text output is unchanged (back-compat).** The `resource_link` items are
+  *appended*; the existing text content (model text, signed-URL line, saved-files
+  summary) is byte-for-byte identical to before this feature.
+
+**In scope:** `mcp-nanobanana-go`, `mcp-gemini-go` (image generation/editing),
+`mcp-imagen-go` (text-to-image and edit), `mcp-veo-go`, `mcp-lyria-go`, and the
+shared omni renderer. **Out of scope:** `mcp-chirp3-go`, `mcp-gemini-go` **TTS**,
+and `mcp-avtool-go` do not emit `resource_link` items.
 
 ## Configuration (Environment Variables)
 
@@ -211,10 +288,10 @@ This allows you to have default values in your `.env` file and override them for
 The following variables can be defined in your `.env` file or as shell environment variables:
 
 *   `GOOGLE_CLOUD_PROJECT` (string): **Required**. Your Google Cloud Project ID. The application will terminate if this is not set. Note: `PROJECT_ID` is also supported as a fallback.
-    *   **Per-Server Override**: You can override the global project ID for specific servers using `VEO_PROJECT_ID`, `IMAGEN_PROJECT_ID`, `LYRIA_PROJECT_ID`, `GEMINI_PROJECT_ID`, `CHIRP3_PROJECT_ID`, `AVTOOL_PROJECT_ID`, or `NANOBANANA_PROJECT_ID`.
+    *   **Per-Server Override**: You can override the global project ID for specific servers using `VEO_PROJECT_ID`, `IMAGEN_PROJECT_ID`, `LYRIA_PROJECT_ID`, `GEMINI_PROJECT_ID`, `CHIRP3_PROJECT_ID`, `AVTOOL_PROJECT_ID`, `NANOBANANA_PROJECT_ID`, or `OMNI_PROJECT_ID`.
 *   `GOOGLE_CLOUD_LOCATION` (string): The preferred Google Cloud location/region for Vertex AI services. Defaults to `us-central1` if not set.
     *   **Fallback**: `LOCATION` is also supported as a fallback for `GOOGLE_CLOUD_LOCATION`.
-    *   **Per-Server Override**: You can override the global location for specific servers using `<PREFIX>_LOCATION` (e.g., `VEO_LOCATION`, `IMAGEN_LOCATION`, `LYRIA_LOCATION`, `GEMINI_LOCATION`, `CHIRP3_LOCATION`, `AVTOOL_LOCATION`, or `NANOBANANA_LOCATION`).
+    *   **Per-Server Override**: You can override the global location for specific servers using `<PREFIX>_LOCATION` (e.g., `VEO_LOCATION`, `IMAGEN_LOCATION`, `LYRIA_LOCATION`, `GEMINI_LOCATION`, `CHIRP3_LOCATION`, `AVTOOL_LOCATION`, `NANOBANANA_LOCATION`, or `OMNI_LOCATION`). Note: `mcp-omni-go` defaults `LOCATION` to `global` and the Interactions API call is always made against the `global` endpoint.
 *   `GENMEDIA_BUCKET` (string): An optional default Google Cloud Storage bucket to use for GCS outputs if a bucket is not specified in a tool request.
 *   `ALLOW_UNSAFE_MODELS` (boolean): Optional (`true`/`false`). Allows users to bypass strict local model constraint validation, enabling them to test experimental or pre-release model strings that are not yet hardcoded in the registry. Defaults to `false`.
 *   `ENABLE_OPTIONAL_HEADER_CAPTURE` (boolean): Optional (`true`/`false`). Intended for internal debugging. When set to `true`, the server intercepts API requests and injects the raw ADC Bearer token to capture and surface the `x-goog-sherlog-link` header in the tool output. This feature is supported for Imagen, Gemini, NanoBanana, and Lyria, but currently not supported for Veo due to Go SDK limitations with long-running operations. Defaults to `false`.

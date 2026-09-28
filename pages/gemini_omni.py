@@ -189,31 +189,31 @@ def gemini_omni_page() -> None:  # noqa: PLR0915
                     # Brand Guidelines select box
                     cfg = Default()
                     if getattr(cfg, "TEAM_AND_BRANDING", True):
-                        guidelines = []
-                        if state.available_brand_guidelines_json:
+                        try:
                             guidelines = json.loads(
                                 state.available_brand_guidelines_json,
                             )
-                        if guidelines:
-                            me.select(
-                                label="Add Brand Guidelines",
-                                options=[
-                                    me.SelectOption(label="None", value=""),
-                                ]
-                                + [
-                                    me.SelectOption(
-                                        label=g["team_label"],
-                                        value=g["content"],
-                                    )
-                                    for g in guidelines
-                                ],
-                                on_selection_change=on_brand_guideline_change,
-                                value=state.selected_brand_guideline,
-                                style=me.Style(
-                                    width="100%",
-                                    margin=me.Margin(bottom=10),
-                                ),
-                            )
+                        except Exception:
+                            guidelines = []
+                        me.select(
+                            label="Add Brand Guidelines",
+                            options=[
+                                me.SelectOption(label="None", value=""),
+                            ]
+                            + [
+                                me.SelectOption(
+                                    label=g["team_label"],
+                                    value=g["content"],
+                                )
+                                for g in guidelines
+                            ],
+                            on_selection_change=on_brand_guideline_change,
+                            value=state.selected_brand_guideline,
+                            style=me.Style(
+                                width="100%",
+                                margin=me.Margin(bottom=10),
+                            ),
+                        )
 
                     with me.box(
                         style=me.Style(

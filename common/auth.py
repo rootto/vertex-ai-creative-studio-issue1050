@@ -11,13 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""FastAPI middleware for request identity and session state."""
 
 import uuid
+from collections.abc import Awaitable, Callable
 
 from fastapi import Request
 from google.auth.transport import requests
 from google.oauth2 import id_token
+from starlette.responses import Response
 
+from common.identity import ANONYMOUS_USER_EMAIL, get_authenticated_user_email
 from common.storage import get_or_create_session
 from config.default import Default
 
@@ -29,34 +33,33 @@ def verify_google_id_token(id_token_str: str) -> dict:
     Raises ValueError if the token is invalid.
     """
     return id_token.verify_oauth2_token(
-        id_token_str, requests.Request(), cfg.GOOGLE_CLIENT_ID,
+        id_token_str,
+        requests.Request(),
+        cfg.GOOGLE_CLIENT_ID,
     )
 
 
-async def set_user_identity_and_session(request: Request, call_next):
-    """FastAPI middleware to set user identity and session information."""
-    # Get or create session ID from cookie
+async def set_user_identity_and_session(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
+    """Set user identity and session information."""
     session_id = request.cookies.get("session_id")
     if not session_id:
         session_id = str(uuid.uuid4())
 
-    # Lookup session in Firestore to find user email
-    session = get_or_create_session(session_id, "anonymous@google.com")
-    user_email = session.user_email
+    user_email = get_authenticated_user_email(request.headers)
+    if not user_email:
+        session = get_or_create_session(session_id, ANONYMOUS_USER_EMAIL)
+        user_email = session.user_email or ANONYMOUS_USER_EMAIL
+    else:
+        get_or_create_session(session_id, user_email)
 
-    # Fallback to IAP header if session doesn't have email
-    if user_email == "anonymous@google.com":
-        iap_email = request.headers.get("X-Goog-Authenticated-User-Email")
-        if iap_email:
-            user_email = iap_email
-
-    # Attach user and session info to the request state
     request.state.user_email = user_email
     request.state.session_id = session_id
 
     response = await call_next(request)
 
-    # Set session ID cookie on the response
     response.set_cookie(
         key="session_id",
         value=session_id,

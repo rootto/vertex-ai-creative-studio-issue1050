@@ -17,6 +17,7 @@ import mesop as me
 from components.header import header
 from components.page_scaffold import on_theme_load
 from components.theme_manager.theme_manager import theme_manager
+from config import default as config
 from state.state import AppState
 
 
@@ -107,6 +108,15 @@ def page():
             "route": "/test_async_veo",
         },
     ]
+
+    # Object Rotation is gated behind EDIT_IMAGES_ENABLED and is disabled by
+    # default (see config/default.py and #1653). Drop its Labs card when the
+    # feature is off so the page is not surfaced anywhere or linked to a route
+    # that is no longer registered.
+    if not config.Default.EDIT_IMAGES_ENABLED:
+        test_pages = [
+            page for page in test_pages if page["route"] != "/object-rotation"
+        ]
 
     # Main container - use min_height and flex column
     with me.box(

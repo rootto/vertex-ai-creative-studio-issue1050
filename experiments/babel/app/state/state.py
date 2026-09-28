@@ -15,6 +15,7 @@
 from dataclasses import field
 
 import mesop as me
+
 from set_up.set_up import Voice
 
 
@@ -32,7 +33,7 @@ class AppState:
     start_page: str = "home"
     current_page: str = "home"
 
-    voices: list[Voice] = field(default_factory=list)
+    voices: list[Voice] = field(default_factory=lambda: [])
 
     toast_is_visible: bool = False
     toast_duration: int = 2

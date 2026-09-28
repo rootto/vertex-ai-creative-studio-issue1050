@@ -19,22 +19,24 @@ import (
 	"net/http"
 
 	"firebase.google.com/go/auth"
-	"github.com/GoogleCloudPlatform/vertex-ai-creative-studio/experiments/run-veo-run/server/internal/config"
+	"github.com/GoogleCloudPlatform/genmedia-creative-studio/experiments/run-veo-run/server/internal/config"
 	"github.com/gorilla/websocket"
 	"google.golang.org/genai"
 )
 
 type Handler struct {
-	Config     *config.Config
-	AuthClient *auth.Client
-	GenAI      *genai.Client
+	Config       *config.Config
+	AuthClient   *auth.Client
+	GeminiClient *genai.Client
+	VeoClient    *genai.Client
 }
 
-func New(cfg *config.Config, authClient *auth.Client, genaiClient *genai.Client) *Handler {
+func New(cfg *config.Config, authClient *auth.Client, geminiClient *genai.Client, veoClient *genai.Client) *Handler {
 	return &Handler{
-		Config:     cfg,
-		AuthClient: authClient,
-		GenAI:      genaiClient,
+		Config:       cfg,
+		AuthClient:   authClient,
+		GeminiClient: geminiClient,
+		VeoClient:    veoClient,
 	}
 }
 

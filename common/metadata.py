@@ -110,6 +110,7 @@ class MediaItem:
     audio_analysis: str | None = (
         None  # Structured analysis from Gemini, stored as a JSON string
     )
+    generated_text: list[str] = field(default_factory=list)
 
     # This field is for loading raw data from Firestore, not for writing.
     # It helps in debugging and displaying all stored fields if needed.
@@ -304,7 +305,7 @@ def _create_media_item_from_dict(doc_id: str, raw_item_data: dict) -> MediaItem:
             if raw_item_data.get("generation_time") is not None
             else None
         )
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         gen_time = None
 
     try:
@@ -313,7 +314,7 @@ def _create_media_item_from_dict(doc_id: str, raw_item_data: dict) -> MediaItem:
             if raw_item_data.get("duration") is not None
             else None
         )
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         item_duration = None
 
     try:
@@ -322,7 +323,7 @@ def _create_media_item_from_dict(doc_id: str, raw_item_data: dict) -> MediaItem:
             if raw_item_data.get("num_images") is not None
             else None
         )
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         num_images = None
 
     try:
@@ -331,7 +332,7 @@ def _create_media_item_from_dict(doc_id: str, raw_item_data: dict) -> MediaItem:
             if raw_item_data.get("seed") is not None
             else None
         )
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         seed = None
 
     # Handle GCS URI (which can be a string or list)
@@ -704,7 +705,7 @@ def get_media_for_page_optimized(
                     if raw_item_data.get("generation_time") is not None
                     else None
                 )
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 gen_time = None
 
             try:
@@ -713,7 +714,7 @@ def get_media_for_page_optimized(
                     if raw_item_data.get("duration") is not None
                     else None
                 )
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 item_duration = None
 
             media_item = MediaItem(

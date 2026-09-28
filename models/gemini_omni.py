@@ -280,7 +280,7 @@ def _extract_video_bytes(response: types.Interaction) -> bytes:
 
         try:
             return base64.b64decode(raw_data)
-        except binascii.Error, ValueError, TypeError:
+        except (binascii.Error, ValueError, TypeError):
             return raw_data
     except Exception as e:
         logger.exception("Failed to decode video output data")

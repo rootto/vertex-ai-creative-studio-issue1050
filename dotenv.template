@@ -37,17 +37,32 @@ PROJECT_ID=
 # [OPTIONAL] Google Analytics Measurement ID for tracking user interactions.
 # GA_MEASUREMENT_ID=
 
+# [OPTIONAL] Require every non-health request to contain a trusted upstream user header.
+# Default: true outside local/dev/test APP_ENV values, false for local/dev/test.
+# REQUIRE_AUTHENTICATED_USER=true
+
+# [OPTIONAL] Comma-separated trusted headers to read authenticated user email from.
+# Defaults support Google IAP plus oauth2-proxy/Netskope style headers:
+# X-Goog-Authenticated-User-Email,X-Auth-Request-Email,X-Forwarded-Email,X-Email,X-Authenticated-User
+# AUTH_EMAIL_HEADERS=
+
 # ==============================================================================
 # 🧠 Gemini Models (Text & Multimodal)
 # ==============================================================================
 
 # [OPTIONAL] The primary Gemini model used for general text and reasoning tasks.
-# Default: gemini-2.5-flash
-# MODEL_ID=gemini-2.5-flash
+# Default: gemini-3.5-flash
+# MODEL_ID=gemini-3.5-flash
+
+# [OPTIONAL] The endpoint used for Gemini text/multimodal calls. Gemini 3.x models
+# are NOT served from single regions such as us-central1 (requests 404); keep this
+# at "global" — or a us/eu multi-region — independently of LOCATION.
+# Default: global
+# GEMINI_LOCATION=global
 
 # [OPTIONAL] The specific model used for image generation features.
-# Default: gemini-2.5-flash-image
-# GEMINI_IMAGE_GEN_MODEL=gemini-2.5-flash-image
+# Default: gemini-3.1-flash-image
+# GEMINI_IMAGE_GEN_MODEL=gemini-3.1-flash-image
 
 # [OPTIONAL] The region for the Gemini Image Generation API.
 # Default: global
@@ -57,8 +72,8 @@ PROJECT_ID=
 # GEMINI_IMAGE_GEN_API_BASE_URL=
 
 # [OPTIONAL] The model used specifically for analyzing audio content.
-# Default: gemini-2.5-flash
-# GEMINI_AUDIO_ANALYSIS_MODEL_ID=gemini-2.5-flash
+# Default: gemini-3.1-flash-lite
+# GEMINI_AUDIO_ANALYSIS_MODEL_ID=gemini-3.1-flash-lite
 
 # [OPTIONAL] The model used for the Gemini Writers Workshop page.
 # Default: Same as MODEL_ID
@@ -192,8 +207,8 @@ PROJECT_ID=
 # USE_MEDIA_PROXY=true
 
 # [OPTIONAL] Model used specifically in the Character Consistency workflow.
-# Default: veo-3.0-fast-generate-001
-# CHARACTER_CONSISTENCY_VEO_MODEL=veo-3.0-fast-generate-001
+# Default: veo-3.1-fast-generate-001
+# CHARACTER_CONSISTENCY_VEO_MODEL=veo-3.1-fast-generate-001
 
 # [OPTIONAL] Gemini model used in the Character Consistency workflow.
 # Default: Same as MODEL_ID

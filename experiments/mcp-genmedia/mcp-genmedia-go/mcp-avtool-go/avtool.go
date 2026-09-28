@@ -9,15 +9,20 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/GoogleCloudPlatform/vertex-ai-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
+	"github.com/GoogleCloudPlatform/genmedia-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/cors"
 )
 
 const (
 	serviceName = "mcp-avtool-go"
-	version     = "3.9.0" // Fix: Removed duration param from extend schema
 )
+
+// version is overridden at build time via -ldflags "-X main.version=...".
+// The single source of truth for the version is the VERSION file at the root
+// of the mcp-genmedia-go tree (injected by the Makefile locally and by the git
+// tag through goreleaser for releases). Defaults to "dev" for un-injected builds.
+var version = "dev"
 
 var (
 	transport string
@@ -93,6 +98,9 @@ func main() {
 	addLayerAudioTool(s, cfg)
 	addCreateGifTool(s, cfg)
 	addGetMediaInfoTool(s, cfg)
+	addTrimMediaTool(s, cfg)
+	addNormalizeLoudnessTool(s, cfg)
+	addResizeReframeTool(s, cfg)
 
 	switch transport {
 	case "sse":

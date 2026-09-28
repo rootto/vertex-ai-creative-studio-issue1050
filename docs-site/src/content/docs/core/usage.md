@@ -14,10 +14,11 @@ GenMedia Creative Studio provides a centralized interface for experimenting with
 Interact directly with the raw generative models to create single-modality outputs.
 
 *   **Image Generation:** 
-    *   **Gemini Image Generation:** Generate high-quality images from text prompts using Gemini (Nano Banana).
-    *   **Edit Images:** Edit existing images using powerful inpainting and outpainting tools.
+    *   **Gemini Image Generation:** Generate high-quality images from text prompts using Gemini (Nano Banana), including Gemini 3.1 Flash-Lite for rapid creation and iteration at 1K resolution.
+    *   **Imagen (deprecated):** Imagen image generation, editing, and upscaling — all Imagen models — were shut down across Google, including Vertex AI, around August 17, 2026. Use **Gemini Image Generation (Nano Banana, `gemini-2.5-flash-image`)** instead. See the [Imagen models migration guide](https://firebase.google.com/docs/ai-logic/imagen-models-migration?api=dev) for the model replacement mapping.
 *   **Video Generation:** 
-    *   **Veo:** Create high-fidelity videos from text or image prompts using Veo 2, Veo 3, and Veo 3.1.
+    *   **Gemini Omni:** Create, animate, reference, and iteratively edit video in a multi-turn chat workspace using Gemini Omni Flash.
+    *   **Veo:** Create high-fidelity videos from text or image prompts using Veo 3 and Veo 3.1.
 *   **Audio & Speech Generation:** 
     *   **Lyria:** Generate complex music tracks and thematic scores from text prompts.
     *   **Gemini TTS:** Synthesize expressive and highly-controllable text-to-speech.

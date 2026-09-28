@@ -85,16 +85,6 @@
     },
 
     {
-      "id": 24,
-      "display": "Edit Images",
-      "icon": "edit",
-      "route": "/edit_images",
-      "group": "foundation",
-      "mode": "image",
-      "feature_flag": "EDIT_IMAGES_ENABLED",
-      "description": "Edit images using inpainting and outpainting."
-    },
-    {
       "id": 30,
       "display": "Virtual Try-On",
       "icon": "checkroom",

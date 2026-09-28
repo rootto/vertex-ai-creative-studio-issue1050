@@ -9,12 +9,6 @@
         "MCP_SERVER_REQUEST_TIMEOUT": "30000"
       }
     },
-    "imagen": {
-      "command": "mcp-imagen-go",
-      "env": {
-        "MCP_SERVER_REQUEST_TIMEOUT": "55000"
-      }
-    },
     "chirp3-hd": {
       "command": "mcp-chirp3-go",
       "env": {
@@ -51,7 +45,7 @@
     {
       "name": "Google Cloud Project ID",
       "description": "The GCP Project ID where Vertex AI is enabled.",
-      "envVar": "PROJECT_ID",
+      "envVar": "GOOGLE_CLOUD_PROJECT",
       "sensitive": false
     },
     {

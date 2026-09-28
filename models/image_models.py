@@ -17,12 +17,14 @@
 # from google.cloud.aiplatform import telemetry
 # from typing import TypedDict # Remove if not used elsewhere in this file
 
-import base64
-import uuid
 
 # from models.model_setup import (
 #    ImagenModelSetup,
 # )
+
+import base64
+import uuid
+
 from google import genai
 from google.cloud import aiplatform
 from google.genai import types
@@ -33,9 +35,12 @@ from tenacity import (
     wait_exponential,
 )
 
-from common.analytics import track_model_call
+import models.gemini as gemini
+from common.analytics import get_logger, track_model_call
 from common.storage import store_to_gcs
 from config.default import Default
+
+logger = get_logger(__name__)
 
 # class ImageModel(TypedDict): # Remove this definition
 #     """Defines Models For Image Generation."""
@@ -63,11 +68,12 @@ class ImagenModelSetup:
             model_id = config.MODEL_ID
         if None in [project_id, location, model_id]:
             raise ValueError("All parameters must be set.")
-        print(f"initiating genai client with {project_id} in {location}")
+        logger.info(f"initiating genai client with {project_id} in {location}")
         client = genai.Client(
             vertexai=config.INIT_VERTEX,
             project=project_id,
             location=location,
+            http_options={"api_version": config.VERTEX_API_VERSION},
         )
         return client
 
@@ -97,7 +103,7 @@ def generate_images(
     gcs_output_directory = f"gs://{cfg.IMAGE_BUCKET}/{cfg.IMAGEN_GENERATED_SUBFOLDER}"
 
     try:
-        print(
+        logger.info(
             f"models.image_models.generate_images: Requesting {number_of_images} images for model {model} with output to {gcs_output_directory}",
         )
         response = client.models.generate_images(
@@ -118,43 +124,43 @@ def generate_images(
             and hasattr(response, "generated_images")
             and response.generated_images
         ):
-            print(
+            logger.info(
                 f"models.image_models.generate_images: Received {len(response.generated_images)} generated_images.",
             )
             for i, gen_img in enumerate(response.generated_images):
                 if hasattr(gen_img, "image") and gen_img.image:
                     if not gen_img.image.gcs_uri:
-                        print(
+                        logger.warning(
                             f"models.image_models.generate_images: Image {i} has NO gcs_uri. Image object: {gen_img.image}",
                         )
                     else:
-                        print(
+                        logger.info(
                             f"models.image_models.generate_images: Image {i} has gcs_uri: {gen_img.image.gcs_uri}",
                         )
                     if not gen_img.image.image_bytes:
-                        print(
+                        logger.warning(
                             f"models.image_models.generate_images: Image {i} has NO image_bytes.",
                         )
                 elif hasattr(gen_img, "error"):
-                    print(
+                    logger.error(
                         f"models.image_models.generate_images: GeneratedImage {i} has an error: {getattr(gen_img, 'error', 'Unknown error')}",
                     )
                 else:
-                    print(
+                    logger.warning(
                         f"models.image_models.generate_images: GeneratedImage {i} has no .image attribute or it's None. Full GeneratedImage object: {gen_img}",
                     )
         elif response and hasattr(response, "error"):
-            print(
+            logger.error(
                 f"models.image_models.generate_images: API response contains an error: {getattr(response, 'error', 'Unknown error')}",
             )
         else:
-            print(
+            logger.warning(
                 f"models.image_models.generate_images: Response has no generated_images or is empty. Full response: {response}",
             )
 
         return response
     except Exception as e:
-        print(f"models.image_models.generate_images: API call failed: {e}")
+        logger.error(f"models.image_models.generate_images: API call failed: {e}")
         raise
 
 
@@ -170,13 +176,16 @@ def generate_images_from_prompt(
     Returns a list of image URIs. Does not directly modify PageState.
     """
     full_prompt = f"{input_txt}, {prompt_modifiers_segment}"
+    billing_units = {
+        "sample_count": image_count,
+        "aspect_ratio": aspect_ratio,
+    }
     with track_model_call(
         model_name=current_model_name,
+        billing_units=billing_units,
         prompt=full_prompt,
-        image_count=image_count,
         negative_prompt=negative_prompt,
-        aspect_ratio=aspect_ratio,
-    ):
+    ) as ctx:
         response = generate_images(
             model=current_model_name,
             prompt=full_prompt,
@@ -189,11 +198,16 @@ def generate_images_from_prompt(
             for img in response.generated_images
             if hasattr(img, "image") and hasattr(img.image, "gcs_uri")
         ]
+        ctx["billing_units"]["images_generated"] = len(generated_uris)
         return generated_uris
 
 
 def generate_virtual_models(prompt: str, num_images: int) -> list[str]:
     """Generates multiple virtual model images and saves them to GCS.
+
+    Text-to-image virtual model generation via Nano Banana (Gemini image). The
+    Imagen model family returns HTTP 404 on Vertex AI, so this helper routes
+    through the Gemini image adapter, which is text-only when ``images=[]``.
 
     Args:
         prompt: The prompt to generate the images.
@@ -203,18 +217,18 @@ def generate_virtual_models(prompt: str, num_images: int) -> list[str]:
         A list of GCS URIs for the generated images.
 
     """
-    response = generate_images(
-        model=Default().MODEL_IMAGEN4_FAST,
-        prompt=prompt,
-        number_of_images=num_images,
-        aspect_ratio="1:1",
-        negative_prompt="",  # Assuming no negative prompt for this case
-    )
-    generated_uris = [
-        img.image.gcs_uri
-        for img in response.generated_images
-        if hasattr(img, "image") and hasattr(img.image, "gcs_uri")
-    ]
+    cfg = Default()
+    generated_uris: list[str] = []
+    for _ in range(num_images):
+        gcs_uris, *_ = gemini.generate_image_from_prompt_and_images(
+            prompt=prompt,
+            images=[],  # text-only
+            aspect_ratio="1:1",
+            gcs_folder=cfg.IMAGEN_GENERATED_SUBFOLDER,
+            file_prefix="virtual_model",
+            model_name=cfg.GEMINI_IMAGE_GEN_MODEL,
+        )
+        generated_uris.extend(gcs_uris)
     return generated_uris
 
 
@@ -237,7 +251,7 @@ def generate_image_for_vto(prompt: str) -> bytes:
 
     random_prompt = generator.build_prompt()
 
-    print(f"Generated random prompt for VTO: {random_prompt}")
+    logger.info(f"Generated random prompt for VTO: {random_prompt}")
 
     cfg = Default()
     client = ImagenModelSetup.init(model_id=cfg.MODEL_IMAGEN4_FAST)
@@ -337,9 +351,6 @@ def edit_image(
     )
 
     try:
-        print(
-            f"models.image_models.edit_image: Requesting {number_of_images} edited images for model {model} with output to {gcs_output_directory}",
-        )
         response = client.models.edit_image(
             model=model,
             prompt=prompt,
@@ -358,25 +369,13 @@ def edit_image(
             and hasattr(response, "generated_images")
             and response.generated_images
         ):
-            print(
-                f"models.image_models.edit_image: Received {len(response.generated_images)} edited images.",
-            )
-            edited_uris = [
+            return [
                 img.image.gcs_uri
                 for img in response.generated_images
                 if hasattr(img, "image") and hasattr(img.image, "gcs_uri")
             ]
-            return edited_uris
-        if response and hasattr(response, "error"):
-            print(
-                f"models.image_models.edit_image: API response contains an error: {getattr(response, 'error', 'Unknown error')}",
-            )
-            return []
-        print(
-            f"models.image_models.edit_image: Response has no generated_images or is empty. Full response: {response}",
-        )
         return []
-
     except Exception as e:
-        print(f"models.image_models.edit_image: API call failed: {e}")
+        logger.error(f"models.image_models.edit_image: API call failed: {e}")
         raise
+

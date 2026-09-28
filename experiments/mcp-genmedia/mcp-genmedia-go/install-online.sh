@@ -5,9 +5,9 @@ set -e
 # This script downloads and installs the pre-compiled binaries for your OS and Architecture.
 #
 # Usage:
-#   curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/vertex-ai-creative-studio/main/experiments/mcp-genmedia/mcp-genmedia-go/install-online.sh | bash
+#   curl -sL https://raw.githubusercontent.com/GoogleCloudPlatform/genmedia-creative-studio/main/experiments/mcp-genmedia/mcp-genmedia-go/install-online.sh | bash
 
-REPO="GoogleCloudPlatform/vertex-ai-creative-studio"
+REPO="GoogleCloudPlatform/genmedia-creative-studio"
 INSTALL_DIR="$HOME/.local/bin"
 ARCHIVE_PREFIX="genmedia-mcp-servers"
 
@@ -143,6 +143,23 @@ if ls "$INSTALL_DIR"/mcp-*-go 1> /dev/null 2>&1; then
 else
     echo_err "No binaries found in the archive."
     exit 1
+fi
+
+# macOS Gatekeeper will silently SIGKILL (exit 137) downloaded binaries that
+# aren't signed with a trusted/valid signature, since they inherit a
+# quarantine attribute from being fetched over the network. Our release
+# binaries are unsigned, so clear the quarantine flag and apply an ad-hoc
+# signature to let them run.
+if [[ "$OS" == "darwin" ]]; then
+    if command -v xattr >/dev/null 2>&1; then
+        xattr -dr com.apple.quarantine "$INSTALL_DIR"/mcp-*-go 2>/dev/null || true
+    fi
+    if command -v codesign >/dev/null 2>&1; then
+        echo_info "Ad-hoc signing binaries for macOS Gatekeeper..."
+        for bin in "$INSTALL_DIR"/mcp-*-go; do
+            codesign --force --sign - "$bin" 2>/dev/null || echo_err "Failed to sign $bin; it may be blocked by Gatekeeper. Run: codesign --force --sign - \"$bin\""
+        done
+    fi
 fi
 
 echo_success "Installation successful!"

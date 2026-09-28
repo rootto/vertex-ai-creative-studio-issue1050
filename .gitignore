@@ -2,6 +2,7 @@ __pycache__
 venv
 venv
 .venv
+.security-audit-venv
 __pycache__
 .ruff_cache
 .env
@@ -22,6 +23,7 @@ dist
 local/  
 recaps/
 plans/
+test/screenshots/
 
 ### Terraform ###
 # Local .terraform directories
@@ -41,6 +43,17 @@ crash.*.log
 # to change depending on the environment.
 *.tfvars
 *.tfvars.json
+
+# Exception: the per-environment example tfvars under
+# deploy/terraform/environments/ ARE tracked. They are legible, reproducible,
+# non-secret configuration templates (see
+# deploy/terraform/environments/README.md); the root terraform.tfvars written per
+# deploy stays ignored by the rule above.
+!deploy/terraform/environments/*.tfvars
+# Same exception for the GKE deploy root's per-environment example tfvars: a
+# legible, non-secret placeholder template (project/user/domain are placeholders,
+# secret_env stays dormant). See deploy/terraform/gke/environments/.
+!deploy/terraform/gke/environments/*.tfvars
 
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
@@ -62,6 +75,10 @@ terraform.rc
 ## MCP Servers
 drivectl-mcp.log
 .genkit/
+temp_*.py
+fix_*.py
+test_gen*.py
+update_*.py
 
 # Dolt database files (added by bd init)
 .dolt/
@@ -72,3 +89,10 @@ drivectl-mcp.log
 .antigravitycli/
 .jetskicli/
 
+# Compiled Go Binaries
+**/mcp-*-go/mcp-*-go
+bin/
+*.exe
+
+# local provider lock (platform-specific hashes); owner re-inits at their venue
+.terraform.lock.hcl

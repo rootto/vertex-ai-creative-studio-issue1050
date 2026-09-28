@@ -32,18 +32,18 @@ This repository contains Jupyter notebooks and tools to perform large-scale prod
 
 - Python 3.8+
 - Jupyter or VSCode
-- Google Cloud Vertex AI and access to Imagen Product Recontext API
+- Google Cloud AI and access to Imagen Product Recontext API
 - Required Python libraries are listed in `requirements.txt`.
 
 ### Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/GoogleCloudPlatform/vertex-ai-creative-studio.git
+   git clone https://github.com/GoogleCloudPlatform/genmedia-creative-studio.git
    ```
 2. Navigate to the experiment directory:
    ```bash
-   cd vertex-ai-creative-studio/experiments/Imagen_Product_Recontext
+   cd genmedia-creative-studio/experiments/Imagen_Product_Recontext
    ```
 3. Install the required dependencies:
    ```bash

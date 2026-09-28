@@ -12,23 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 import pathlib
-
-from moviepy import AudioFileClip, VideoFileClip, concatenate_videoclips
-from moviepy.video.fx import FadeOut, MultiplySpeed
+import logging
+from typing import List, Optional
+from moviepy import VideoFileClip, AudioFileClip, concatenate_videoclips
+from moviepy.video.fx import MultiplySpeed, FadeOut
 
 # Set up logging for this module
 logger = logging.getLogger(__name__)
 
-
 def create_final_video(
-    video_paths: list[str],
+    video_paths: List[str], 
     output_path: str,
-    speed_factor: float = 4.0,
-    fade_duration: float = 1.0,
-) -> str | None:
-    """Speeds up, concatenates video clips, adds a fade-out, and adds music.
+    speed_factor: float = 4.0, 
+    fade_duration: float = 1.0
+) -> Optional[str]:
+    """
+    Speeds up, concatenates video clips, adds a fade-out, and adds music.
 
     Args:
         video_paths (List[str]): A list of paths to the video clips to concatenate.
@@ -38,13 +38,12 @@ def create_final_video(
 
     Returns:
         Optional[str]: The path to the created final video, or None if an error occurred.
-
     """
     logger.info("\n--- Creating Final Video ---")
-    sped_up_clips: list[VideoFileClip] = []
+    sped_up_clips: List[VideoFileClip] = []
     speed_effect = MultiplySpeed(factor=speed_factor)
     fade_effect = FadeOut(duration=fade_duration)
-    final_clip: VideoFileClip | None = None
+    final_clip: Optional[VideoFileClip] = None
 
     try:
         # Process clips
@@ -75,9 +74,7 @@ def create_final_video(
 
         final_clip_with_music: VideoFileClip
         if not audio_path.exists():
-            logger.warning(
-                f"Warning: Music file not found at {audio_path}. Proceeding without music.",
-            )
+            logger.warning(f"Warning: Music file not found at {audio_path}. Proceeding without music.")
             final_clip_with_music = final_clip_with_fade
         else:
             audio_clip = AudioFileClip(str(audio_path))
@@ -89,9 +86,9 @@ def create_final_video(
             output_path,
             codec="libx264",
             audio_codec="aac",
-            logger=None,  # Suppress MoviePy's internal logging to avoid duplicate messages
+            logger=None # Suppress MoviePy's internal logging to avoid duplicate messages
         )
-
+        
         logger.info(f"Successfully created final video: {output_path}")
         return output_path
 

@@ -142,6 +142,7 @@ type GeminiImageModelInfo struct {
 	CanonicalName         string
 	Aliases               []string
 	SupportedAspectRatios []string
+	SupportedImageSizes   []string // mirrors ImagenModelInfo; empty means image_size is unsupported/ignored
 	Description           string
 }
 
@@ -150,20 +151,30 @@ var SupportedGeminiImageModels = map[string]GeminiImageModelInfo{
 	"gemini-3.1-flash-image": {
 		CanonicalName:         "gemini-3.1-flash-image",
 		Aliases:               []string{"Nano Banana 2"},
-		SupportedAspectRatios: []string{"1:1", "3:2", "2:3", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"},
+		SupportedAspectRatios: []string{"1:1", "3:2", "2:3", "3:4", "1:4", "4:1", "4:3", "4:5", "5:4", "1:8", "8:1", "9:16", "16:9", "21:9", "9:21"},
+		SupportedImageSizes:   []string{"512", "1K", "2K", "4K"}, // 4K is Preview
 		Description:           "Gemini 3.1 Flash Image, or Nano Banana 2.",
+	},
+	"gemini-3.1-flash-lite-image": {
+		CanonicalName:         "gemini-3.1-flash-lite-image",
+		Aliases:               []string{"Nano Banana 2 Lite"},
+		SupportedAspectRatios: []string{"1:1", "1:4", "4:1", "1:8", "8:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"},
+		SupportedImageSizes:   []string{"1K"},
+		Description:           "Gemini 3.1 Flash Lite Image, or Nano Banana 2 Lite, is optimized for high-speed, cost-effective image generation at 1K resolution.",
 	},
 
 	"gemini-3-pro-image": {
 		CanonicalName:         "gemini-3-pro-image",
 		Aliases:               []string{"Nano Banana Pro", "Gemini 3 Pro Image"},
-		SupportedAspectRatios: []string{"1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"},
+		SupportedAspectRatios: []string{"1:1", "3:2", "2:3", "3:4", "1:4", "4:1", "4:3", "4:5", "5:4", "1:8", "8:1", "9:16", "16:9", "21:9", "9:21"},
+		SupportedImageSizes:   []string{"1K", "2K", "4K"}, // 4K is Preview
 		Description:           "Gemini 3 Pro Image, or Gemini 3 Pro (with Nano Banana), is designed to tackle the most challenging image generation by incorporating state-of-the-art reasoning capabilities. It's the best model for complex and multi-turn image generation and editing, having improved accuracy and enhanced image quality.",
 	},
 	"gemini-2.5-flash-image": {
 		CanonicalName:         "gemini-2.5-flash-image",
 		Aliases:               []string{"Nano Banana", "nano-banana"},
-		SupportedAspectRatios: []string{"1:1", "3:4", "4:3", "9:16", "16:9"},
+		SupportedAspectRatios: []string{"1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"},
+		SupportedImageSizes:   []string{}, // no resolution control: image_size is silently ignored by the API (verified empirically)
 		Description:           "Gemini 2.5 Flash Image, or Nano Banana, is optimized for image understanding and generation and offers a balance of price and performance.",
 	},
 }
@@ -190,7 +201,8 @@ func ResolveGeminiImageModel(modelInput string, allowUnsafe bool) (GeminiImageMo
 		// Return a permissive fallback struct for experimental models
 		return GeminiImageModelInfo{
 			CanonicalName:         modelInput,
-			SupportedAspectRatios: []string{"1:1", "3:2", "2:3", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"},
+			SupportedAspectRatios: []string{"1:1", "3:2", "2:3", "3:4", "1:4", "4:1", "4:3", "4:5", "5:4", "1:8", "8:1", "9:16", "16:9", "21:9", "9:21"},
+			SupportedImageSizes:   []string{"512", "1K", "2K", "4K"},
 		}, true
 	}
 
@@ -210,6 +222,9 @@ func BuildGeminiImageModelDescription() string {
 	for _, name := range sortedNames {
 		info := SupportedGeminiImageModels[name]
 		fmt.Fprintf(&sb, "- *%s* (Ratios: %s)", info.CanonicalName, strings.Join(info.SupportedAspectRatios, ", "))
+		if len(info.SupportedImageSizes) > 0 {
+			fmt.Fprintf(&sb, " (Sizes: %s)", strings.Join(info.SupportedImageSizes, ", "))
+		}
 		if len(info.Aliases) > 0 {
 			fmt.Fprintf(&sb, " Aliases: *%s*", strings.Join(info.Aliases, "*, *"))
 		}
@@ -414,7 +429,6 @@ func BuildVeoModelDescription() string {
 	return sb.String()
 }
 
-
 // --- Lyria Model Configuration ---
 
 // LyriaModelInfo holds the details for a specific Lyria model.
@@ -467,12 +481,104 @@ func ResolveLyriaModel(modelInput string, allowUnsafe bool) (LyriaModelInfo, boo
 		// Default to Interactions API as it's the newer path for upcoming models.
 		return LyriaModelInfo{
 			CanonicalName: modelInput,
-			EndpointType:  "interactions", 
+			EndpointType:  "interactions",
 		}, true
 	}
 
 	return LyriaModelInfo{}, false
 }
+
+// --- Omni Model Configuration ---
+
+// DefaultOmniModel is the canonical default Gemini Omni model ID.
+const DefaultOmniModel = "gemini-omni-1.1-flash-preview"
+
+// OmniModelInfo holds the details for a specific Gemini Omni model. Omni models
+// (text/image/video in, text+video out) are reachable only via the Vertex
+// Interactions API and are global-only.
+type OmniModelInfo struct {
+	CanonicalName string
+	Aliases       []string
+	// SupportedResolutions lists the video output resolutions the model can emit
+	// (mirrors GeminiImageModelInfo.SupportedImageSizes). This is capability
+	// metadata surfaced in the tool description; the resolution request parameter
+	// itself is not yet wired into the tool (see follow-up).
+	SupportedResolutions []string
+	Description          string
+}
+
+// SupportedOmniModels is the single source of truth for all supported Omni models.
+var SupportedOmniModels = map[string]OmniModelInfo{
+	"gemini-omni-1.1-flash-preview": {
+		CanonicalName:        "gemini-omni-1.1-flash-preview",
+		Aliases:              []string{"Gemini Omni 1.1 Flash", "Omni 1.1", "Omni"},
+		SupportedResolutions: []string{"360p", "720p", "1080p", "4k"},
+		Description:          "Gemini Omni 1.1 Flash (Preview): text/image/video in, text+video out, via the Vertex Interactions API (global only). Supports 360p/720p/1080p/4k video output.",
+	},
+	"gemini-omni-flash-preview": {
+		CanonicalName:        "gemini-omni-flash-preview",
+		Aliases:              []string{"Gemini Omni Flash"},
+		SupportedResolutions: []string{"720p"},
+		Description:          "Gemini Omni Flash (Preview): text/image/video in, text+video out, via the Vertex Interactions API (global only).",
+	},
+}
+
+// ResolveOmniModel finds the canonical model info from a user-provided name or
+// alias. An empty input resolves to the default Omni model.
+func ResolveOmniModel(modelInput string, allowUnsafe bool) (OmniModelInfo, bool) {
+	if strings.TrimSpace(modelInput) == "" {
+		return SupportedOmniModels[DefaultOmniModel], true
+	}
+
+	modelInputLower := strings.ToLower(modelInput)
+	for canonicalName, info := range SupportedOmniModels {
+		if strings.ToLower(canonicalName) == modelInputLower {
+			return info, true
+		}
+		for _, alias := range info.Aliases {
+			if strings.ToLower(alias) == modelInputLower {
+				return info, true
+			}
+		}
+	}
+
+	if allowUnsafe && modelInput != "" {
+		// Return a permissive fallback struct for experimental models.
+		return OmniModelInfo{CanonicalName: modelInput}, true
+	}
+
+	return OmniModelInfo{}, false
+}
+
+// BuildOmniModelDescription generates a formatted string listing supported Omni
+// models and their aliases, suitable for use in an MCP tool description.
+func BuildOmniModelDescription() string {
+	var sb strings.Builder
+	sb.WriteString("The Gemini Omni model ID to use for video generation. Supported models:\n")
+
+	keys := make([]string, 0, len(SupportedOmniModels))
+	for k := range SupportedOmniModels {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		info := SupportedOmniModels[k]
+		fmt.Fprintf(&sb, "- *%s*", info.CanonicalName)
+		if len(info.Aliases) > 0 {
+			fmt.Fprintf(&sb, " Aliases: *%s*", strings.Join(info.Aliases, "*, *"))
+		}
+		if info.Description != "" {
+			fmt.Fprintf(&sb, " - %s", info.Description)
+		}
+		if len(info.SupportedResolutions) > 0 {
+			fmt.Fprintf(&sb, " Supported resolutions: %s.", strings.Join(info.SupportedResolutions, ", "))
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
 // and their aliases, suitable for use in an MCP tool description.
 func BuildLyriaModelDescription() string {
 	var sb strings.Builder

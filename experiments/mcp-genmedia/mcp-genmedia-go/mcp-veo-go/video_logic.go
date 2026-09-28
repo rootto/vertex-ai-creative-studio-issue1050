@@ -26,12 +26,80 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleCloudPlatform/vertex-ai-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
+	"github.com/GoogleCloudPlatform/genmedia-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/genai"
 )
+
+// veoOutputNames returns the deterministic per-video output file names when a
+// client output_filename is set (extension forced to the true video MIME, 1-based
+// suffixing for count > 1 per design #842 §4b/§4c). It returns nil when
+// output_filename is unset or cannot be applied, so the handler falls back to its
+// existing default naming scheme (byte-for-byte legacy behavior).
+func veoOutputNames(outputFilename string, count int, mimeType string) []string {
+	if strings.TrimSpace(outputFilename) == "" || count < 1 {
+		return nil
+	}
+	names, err := common.BuildOutputFilenames(outputFilename, count, mimeType)
+	if err != nil {
+		log.Printf("output_filename %q could not be applied (%v); falling back to default naming", outputFilename, err)
+		return nil
+	}
+	return names
+}
+
+// buildVeoRenamePlan maps the API-written GCS objects (Path C: veo lets Vertex
+// name the objects itself under the OutputGCSURI prefix) to the client-desired
+// names. srcURIs and names are aligned 1:1 by identity (srcURIs[i] is the video
+// whose desired name is names[i]), so a skipped/partial element never drifts the
+// mapping. It returns the bucket, the ordered src→dst renames, and — aligned 1:1
+// with renames — the source gs:// URI each rename came from (planSrcURIs) and the
+// resulting destination gs:// URI (dstURIs). planSrcURIs lets the caller write each
+// renamed URI back onto the exact artifact it came from by identity rather than by
+// slice position. When names is empty it returns nil (default API names kept).
+func buildVeoRenamePlan(gcsOutputURI string, srcURIs, names []string) (bucket string, renames []common.Rename, planSrcURIs, dstURIs []string) {
+	if len(names) == 0 || len(srcURIs) == 0 {
+		return "", nil, nil, nil
+	}
+	bucket, prefix := common.ParseGCSBucketAndPrefix(gcsOutputURI)
+	n := len(srcURIs)
+	if len(names) < n {
+		n = len(names)
+	}
+	for i := 0; i < n; i++ {
+		_, srcObject, err := common.ParseGCSPath(srcURIs[i])
+		if err != nil {
+			log.Printf("skipping GCS rename for unparseable URI %q: %v", srcURIs[i], err)
+			continue
+		}
+		dstObject := prefix + names[i]
+		renames = append(renames, common.Rename{Src: srcObject, Dst: dstObject})
+		planSrcURIs = append(planSrcURIs, srcURIs[i])
+		dstURIs = append(dstURIs, common.BuildGCSURI(bucket, dstObject))
+	}
+	return bucket, renames, planSrcURIs, dstURIs
+}
+
+// applyRenamedURIs writes each successfully-renamed destination URI back onto the
+// artifact it came from, pairing by identity (the source gs:// URI in planSrcURIs)
+// rather than by slice position. renames/planSrcURIs/dstURIs are aligned 1:1 by
+// construction (buildVeoRenamePlan), and renamedCount is how many leading plan
+// entries common.RenameGCSObjects reported as renamed (a prefix of the plan,
+// truncated at the first failure). Positional writeback into the (un-compacted)
+// gcsVideoURIs would drift if any source URI was skipped or the batch partially
+// failed; identity pairing never does.
+func applyRenamedURIs(gcsVideoURIs, planSrcURIs, dstURIs []string, renamedCount int) {
+	for k := 0; k < renamedCount && k < len(dstURIs) && k < len(planSrcURIs); k++ {
+		for idx := range gcsVideoURIs {
+			if gcsVideoURIs[idx] == planSrcURIs[k] {
+				gcsVideoURIs[idx] = dstURIs[k]
+				break
+			}
+		}
+	}
+}
 
 // callGenerateVideosAPI orchestrates the entire video generation process.
 // It initiates the video generation operation, polls for its completion, and handles
@@ -43,6 +111,7 @@ func callGenerateVideosAPI(
 	mcpServer *server.MCPServer,
 	progressToken mcp.ProgressToken,
 	outputDir string,
+	outputFilename string,
 	modelName string,
 	source *genai.GenerateVideosSource,
 	config *genai.GenerateVideosConfig,
@@ -268,10 +337,18 @@ func callGenerateVideosAPI(
 	var downloadedLocalFiles []string
 	var downloadErrors []string
 
+	// Collect the produced GCS video URIs (compacted, in generation order) and the
+	// true output MIME type. Veo (Path C) lets Vertex name the objects itself under
+	// the OutputGCSURI prefix; the client-supplied output_filename is honored by a
+	// post-generation copy-rename below.
+	videoMIMEType := ""
 	for i, generatedVideo := range operation.Response.GeneratedVideos {
 		videoGCSURI := ""
 		if generatedVideo.Video != nil && generatedVideo.Video.URI != "" {
 			videoGCSURI = generatedVideo.Video.URI
+			if videoMIMEType == "" && generatedVideo.Video.MIMEType != "" {
+				videoMIMEType = generatedVideo.Video.MIMEType
+			}
 		}
 
 		if videoGCSURI == "" {
@@ -280,22 +357,65 @@ func callGenerateVideosAPI(
 		}
 		gcsVideoURIs = append(gcsVideoURIs, videoGCSURI)
 		log.Printf("Video %d (%s) generated by operation %s is available at GCS URI: %s", i, callType, operation.Name, videoGCSURI)
+	}
+	videoMIMEType = resolveVeoMIMEType(videoMIMEType)
 
-		if attemptLocalDownload {
-			// Construct a descriptive filename similar to Imagen
-			localFilename := fmt.Sprintf("veo-%s-%s-%d.mp4", modelName, time.Now().Format("20060102-150405"), i)
+	// Resolve an optional client-supplied output_filename (design #842). When set,
+	// outputNames holds the deterministic per-video names (extension forced to the
+	// true video MIME, 1-based suffix for >1 video) aligned 1:1 with gcsVideoURIs;
+	// when unset it is nil and the handler keeps its existing default naming scheme
+	// (byte-for-byte legacy behavior).
+	outputNames := veoOutputNames(outputFilename, len(gcsVideoURIs), videoMIMEType)
+
+	if attemptLocalDownload {
+		for j, videoGCSURI := range gcsVideoURIs {
+			var localFilename string
+			if outputNames != nil {
+				// Client output_filename: use the deterministic name (extension
+				// already forced to the true video MIME).
+				localFilename = outputNames[j]
+			} else {
+				// Construct a descriptive filename similar to Imagen (legacy default).
+				localFilename = fmt.Sprintf("veo-%s-%s-%d.mp4", modelName, time.Now().Format("20060102-150405"), j)
+			}
 			localFilepath := filepath.Join(outputDir, localFilename)
 			localFilepath = filepath.Clean(localFilepath)
 
-			log.Printf("Attempting to download video %d from GCS URI %s to %s", i, videoGCSURI, localFilepath)
+			log.Printf("Attempting to download video %d from GCS URI %s to %s", j, videoGCSURI, localFilepath)
 			downloadErr := common.DownloadFromGCS(ctx, videoGCSURI, localFilepath)
 			if downloadErr != nil {
-				errMsg := fmt.Sprintf("Error downloading video %d from %s to %s: %v", i, videoGCSURI, localFilepath, downloadErr)
+				errMsg := fmt.Sprintf("Error downloading video %d from %s to %s: %v", j, videoGCSURI, localFilepath, downloadErr)
 				log.Print(errMsg)
 				downloadErrors = append(downloadErrors, errMsg)
 			} else {
-				log.Printf("Successfully downloaded and saved video %d to %s", i, localFilepath)
+				log.Printf("Successfully downloaded and saved video %d to %s", j, localFilepath)
 				downloadedLocalFiles = append(downloadedLocalFiles, localFilepath)
+			}
+		}
+	}
+
+	// Path C copy-rename (design #842 §4d): when output_filename is set, copy-rename
+	// the API-written GCS objects to the client-desired names and delete the
+	// originals. src→dst are paired by identity (gcsVideoURIs[j] → outputNames[j]),
+	// so a partial failure never drifts the mapping. Already-renamed valid outputs
+	// are not rolled back; the reported URIs reflect the successfully-renamed
+	// objects. Latency: a same-bucket, same-region copy is a fast metadata op, but
+	// large videos add copy time proportional to size; this runs on ctx (the same
+	// context used for downloads), before the tool returns.
+	var renameNote string
+	if outputNames != nil && len(gcsVideoURIs) > 0 {
+		renameBucket, renames, planSrcURIs, dstURIs := buildVeoRenamePlan(config.OutputGCSURI, gcsVideoURIs, outputNames)
+		if len(renames) > 0 {
+			renamed, rErr := common.RenameGCSObjects(ctx, renameBucket, renames)
+			// Pair each renamed URI back to its source artifact by identity, not by
+			// slice position, so a skipped/unparseable URI or a partial batch failure
+			// never writes a renamed URI onto the wrong artifact.
+			applyRenamedURIs(gcsVideoURIs, planSrcURIs, dstURIs, len(renamed))
+			if rErr != nil {
+				renameNote = fmt.Sprintf("Note: renaming generated GCS object(s) to match output_filename '%s' partially failed (some API-original objects may remain): %v", outputFilename, rErr)
+				log.Print(renameNote)
+			} else {
+				log.Printf("Renamed %d generated GCS object(s) to match output_filename '%s'.", len(renamed), outputFilename)
 			}
 		}
 	}
@@ -305,6 +425,9 @@ func callGenerateVideosAPI(
 
 	if len(gcsVideoURIs) > 0 {
 		saveMessageParts = append(saveMessageParts, fmt.Sprintf("Videos saved to GCS: %s.", strings.Join(gcsVideoURIs, ", ")))
+	}
+	if renameNote != "" {
+		saveMessageParts = append(saveMessageParts, renameNote)
 	}
 
 	if attemptLocalDownload {
@@ -349,5 +472,35 @@ func callGenerateVideosAPI(
 		}
 	}
 
-	return mcp.NewToolResultText(strings.TrimSpace(resultText)), nil
+	// Text output is unchanged; append one resource_link per GCS video artifact
+	// (design #483), in generation order. content[0]=text, content[1..n]=links.
+	content := []mcp.Content{mcp.TextContent{Type: "text", Text: strings.TrimSpace(resultText)}}
+	content = appendVeoResourceLinks(content, gcsVideoURIs, videoMIMEType)
+	return &mcp.CallToolResult{Content: content}, nil
+}
+
+// resolveVeoMIMEType returns the video MIME type to report, defaulting to
+// "video/mp4" when the API did not supply one (veo output is MP4). Kept as a named
+// function so the fallback is unit-testable.
+func resolveVeoMIMEType(mimeType string) string {
+	if mimeType == "" {
+		return "video/mp4"
+	}
+	return mimeType
+}
+
+// appendVeoResourceLinks appends one resource_link per GCS video artifact to items
+// (design #483), in generation order, each carrying videoMIMEType and a 1-based
+// "veo output i of n" description. This only ADDS links (the caller's text content
+// is unchanged) and returns items unchanged when there are no GCS videos.
+func appendVeoResourceLinks(items []mcp.Content, gcsVideoURIs []string, videoMIMEType string) []mcp.Content {
+	var mediaResults []common.MediaResult
+	for i, uri := range gcsVideoURIs {
+		mediaResults = append(mediaResults, common.MediaResult{
+			GCSURI:      uri,
+			MimeType:    videoMIMEType,
+			Description: fmt.Sprintf("veo output %d of %d", i+1, len(gcsVideoURIs)),
+		})
+	}
+	return common.AppendMediaContent(items, mediaResults)
 }

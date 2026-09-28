@@ -13,35 +13,25 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-
+from typing import List, Optional
 
 @dataclass
 class ImagenModelConfig:
     """Configuration for a specific Imagen model version."""
-
     model_name: str
     display_name: str
-    supported_aspect_ratios: list[str]
+    supported_aspect_ratios: List[str]
     max_samples: int
     default_samples: int
 
-
 # This list is the single source of truth for all Imagen model configurations.
-IMAGEN_MODELS: list[ImagenModelConfig] = [
-    ImagenModelConfig(
-        model_name="imagen-3.0-fast-generate-001",
-        display_name="Imagen 3 Fast",
-        supported_aspect_ratios=["1:1", "3:4", "4:3", "9:16", "16:9"],
-        max_samples=4,
-        default_samples=4,
-    ),
-    ImagenModelConfig(
-        model_name="imagen-3.0-generate-002",
-        display_name="Imagen 3",
-        supported_aspect_ratios=["1:1", "3:4", "4:3", "9:16", "16:9"],
-        max_samples=4,
-        default_samples=4,
-    ),
+#
+# GA endpoint deprecation (sunset 2026-06-30): the Imagen 3 generate endpoints
+# `imagen-3.0-fast-generate-001` and `imagen-3.0-generate-002` were removed from
+# this list. Their go-forward replacements are already present below:
+# `imagen-4.0-fast-generate-001` (fast tier) and `imagen-4.0-generate-001`
+# (standard tier, also the page default). Do not re-add the Imagen 3 entries.
+IMAGEN_MODELS: List[ImagenModelConfig] = [
     ImagenModelConfig(
         model_name="imagen-4.0-generate-001",
         display_name="Imagen 4",
@@ -65,9 +55,8 @@ IMAGEN_MODELS: list[ImagenModelConfig] = [
     ),
 ]
 
-
 # Helper function to easily find a model's config by its model_name.
-def get_imagen_model_config(model_name: str) -> ImagenModelConfig | None:
+def get_imagen_model_config(model_name: str) -> Optional[ImagenModelConfig]:
     """Finds and returns the configuration for a given Imagen model name."""
     for model in IMAGEN_MODELS:
         if model.model_name == model_name:

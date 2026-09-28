@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 import mesop as me
 
-from common.analytics import log_ui_click, track_model_call
+from common.analytics import log_ui_click
 from common.metadata import (
     MediaItem,
     add_media_item_to_firestore,
@@ -1094,7 +1094,7 @@ def on_transformation_click(e: me.ClickEvent):
         transformation = json.loads(e.key)
         title = transformation["title"]
         prompt = transformation["prompt"]
-    except json.JSONDecodeError, KeyError:
+    except (json.JSONDecodeError, KeyError):
         yield from show_snackbar(state, "Invalid transformation data.")
         return
 
@@ -1289,28 +1289,21 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
                 final_prompt = (
                     f"{final_prompt}\n\nBrand Guidelines:\n{selected_g['content']}"
                 )
-        with track_model_call(
-            model_name=state.selected_model,
-            prompt_length=len(final_prompt),
-            aspect_ratio=state.aspect_ratio,
-            # num_input_images=len(input_gcs_uris),
-            # num_images_generated=state.num_images_to_generate,
-        ):
-            gcs_uris, execution_time, captions, grounding_info, all_thoughts = (
-                generate_image_from_prompt_and_images(
-                    prompt=final_prompt,
-                    images=input_gcs_uris,
-                    aspect_ratio=state.aspect_ratio,
-                    gcs_folder="gemini_image_generations",
-                    file_prefix="gemini_image",
-                    image_size=state.image_size,
-                    use_search=state.use_search,
-                    use_image_search=state.use_image_search,
-                    thinking_level=state.thinking_level,
-                    include_thoughts=state.include_thoughts,
-                    model_name=state.selected_model,
-                )
+        gcs_uris, execution_time, captions, grounding_info, all_thoughts = (
+            generate_image_from_prompt_and_images(
+                prompt=final_prompt,
+                images=input_gcs_uris,
+                aspect_ratio=state.aspect_ratio,
+                gcs_folder="gemini_image_generations",
+                file_prefix="gemini_image",
+                image_size=state.image_size,
+                use_search=state.use_search,
+                use_image_search=state.use_image_search,
+                thinking_level=state.thinking_level,
+                include_thoughts=state.include_thoughts,
+                model_name=state.selected_model,
             )
+        )
 
         state.generation_time = execution_time
         state.grounding_info = json.dumps(grounding_info) if grounding_info else ""
@@ -1451,7 +1444,10 @@ def on_load(e: me.LoadEvent):
             config_path="config/image_prompt_templates.json",
             template_type="image",
         )
-        state.prompt_templates_json = json.dumps([t.model_dump() for t in templates])
+        state.prompt_templates_json = json.dumps(
+            [t.model_dump() for t in templates],
+            default=str,
+        )
         print(
             f"Loaded {len(json.loads(state.prompt_templates_json))} image prompt templates.",
         )

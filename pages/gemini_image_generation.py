@@ -21,10 +21,7 @@ from dataclasses import field
 import mesop as me
 
 from common.analytics import analytics_logger, log_ui_click, track_model_call
-from common.metadata import (
-    MediaItem,
-    add_media_item_to_firestore,
-)
+from common.metadata import MediaItem, add_media_item_to_firestore
 from common.prompt_template_service import prompt_template_service
 from common.storage import store_to_gcs
 from common.utils import create_display_url, https_url_to_gcs_uri
@@ -957,7 +954,7 @@ def on_transformation_click(e: me.ClickEvent):
         transformation = json.loads(e.key)
         title = transformation["title"]
         prompt = transformation["prompt"]
-    except json.JSONDecodeError, KeyError:
+    except (json.JSONDecodeError, KeyError):
         yield from show_snackbar(state, "Invalid transformation data.")
         return
 
@@ -1163,29 +1160,22 @@ def _generate_and_save(base_prompt: str, input_gcs_uris: list[str]):
     yield
 
     try:
-        with track_model_call(
-            model_name=state.selected_model,
-            prompt_length=len(final_prompt),
-            aspect_ratio=state.aspect_ratio,
-            # num_input_images=len(input_gcs_uris),
-            # num_images_generated=state.num_images_to_generate,
-        ):
-            gcs_uris, execution_time, captions, grounding_info, all_thoughts = (
-                generate_image_from_prompt_and_images(
-                    prompt=final_prompt,
-                    images=all_input_uris,
-                    aspect_ratio=state.aspect_ratio,
-                    gcs_folder="gemini_image_generations",
-                    file_prefix="gemini_image",
-                    candidate_count=1,
-                    image_size=state.image_size,
-                    use_search=state.use_search,
-                    use_image_search=state.use_image_search,
-                    thinking_level=state.thinking_level,
-                    include_thoughts=state.include_thoughts,
-                    model_name=state.selected_model,
-                )
+        gcs_uris, execution_time, captions, grounding_info, all_thoughts = (
+            generate_image_from_prompt_and_images(
+                prompt=final_prompt,
+                images=all_input_uris,
+                aspect_ratio=state.aspect_ratio,
+                gcs_folder="gemini_image_generations",
+                file_prefix="gemini_image",
+                candidate_count=1,
+                image_size=state.image_size,
+                use_search=state.use_search,
+                use_image_search=state.use_image_search,
+                thinking_level=state.thinking_level,
+                include_thoughts=state.include_thoughts,
+                model_name=state.selected_model,
             )
+        )
 
         state.generation_time = execution_time
         state.grounding_info = json.dumps(grounding_info) if grounding_info else ""

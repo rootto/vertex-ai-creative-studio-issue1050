@@ -7,18 +7,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/GoogleCloudPlatform/vertex-ai-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
+	"github.com/GoogleCloudPlatform/genmedia-creative-studio/experiments/mcp-genmedia/mcp-genmedia-go/mcp-common"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/teris-io/shortid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )
+
+// resolveAVToolOutputFilename applies the shared accept-and-alias precedence
+// (design #842 §4a): the canonical output_filename wins over the deprecated
+// output_file_name alias. avtool is EXEMPT from extension-forcing (design §4d) —
+// the client-provided extension selects the ffmpeg output container/format, so it
+// is preserved. The name is still sanitized to a single safe path component
+// (traversal defense), which keeps any extension intact. An empty result falls
+// through to HandleOutputPreparation's unique-name default.
+func resolveAVToolOutputFilename(argsMap map[string]interface{}) string {
+	base := common.ResolveOutputFilename(argsMap, "output_file_name")
+	if base == "" {
+		return ""
+	}
+	return common.SanitizeBaseFilename(base)
+}
 
 // getArguments safely extracts the tool call arguments from an MCP request.
 // It checks if the arguments are present and are of the expected type (map[string]interface{}).
@@ -101,7 +117,8 @@ func addConvertAudioTool(s *server.MCPServer, cfg *common.Config) {
 	tool := mcp.NewTool("ffmpeg_convert_audio_wav_to_mp3",
 		mcp.WithDescription("Converts a WAV audio file to MP3 format using FFMpeg."),
 		mcp.WithString("input_audio_uri", mcp.Required(), mcp.Description("URI of the input WAV audio file (local path or gs://).")),
-		mcp.WithString("output_file_name", mcp.Description("Optional. Desired name for the output MP3 file (e.g., 'converted.mp3'). If omitted, a unique name is generated.")),
+		mcp.WithString("output_filename", mcp.Description("Optional. Desired name for the output file (e.g., 'converted.mp3'). The client-provided extension is honored and selects the output format. Takes precedence over the deprecated output_file_name. If omitted, a unique name is generated. An existing file of the same name is overwritten.")),
+		mcp.WithString("output_file_name", mcp.Description("Optional (deprecated; use output_filename). Desired name for the output MP3 file (e.g., 'converted.mp3'). If omitted, a unique name is generated.")),
 		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output MP3 file.")),
 		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output MP3 file to.")),
 	)
@@ -126,7 +143,7 @@ func ffmpegConvertAudioHandler(ctx context.Context, request mcp.CallToolRequest,
 	log.Printf("Handling %s request with arguments: %v", "ffmpeg_convert_audio_wav_to_mp3", argsMap)
 
 	inputAudioURI, _ := argsMap["input_audio_uri"].(string)
-	outputFileName, _ := argsMap["output_file_name"].(string)
+	outputFileName := resolveAVToolOutputFilename(argsMap)
 	outputLocalDir, _ := argsMap["output_local_dir"].(string)
 	outputGCSBucket, _ := argsMap["output_gcs_bucket"].(string)
 	outputGCSBucket = strings.TrimSpace(outputGCSBucket)
@@ -204,7 +221,8 @@ func addCreateGifTool(s *server.MCPServer, cfg *common.Config) {
 		mcp.WithString("input_video_uri", mcp.Required(), mcp.Description("URI of the input video file (local path or gs://).")),
 		mcp.WithNumber("scale_width_factor", mcp.DefaultNumber(0.33), mcp.Description("Factor to scale the input video's width by (e.g., 0.33 for 33%). Height is scaled automatically to maintain aspect ratio. Use 1.0 for original width.")),
 		mcp.WithNumber("fps", mcp.DefaultNumber(15), mcp.Min(1), mcp.Max(50), mcp.Description("Frames per second for the output GIF (e.g., 10, 15, 25).")),
-		mcp.WithString("output_file_name", mcp.Description("Optional. Desired name for the output GIF file (e.g., 'animation.gif'). If omitted, a unique name is generated.")),
+		mcp.WithString("output_filename", mcp.Description("Optional. Desired name for the output file (e.g., 'animation.gif'). The client-provided extension is honored and selects the output format. Takes precedence over the deprecated output_file_name. If omitted, a unique name is generated. An existing file of the same name is overwritten.")),
+		mcp.WithString("output_file_name", mcp.Description("Optional (deprecated; use output_filename). Desired name for the output GIF file (e.g., 'animation.gif'). If omitted, a unique name is generated.")),
 		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output GIF file.")),
 		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output GIF file to (uses GENMEDIA_BUCKET if set and this is empty).")),
 	)
@@ -248,7 +266,7 @@ func ffmpegVideoToGifHandler(ctx context.Context, request mcp.CallToolRequest, c
 		fpsParam = 50
 	}
 
-	outputFileName, _ := argsMap["output_file_name"].(string)
+	outputFileName := resolveAVToolOutputFilename(argsMap)
 	outputLocalDir, _ := argsMap["output_local_dir"].(string)
 	outputGCSBucket, _ := argsMap["output_gcs_bucket"].(string)
 	outputGCSBucket = strings.TrimSpace(outputGCSBucket)
@@ -353,7 +371,8 @@ func addCombineAudioVideoTool(s *server.MCPServer, cfg *common.Config) {
 		mcp.WithString("input_audio_uri", mcp.Required(), mcp.Description("URI of the input audio file (local path or gs://).")),
 		mcp.WithNumber("input_video_volume_db_change", mcp.Description("Optional. Volume change in dB for the input video's audio track (e.g., -10).")),
 		mcp.WithNumber("input_audio_volume_db_change", mcp.Description("Optional. Volume change in dB for the input audio track (e.g., +5).")),
-		mcp.WithString("output_file_name", mcp.Description("Optional. Desired name for the output video file (e.g., 'combined.mp4').")),
+		mcp.WithString("output_filename", mcp.Description("Optional. Desired name for the output file (e.g., 'combined.mp4'). The client-provided extension is honored and selects the output format. Takes precedence over the deprecated output_file_name. If omitted, a unique name is generated. An existing file of the same name is overwritten.")),
+		mcp.WithString("output_file_name", mcp.Description("Optional (deprecated; use output_filename). Desired name for the output video file (e.g., 'combined.mp4').")),
 		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output video file.")),
 		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output video file to.")),
 	)
@@ -380,7 +399,7 @@ func ffmpegCombineAudioVideoHandler(ctx context.Context, request mcp.CallToolReq
 
 	inputVideoURI, _ := argsMap["input_video_uri"].(string)
 	inputAudioURI, _ := argsMap["input_audio_uri"].(string)
-	outputFileName, _ := argsMap["output_file_name"].(string)
+	outputFileName := resolveAVToolOutputFilename(argsMap)
 	outputLocalDir, _ := argsMap["output_local_dir"].(string)
 	outputGCSBucket, _ := argsMap["output_gcs_bucket"].(string)
 	outputGCSBucket = strings.TrimSpace(outputGCSBucket)
@@ -451,19 +470,19 @@ func ffmpegCombineAudioVideoHandler(ctx context.Context, request mcp.CallToolReq
 	if hasAudio {
 		// Mix audio tracks using amix filter
 		var filterParts []string
-		
+
 		if hasVideoVol {
 			filterParts = append(filterParts, fmt.Sprintf("[0:a]volume=%.2fdB[v_a]", inputVideoVolume))
 		} else {
 			filterParts = append(filterParts, "[0:a]anull[v_a]")
 		}
-		
+
 		if hasAudioVol {
 			filterParts = append(filterParts, fmt.Sprintf("[1:a]volume=%.2fdB[a_a]", inputAudioVolume))
 		} else {
 			filterParts = append(filterParts, "[1:a]anull[a_a]")
 		}
-		
+
 		filterParts = append(filterParts, "[v_a][a_a]amix=inputs=2:duration=longest[a]")
 		filterComplex := strings.Join(filterParts, "; ")
 
@@ -517,7 +536,8 @@ func addOverlayImageOnVideoTool(s *server.MCPServer, cfg *common.Config) {
 		mcp.WithString("input_image_uri", mcp.Required(), mcp.Description("URI of the input image file (local path or gs://).")),
 		mcp.WithNumber("x_coordinate", mcp.DefaultNumber(0), mcp.Description("X coordinate for the overlay (top-left).")),
 		mcp.WithNumber("y_coordinate", mcp.DefaultNumber(0), mcp.Description("Y coordinate for the overlay (top-left).")),
-		mcp.WithString("output_file_name", mcp.Description("Optional. Desired name for the output video file (e.g., 'overlayed_video.mp4').")),
+		mcp.WithString("output_filename", mcp.Description("Optional. Desired name for the output file (e.g., 'overlayed_video.mp4'). The client-provided extension is honored and selects the output format. Takes precedence over the deprecated output_file_name. If omitted, a unique name is generated. An existing file of the same name is overwritten.")),
+		mcp.WithString("output_file_name", mcp.Description("Optional (deprecated; use output_filename). Desired name for the output video file (e.g., 'overlayed_video.mp4').")),
 		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output video file.")),
 		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output video file to.")),
 	)
@@ -547,7 +567,7 @@ func ffmpegOverlayImageHandler(ctx context.Context, request mcp.CallToolRequest,
 	yCoordFloat, _ := argsMap["y_coordinate"].(float64)
 	xCoord := int(xCoordFloat)
 	yCoord := int(yCoordFloat)
-	outputFileName, _ := argsMap["output_file_name"].(string)
+	outputFileName := resolveAVToolOutputFilename(argsMap)
 	outputLocalDir, _ := argsMap["output_local_dir"].(string)
 	outputGCSBucket, _ := argsMap["output_gcs_bucket"].(string)
 	outputGCSBucket = strings.TrimSpace(outputGCSBucket)
@@ -633,7 +653,8 @@ func addConcatenateMediaTool(s *server.MCPServer, cfg *common.Config) {
 	tool := mcp.NewTool("ffmpeg_concatenate_media_files",
 		mcp.WithDescription("Concatenates multiple media files. If output is WAV, inputs must be PCM WAV; otherwise, inputs are standardized to MP4/AAC before concatenation."),
 		mcp.WithArray("input_media_uris", mcp.Required(), mcp.Description("Array of URIs for the input media files (local paths or gs://)."), mcp.Items(map[string]any{"type": "string"})),
-		mcp.WithString("output_file_name", mcp.Description("Optional. Desired name for the output file (e.g., 'concatenated.mp4'). Extension determines behavior for audio concatenation.")),
+		mcp.WithString("output_filename", mcp.Description("Optional. Desired name for the output file (e.g., 'concatenated.mp4'). The client-provided extension is honored and selects the output format (and determines behavior for audio concatenation). Takes precedence over the deprecated output_file_name. If omitted, a unique name is generated. An existing file of the same name is overwritten.")),
+		mcp.WithString("output_file_name", mcp.Description("Optional (deprecated; use output_filename). Desired name for the output file (e.g., 'concatenated.mp4'). Extension determines behavior for audio concatenation.")),
 		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output file.")),
 		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output file to.")),
 	)
@@ -667,7 +688,7 @@ func ffmpegConcatenateMediaHandler(ctx context.Context, request mcp.CallToolRequ
 		}
 	}
 
-	outputFileName, _ := argsMap["output_file_name"].(string)
+	outputFileName := resolveAVToolOutputFilename(argsMap)
 	outputLocalDir, _ := argsMap["output_local_dir"].(string)
 	outputGCSBucket, _ := argsMap["output_gcs_bucket"].(string)
 	outputGCSBucket = strings.TrimSpace(outputGCSBucket)
@@ -1009,6 +1030,533 @@ func ffmpegConcatenateMediaHandler(ctx context.Context, request mcp.CallToolRequ
 	return mcp.NewToolResultText(strings.Join(messageParts, " ")), nil
 }
 
+// addTrimMediaTool defines and registers the 'ffmpeg_trim_media' tool.
+// This tool extracts a single contiguous segment (a cut/trim) from an audio or video
+// file. It works identically for audio and video because it operates on ffmpeg's
+// -ss/-t seek-and-duration options, which apply to any stream type.
+func addTrimMediaTool(s *server.MCPServer, cfg *common.Config) {
+	tool := mcp.NewTool("ffmpeg_trim_media",
+		mcp.WithDescription("Trims (cuts) a single segment from an audio or video file, keeping only the portion between a start time and an end time (or for a given duration). Works for both audio and video inputs. "+
+			"By default the segment is extracted with a fast, lossless stream copy (no re-encode). Because a stream copy can only begin on a keyframe, the actual cut may start at the nearest keyframe at or before the requested start time, so it may not be exactly frame-accurate. "+
+			"Set re_encode=true for a frame-accurate cut at the exact start time; this re-encodes the segment, which is slower and slightly lossy. If a stream copy is not possible for the chosen output container, the tool automatically falls back to a re-encode."),
+		mcp.WithString("input_media_uri", mcp.Required(), mcp.Description("URI of the input audio or video file (local path or gs://).")),
+		mcp.WithNumber("start_time", mcp.Required(), mcp.Description("Start time of the segment to keep, in seconds from the beginning of the file (e.g., 5 or 12.5). Must be within the file's duration.")),
+		mcp.WithNumber("duration", mcp.Description("Optional. Length of the segment to keep, in seconds (e.g., 10). Provide either 'duration' or 'end_time'. If both are given, 'duration' takes precedence.")),
+		mcp.WithNumber("end_time", mcp.Description("Optional. End time of the segment to keep, in seconds from the beginning of the file. Must be greater than 'start_time'. Used only when 'duration' is not provided.")),
+		mcp.WithBoolean("re_encode", mcp.DefaultBool(false), mcp.Description("Optional. When true, re-encodes the segment for a frame-accurate cut at the exact start time instead of the default fast, lossless stream copy. Defaults to false.")),
+		mcp.WithString("output_filename", mcp.Description("Optional. Desired name for the output file (e.g., 'clip.mp4'). The client-provided extension is honored and selects the output format. Takes precedence over the deprecated output_file_name. If omitted, a unique name is generated and the input's extension is preserved. An existing file of the same name is overwritten.")),
+		mcp.WithString("output_file_name", mcp.Description("Optional (deprecated; use output_filename). Desired name for the output file (e.g., 'clip.mp4').")),
+		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output file.")),
+		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output file to (uses GENMEDIA_BUCKET if set and this is empty).")),
+	)
+	s.AddTool(tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return ffmpegTrimMediaHandler(ctx, request, cfg)
+	})
+}
+
+// ffmpegTrimMediaHandler is the handler for the 'ffmpeg_trim_media' tool. It prepares
+// the input, resolves the requested time range (start plus either an explicit duration
+// or an end time), validates the range against the file's actual duration, and then
+// extracts the segment. The output container defaults to the input's extension so a
+// stream copy stays valid, unless the caller specifies an output filename with its own
+// extension.
+func ffmpegTrimMediaHandler(ctx context.Context, request mcp.CallToolRequest, cfg *common.Config) (*mcp.CallToolResult, error) {
+	tr := otel.Tracer(serviceName)
+	ctx, span := tr.Start(ctx, "ffmpeg_trim_media")
+	defer span.End()
+
+	startTime := time.Now()
+	argsMap, err := getArguments(request)
+	if err != nil {
+		span.RecordError(err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	log.Printf("Handling %s request with arguments: %v", "ffmpeg_trim_media", argsMap)
+
+	inputMediaURI, _ := argsMap["input_media_uri"].(string)
+	if strings.TrimSpace(inputMediaURI) == "" {
+		return mcp.NewToolResultError("Parameter 'input_media_uri' is required."), nil
+	}
+
+	startSeconds, hasStart := argsMap["start_time"].(float64)
+	if !hasStart {
+		return mcp.NewToolResultError("Parameter 'start_time' is required and must be a number (seconds)."), nil
+	}
+	if startSeconds < 0 {
+		return mcp.NewToolResultError("Parameter 'start_time' must not be negative."), nil
+	}
+
+	durationSeconds, hasDuration := argsMap["duration"].(float64)
+	endSeconds, hasEnd := argsMap["end_time"].(float64)
+
+	switch {
+	case hasDuration:
+		if durationSeconds <= 0 {
+			return mcp.NewToolResultError("Parameter 'duration' must be greater than 0."), nil
+		}
+	case hasEnd:
+		if endSeconds <= startSeconds {
+			return mcp.NewToolResultError("Parameter 'end_time' must be greater than 'start_time'."), nil
+		}
+		durationSeconds = endSeconds - startSeconds
+	default:
+		return mcp.NewToolResultError("Either 'duration' or 'end_time' must be provided."), nil
+	}
+
+	reEncode, _ := argsMap["re_encode"].(bool)
+	outputFileName := resolveAVToolOutputFilename(argsMap)
+	outputLocalDir, _ := argsMap["output_local_dir"].(string)
+	outputGCSBucket, _ := argsMap["output_gcs_bucket"].(string)
+	outputGCSBucket = strings.TrimSpace(outputGCSBucket)
+
+	if outputGCSBucket == "" && cfg.GenmediaBucket != "" {
+		outputGCSBucket = cfg.GenmediaBucket
+		log.Printf("Handler ffmpeg_trim_media: 'output_gcs_bucket' parameter not provided, using default from GENMEDIA_BUCKET: %s", outputGCSBucket)
+	}
+	if outputGCSBucket != "" {
+		outputGCSBucket = strings.TrimPrefix(outputGCSBucket, "gs://")
+	}
+
+	span.SetAttributes(
+		attribute.String("input_media_uri", inputMediaURI),
+		attribute.Float64("start_time", startSeconds),
+		attribute.Float64("duration", durationSeconds),
+		attribute.Bool("re_encode", reEncode),
+		attribute.String("output_file_name", outputFileName),
+		attribute.String("output_local_dir", outputLocalDir),
+		attribute.String("output_gcs_bucket", outputGCSBucket),
+	)
+
+	localInputMedia, inputCleanup, err := common.PrepareInputFile(ctx, inputMediaURI, "trim_input", cfg.ProjectID)
+	if err != nil {
+		span.RecordError(err)
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to prepare input media: %v", err)), nil
+	}
+	defer inputCleanup()
+
+	// Validate the requested range against the file's actual duration when it can be
+	// determined. If the duration is unknown (some streams don't report one), skip
+	// validation and let ffmpeg handle it rather than rejecting a valid request.
+	if mediaDuration, probeErr := probeMediaDurationSeconds(ctx, localInputMedia); probeErr != nil {
+		log.Printf("Handler ffmpeg_trim_media: could not determine input duration, skipping range validation: %v", probeErr)
+	} else if startSeconds >= mediaDuration {
+		return mcp.NewToolResultError(fmt.Sprintf("Parameter 'start_time' (%.3fs) is at or beyond the input's duration (%.3fs).", startSeconds, mediaDuration)), nil
+	}
+
+	// Default the output container to the input's extension so a stream copy remains
+	// valid. A client-provided output filename extension overrides this.
+	defaultOutputExt := strings.ToLower(strings.TrimPrefix(filepath.Ext(localInputMedia), "."))
+	if defaultOutputExt == "" {
+		defaultOutputExt = "mp4"
+	}
+	if outputFileName != "" {
+		if userExt := strings.ToLower(strings.TrimPrefix(filepath.Ext(outputFileName), ".")); userExt != "" {
+			defaultOutputExt = userExt
+		}
+	}
+
+	tempOutputFile, finalOutputFilename, outputCleanup, err := common.HandleOutputPreparation(outputFileName, defaultOutputExt)
+	if err != nil {
+		span.RecordError(err)
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to prepare output file: %v", err)), nil
+	}
+	defer outputCleanup()
+
+	usedReEncode, ffmpegErr := executeTrimMedia(ctx, localInputMedia, tempOutputFile, startSeconds, durationSeconds, reEncode)
+	if ffmpegErr != nil {
+		span.RecordError(ffmpegErr)
+		return mcp.NewToolResultError(fmt.Sprintf("FFMpeg trim failed: %v", ffmpegErr)), nil
+	}
+	span.SetAttributes(attribute.Bool("used_re_encode", usedReEncode))
+
+	finalLocalPath, finalGCSPath, processErr := common.ProcessOutputAfterFFmpeg(ctx, tempOutputFile, finalOutputFilename, outputLocalDir, outputGCSBucket, cfg.ProjectID)
+	if processErr != nil {
+		span.RecordError(processErr)
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to process FFMpeg output: %v", processErr)), nil
+	}
+
+	duration := time.Since(startTime)
+	span.SetAttributes(attribute.Float64("duration_ms", float64(duration.Milliseconds())))
+
+	var messageParts []string
+	mode := "stream copy (no re-encode)"
+	if usedReEncode {
+		mode = "re-encode"
+	}
+	messageParts = append(messageParts, fmt.Sprintf("Trim of %.3fs starting at %.3fs (%s) completed in %v.", durationSeconds, startSeconds, mode, duration))
+	if outputLocalDir != "" && finalLocalPath != "" {
+		messageParts = append(messageParts, fmt.Sprintf("Output saved locally to: %s.", finalLocalPath))
+	} else if finalLocalPath != "" && (outputGCSBucket == "" || finalGCSPath == "") {
+		messageParts = append(messageParts, fmt.Sprintf("Temporary output was at: %s (cleaned up if not moved/uploaded).", finalLocalPath))
+	}
+	if finalGCSPath != "" {
+		messageParts = append(messageParts, fmt.Sprintf("Output uploaded to GCS: %s.", finalGCSPath))
+	}
+	if len(messageParts) == 1 {
+		messageParts = append(messageParts, "No specific output location requested beyond temporary processing.")
+	}
+	return mcp.NewToolResultText(strings.Join(messageParts, " ")), nil
+}
+
+// addNormalizeLoudnessTool defines and registers the 'ffmpeg_normalize_loudness' tool.
+// It performs EBU R128 loudness normalization on any audio (or audio-containing video)
+// file using the accurate two-pass loudnorm method.
+func addNormalizeLoudnessTool(s *server.MCPServer, cfg *common.Config) {
+	tool := mcp.NewTool("ffmpeg_normalize_loudness",
+		mcp.WithDescription("Normalizes the perceived loudness of an audio file (or the audio track of a video file) to a target level using EBU R128 loudness normalization. "+
+			"This uses the accurate two-pass method: a first pass measures the input's actual integrated loudness, true peak, loudness range and threshold, and a second pass applies a linear correction toward the target using those measurements. This is more accurate than a single-pass normalize and avoids over- or under-correction. "+
+			"Useful for levelling recordings or generated speech so that quiet inputs are brought up and loud inputs are brought down to a consistent playback loudness. "+
+			"Defaults target -16 LUFS integrated loudness, -1.5 dBTP true peak and 11 LU loudness range, which suit streaming and web playback; all three can be overridden. When the input is a video its video stream is copied unchanged and only the audio is normalized. Fails if the input has no audio stream."),
+		mcp.WithString("input_media_uri", mcp.Required(), mcp.Description("URI of the input audio or video file (local path or gs://). Must contain an audio stream.")),
+		mcp.WithNumber("target_loudness", mcp.DefaultNumber(defaultTargetLoudnessLUFS), mcp.Description("Optional. Target integrated loudness in LUFS (EBU R128 'I'). Defaults to -16 (common for streaming/web/podcast). Use -23 for EBU R128 broadcast delivery. Valid range: -70 to -5.")),
+		mcp.WithNumber("target_true_peak", mcp.DefaultNumber(defaultTargetTruePeakDBTP), mcp.Description("Optional. Maximum true peak in dBTP (loudnorm 'TP'). Defaults to -1.5. Valid range: -9 to 0.")),
+		mcp.WithNumber("target_loudness_range", mcp.DefaultNumber(defaultTargetLoudnessRangeLU), mcp.Description("Optional. Target loudness range in LU (loudnorm 'LRA'). Defaults to 11. Valid range: 1 to 50.")),
+		mcp.WithString("output_filename", mcp.Description("Optional. Desired name for the output file (e.g., 'normalized.wav'). The client-provided extension is honored and selects the output format. Takes precedence over the deprecated output_file_name. If omitted, a unique name is generated and the input's extension is preserved. An existing file of the same name is overwritten.")),
+		mcp.WithString("output_file_name", mcp.Description("Optional (deprecated; use output_filename). Desired name for the output file (e.g., 'normalized.wav').")),
+		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output file.")),
+		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output file to (uses GENMEDIA_BUCKET if set and this is empty).")),
+	)
+	s.AddTool(tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return ffmpegNormalizeLoudnessHandler(ctx, request, cfg)
+	})
+}
+
+// ffmpegNormalizeLoudnessHandler is the handler for the 'ffmpeg_normalize_loudness'
+// tool. It prepares the input, verifies it has an audio stream, resolves the target
+// loudness parameters (falling back to sensible defaults), runs the two-pass EBU R128
+// normalization and writes the result to the requested destination.
+func ffmpegNormalizeLoudnessHandler(ctx context.Context, request mcp.CallToolRequest, cfg *common.Config) (*mcp.CallToolResult, error) {
+	tr := otel.Tracer(serviceName)
+	ctx, span := tr.Start(ctx, "ffmpeg_normalize_loudness")
+	defer span.End()
+
+	startTime := time.Now()
+	argsMap, err := getArguments(request)
+	if err != nil {
+		span.RecordError(err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	log.Printf("Handling %s request with arguments: %v", "ffmpeg_normalize_loudness", argsMap)
+
+	inputMediaURI, _ := argsMap["input_media_uri"].(string)
+	if strings.TrimSpace(inputMediaURI) == "" {
+		return mcp.NewToolResultError("Parameter 'input_media_uri' is required."), nil
+	}
+
+	target := loudnormTarget{
+		IntegratedLUFS:  defaultTargetLoudnessLUFS,
+		TruePeakDBTP:    defaultTargetTruePeakDBTP,
+		LoudnessRangeLU: defaultTargetLoudnessRangeLU,
+	}
+	if v, ok := argsMap["target_loudness"].(float64); ok {
+		target.IntegratedLUFS = v
+	}
+	if v, ok := argsMap["target_true_peak"].(float64); ok {
+		target.TruePeakDBTP = v
+	}
+	if v, ok := argsMap["target_loudness_range"].(float64); ok {
+		target.LoudnessRangeLU = v
+	}
+
+	if target.IntegratedLUFS < -70 || target.IntegratedLUFS > -5 {
+		return mcp.NewToolResultError("Parameter 'target_loudness' must be between -70 and -5 LUFS."), nil
+	}
+	if target.TruePeakDBTP < -9 || target.TruePeakDBTP > 0 {
+		return mcp.NewToolResultError("Parameter 'target_true_peak' must be between -9 and 0 dBTP."), nil
+	}
+	if target.LoudnessRangeLU < 1 || target.LoudnessRangeLU > 50 {
+		return mcp.NewToolResultError("Parameter 'target_loudness_range' must be between 1 and 50 LU."), nil
+	}
+
+	outputFileName := resolveAVToolOutputFilename(argsMap)
+	outputLocalDir, _ := argsMap["output_local_dir"].(string)
+	outputGCSBucket, _ := argsMap["output_gcs_bucket"].(string)
+	outputGCSBucket = strings.TrimSpace(outputGCSBucket)
+
+	if outputGCSBucket == "" && cfg.GenmediaBucket != "" {
+		outputGCSBucket = cfg.GenmediaBucket
+		log.Printf("Handler ffmpeg_normalize_loudness: 'output_gcs_bucket' parameter not provided, using default from GENMEDIA_BUCKET: %s", outputGCSBucket)
+	}
+	if outputGCSBucket != "" {
+		outputGCSBucket = strings.TrimPrefix(outputGCSBucket, "gs://")
+	}
+
+	span.SetAttributes(
+		attribute.String("input_media_uri", inputMediaURI),
+		attribute.Float64("target_loudness", target.IntegratedLUFS),
+		attribute.Float64("target_true_peak", target.TruePeakDBTP),
+		attribute.Float64("target_loudness_range", target.LoudnessRangeLU),
+		attribute.String("output_file_name", outputFileName),
+		attribute.String("output_local_dir", outputLocalDir),
+		attribute.String("output_gcs_bucket", outputGCSBucket),
+	)
+
+	localInputMedia, inputCleanup, err := common.PrepareInputFile(ctx, inputMediaURI, "loudnorm_input", cfg.ProjectID)
+	if err != nil {
+		span.RecordError(err)
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to prepare input media: %v", err)), nil
+	}
+	defer inputCleanup()
+
+	streamInfo, err := probeMediaStreamInfo(ctx, localInputMedia)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to inspect input media: %v", err)), nil
+	}
+	if !streamInfo.HasAudio {
+		return mcp.NewToolResultError("The input has no audio stream to normalize."), nil
+	}
+
+	// Preserve the input's container by default so the output format is predictable;
+	// a client-provided output filename extension overrides it.
+	defaultOutputExt := strings.ToLower(strings.TrimPrefix(filepath.Ext(localInputMedia), "."))
+	if defaultOutputExt == "" {
+		if streamInfo.HasVideo {
+			defaultOutputExt = "mp4"
+		} else {
+			defaultOutputExt = "wav"
+		}
+	}
+	if outputFileName != "" {
+		if userExt := strings.ToLower(strings.TrimPrefix(filepath.Ext(outputFileName), ".")); userExt != "" {
+			defaultOutputExt = userExt
+		}
+	}
+
+	tempOutputFile, finalOutputFilename, outputCleanup, err := common.HandleOutputPreparation(outputFileName, defaultOutputExt)
+	if err != nil {
+		span.RecordError(err)
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to prepare output file: %v", err)), nil
+	}
+	defer outputCleanup()
+
+	measurements, ffmpegErr := executeNormalizeLoudness(ctx, localInputMedia, tempOutputFile, target, streamInfo.HasVideo, streamInfo.SampleRate)
+	if ffmpegErr != nil {
+		span.RecordError(ffmpegErr)
+		return mcp.NewToolResultError(fmt.Sprintf("FFMpeg loudness normalization failed: %v", ffmpegErr)), nil
+	}
+
+	finalLocalPath, finalGCSPath, processErr := common.ProcessOutputAfterFFmpeg(ctx, tempOutputFile, finalOutputFilename, outputLocalDir, outputGCSBucket, cfg.ProjectID)
+	if processErr != nil {
+		span.RecordError(processErr)
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to process FFMpeg output: %v", processErr)), nil
+	}
+
+	duration := time.Since(startTime)
+	span.SetAttributes(attribute.Float64("duration_ms", float64(duration.Milliseconds())))
+
+	var messageParts []string
+	messageParts = append(messageParts, fmt.Sprintf("Loudness normalization to %s LUFS (measured input loudness %s LUFS, true peak %s dBTP) completed in %v.",
+		formatLoudnormValue(target.IntegratedLUFS), measurements.InputI, measurements.InputTP, duration))
+	if outputLocalDir != "" && finalLocalPath != "" {
+		messageParts = append(messageParts, fmt.Sprintf("Output saved locally to: %s.", finalLocalPath))
+	} else if finalLocalPath != "" && (outputGCSBucket == "" || finalGCSPath == "") {
+		messageParts = append(messageParts, fmt.Sprintf("Temporary output was at: %s (cleaned up if not moved/uploaded).", finalLocalPath))
+	}
+	if finalGCSPath != "" {
+		messageParts = append(messageParts, fmt.Sprintf("Output uploaded to GCS: %s.", finalGCSPath))
+	}
+	if len(messageParts) == 1 {
+		messageParts = append(messageParts, "No specific output location requested beyond temporary processing.")
+	}
+	return mcp.NewToolResultText(strings.Join(messageParts, " ")), nil
+}
+
+// addResizeReframeTool defines and registers the 'ffmpeg_resize_reframe' tool. It
+// resizes an image or video to a target geometry and reconciles any aspect-ratio
+// mismatch by padding (letterbox/pillarbox, the default) or cropping.
+func addResizeReframeTool(s *server.MCPServer, cfg *common.Config) {
+	tool := mcp.NewTool("ffmpeg_resize_reframe",
+		mcp.WithDescription("Resizes and reframes an image OR a video to a target geometry. A single image is treated as a one-frame stream, so the same tool handles both. "+
+			"Specify the target either as an explicit width and/or height in pixels, or as an aspect-ratio shorthand ('16:9', '9:16', '1:1'); the aspect_ratio can be combined with a single width or height (the other side is computed), or used alone (the input's width is kept). Providing both width and height sets the exact frame and ignores aspect_ratio. "+
+			"When the source and target aspect ratios differ, the mismatch is reconciled by 'reframe_mode': 'pad' (default) scales the whole picture to fit and fills the remainder with bars (letterbox/pillarbox), preserving all content; 'crop' scales to fill the frame edge-to-edge and trims the overflow. Pad is the default because it never discards picture content. "+
+			"Target dimensions are automatically rounded to even numbers, which many video codecs require. Works on local paths and gs:// URIs and preserves any audio stream unchanged."),
+		mcp.WithString("input_media_uri", mcp.Required(), mcp.Description("URI of the input image or video file (local path or gs://). Must contain a visual (image or video) stream.")),
+		mcp.WithNumber("width", mcp.Description("Optional. Target width in pixels (must be positive). Combine with 'height' for an exact frame, with 'aspect_ratio' to compute the height, or alone for a proportional resize that keeps the input's aspect ratio.")),
+		mcp.WithNumber("height", mcp.Description("Optional. Target height in pixels (must be positive). Combine with 'width' for an exact frame, with 'aspect_ratio' to compute the width, or alone for a proportional resize that keeps the input's aspect ratio.")),
+		mcp.WithString("aspect_ratio", mcp.Description("Optional. Target aspect ratio shorthand in W:H form (e.g. '16:9', '9:16', '1:1'). Used with a single width or height to size the frame, or alone to reframe at the input's width. Ignored when both width and height are given.")),
+		mcp.WithString("reframe_mode", mcp.DefaultString(defaultReframeMode), mcp.Description("Optional. How to handle an aspect-ratio mismatch: 'pad' (default) keeps the whole frame and adds bars; 'crop' fills the frame and cuts off the excess.")),
+		mcp.WithString("pad_color", mcp.DefaultString(defaultPadColor), mcp.Description("Optional. Fill colour for the bars added in 'pad' mode (e.g. 'black', 'white', '#000000', '0xFFFFFF'). Defaults to black. Ignored in 'crop' mode.")),
+		mcp.WithString("output_filename", mcp.Description("Optional. Desired name for the output file (e.g., 'reframed.mp4' or 'thumb.png'). The client-provided extension is honored and selects the output format. Takes precedence over the deprecated output_file_name. If omitted, a unique name is generated and the input's extension is preserved. An existing file of the same name is overwritten.")),
+		mcp.WithString("output_file_name", mcp.Description("Optional (deprecated; use output_filename). Desired name for the output file.")),
+		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output file.")),
+		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output file to (uses GENMEDIA_BUCKET if set and this is empty).")),
+	)
+	s.AddTool(tool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return ffmpegResizeReframeHandler(ctx, request, cfg)
+	})
+}
+
+// ffmpegResizeReframeHandler is the handler for the 'ffmpeg_resize_reframe' tool. It
+// validates the requested target geometry, probes the input's visual dimensions
+// (rejecting inputs with no image/video stream), resolves the final even target
+// width/height, and runs the scale+pad/crop filtergraph, writing the result to the
+// requested destination.
+func ffmpegResizeReframeHandler(ctx context.Context, request mcp.CallToolRequest, cfg *common.Config) (*mcp.CallToolResult, error) {
+	tr := otel.Tracer(serviceName)
+	ctx, span := tr.Start(ctx, "ffmpeg_resize_reframe")
+	defer span.End()
+
+	startTime := time.Now()
+	argsMap, err := getArguments(request)
+	if err != nil {
+		span.RecordError(err)
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	log.Printf("Handling %s request with arguments: %v", "ffmpeg_resize_reframe", argsMap)
+
+	inputMediaURI, _ := argsMap["input_media_uri"].(string)
+	if strings.TrimSpace(inputMediaURI) == "" {
+		return mcp.NewToolResultError("Parameter 'input_media_uri' is required."), nil
+	}
+
+	// Resolve the requested target components. Numbers arrive as float64 from JSON;
+	// 0 is used internally to mean "not supplied", so a supplied zero or negative
+	// dimension is an explicit error.
+	var reqWidth, reqHeight int
+	if v, ok := argsMap["width"].(float64); ok {
+		if v <= 0 {
+			return mcp.NewToolResultError("Parameter 'width' must be a positive number of pixels."), nil
+		}
+		reqWidth = int(math.Round(v))
+	}
+	if v, ok := argsMap["height"].(float64); ok {
+		if v <= 0 {
+			return mcp.NewToolResultError("Parameter 'height' must be a positive number of pixels."), nil
+		}
+		reqHeight = int(math.Round(v))
+	}
+
+	var aspect float64
+	if raw, ok := argsMap["aspect_ratio"].(string); ok && strings.TrimSpace(raw) != "" {
+		aspect, err = parseAspectRatio(raw)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Parameter 'aspect_ratio' is invalid: %v", err)), nil
+		}
+	}
+
+	if reqWidth == 0 && reqHeight == 0 && aspect == 0 {
+		return mcp.NewToolResultError("Provide at least one of 'width', 'height', or 'aspect_ratio' to define the target."), nil
+	}
+
+	reframeMode := defaultReframeMode
+	if raw, ok := argsMap["reframe_mode"].(string); ok && strings.TrimSpace(raw) != "" {
+		reframeMode = strings.ToLower(strings.TrimSpace(raw))
+	}
+	if reframeMode != reframeModePad && reframeMode != reframeModeCrop {
+		return mcp.NewToolResultError(fmt.Sprintf("Parameter 'reframe_mode' must be %q or %q.", reframeModePad, reframeModeCrop)), nil
+	}
+
+	padColor := defaultPadColor
+	if raw, ok := argsMap["pad_color"].(string); ok && strings.TrimSpace(raw) != "" {
+		padColor = strings.TrimSpace(raw)
+	}
+	if !isValidPadColor(padColor) {
+		return mcp.NewToolResultError("Parameter 'pad_color' must be a simple colour name or hex value (e.g. 'black', '#000000', '0xFFFFFF')."), nil
+	}
+
+	outputFileName := resolveAVToolOutputFilename(argsMap)
+	outputLocalDir, _ := argsMap["output_local_dir"].(string)
+	outputGCSBucket, _ := argsMap["output_gcs_bucket"].(string)
+	outputGCSBucket = strings.TrimSpace(outputGCSBucket)
+
+	if outputGCSBucket == "" && cfg.GenmediaBucket != "" {
+		outputGCSBucket = cfg.GenmediaBucket
+		log.Printf("Handler ffmpeg_resize_reframe: 'output_gcs_bucket' parameter not provided, using default from GENMEDIA_BUCKET: %s", outputGCSBucket)
+	}
+	if outputGCSBucket != "" {
+		outputGCSBucket = strings.TrimPrefix(outputGCSBucket, "gs://")
+	}
+
+	span.SetAttributes(
+		attribute.String("input_media_uri", inputMediaURI),
+		attribute.Int("requested_width", reqWidth),
+		attribute.Int("requested_height", reqHeight),
+		attribute.Float64("aspect_ratio", aspect),
+		attribute.String("reframe_mode", reframeMode),
+		attribute.String("output_file_name", outputFileName),
+		attribute.String("output_local_dir", outputLocalDir),
+		attribute.String("output_gcs_bucket", outputGCSBucket),
+	)
+
+	localInputMedia, inputCleanup, err := common.PrepareInputFile(ctx, inputMediaURI, "resize_input", cfg.ProjectID)
+	if err != nil {
+		span.RecordError(err)
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to prepare input media: %v", err)), nil
+	}
+	defer inputCleanup()
+
+	// A single ffprobe call yields both the input's dimensions and whether it carries
+	// an audio stream (used to decide if audio is stream-copied through the resize).
+	streamInfo, err := probeMediaStreamInfo(ctx, localInputMedia)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Cannot resize this input: %v", err)), nil
+	}
+	if streamInfo.Width <= 0 || streamInfo.Height <= 0 {
+		return mcp.NewToolResultError("Cannot resize this input: it has no video or image stream with usable dimensions"), nil
+	}
+	inWidth, inHeight := streamInfo.Width, streamInfo.Height
+	hasAudio := streamInfo.HasAudio
+
+	targetWidth, targetHeight, err := resolveTargetDimensions(reqWidth, reqHeight, aspect, inWidth, inHeight)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Could not resolve target dimensions: %v", err)), nil
+	}
+	span.SetAttributes(
+		attribute.Int("target_width", targetWidth),
+		attribute.Int("target_height", targetHeight),
+	)
+
+	// Preserve the input's container/extension by default; a client-provided output
+	// filename extension overrides it and selects the output format.
+	defaultOutputExt := strings.ToLower(strings.TrimPrefix(filepath.Ext(localInputMedia), "."))
+	if defaultOutputExt == "" {
+		defaultOutputExt = "mp4"
+	}
+	if outputFileName != "" {
+		if userExt := strings.ToLower(strings.TrimPrefix(filepath.Ext(outputFileName), ".")); userExt != "" {
+			defaultOutputExt = userExt
+		}
+	}
+
+	tempOutputFile, finalOutputFilename, outputCleanup, err := common.HandleOutputPreparation(outputFileName, defaultOutputExt)
+	if err != nil {
+		span.RecordError(err)
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to prepare output file: %v", err)), nil
+	}
+	defer outputCleanup()
+
+	target := reframeTarget{Width: targetWidth, Height: targetHeight, Mode: reframeMode, PadColor: padColor}
+	if ffmpegErr := executeResizeReframe(ctx, localInputMedia, tempOutputFile, target, hasAudio); ffmpegErr != nil {
+		span.RecordError(ffmpegErr)
+		return mcp.NewToolResultError(fmt.Sprintf("FFMpeg resize/reframe failed: %v", ffmpegErr)), nil
+	}
+
+	finalLocalPath, finalGCSPath, processErr := common.ProcessOutputAfterFFmpeg(ctx, tempOutputFile, finalOutputFilename, outputLocalDir, outputGCSBucket, cfg.ProjectID)
+	if processErr != nil {
+		span.RecordError(processErr)
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to process FFMpeg output: %v", processErr)), nil
+	}
+
+	duration := time.Since(startTime)
+	span.SetAttributes(attribute.Float64("duration_ms", float64(duration.Milliseconds())))
+
+	var messageParts []string
+	messageParts = append(messageParts, fmt.Sprintf("Resized from %dx%d to %dx%d (%s mode) in %v.",
+		inWidth, inHeight, targetWidth, targetHeight, reframeMode, duration))
+	if outputLocalDir != "" && finalLocalPath != "" {
+		messageParts = append(messageParts, fmt.Sprintf("Output saved locally to: %s.", finalLocalPath))
+	} else if finalLocalPath != "" && (outputGCSBucket == "" || finalGCSPath == "") {
+		messageParts = append(messageParts, fmt.Sprintf("Temporary output was at: %s (cleaned up if not moved/uploaded).", finalLocalPath))
+	}
+	if finalGCSPath != "" {
+		messageParts = append(messageParts, fmt.Sprintf("Output uploaded to GCS: %s.", finalGCSPath))
+	}
+	if len(messageParts) == 1 {
+		messageParts = append(messageParts, "No specific output location requested beyond temporary processing.")
+	}
+	return mcp.NewToolResultText(strings.Join(messageParts, " ")), nil
+}
+
 // addAdjustVolumeTool defines and registers the 'ffmpeg_adjust_volume' tool.
 // This tool allows for changing the volume of an audio file by a specified decibel (dB) level.
 func addAdjustVolumeTool(s *server.MCPServer, cfg *common.Config) {
@@ -1016,7 +1564,8 @@ func addAdjustVolumeTool(s *server.MCPServer, cfg *common.Config) {
 		mcp.WithDescription("Adjusts the volume of an audio file by a specified dB amount."),
 		mcp.WithString("input_audio_uri", mcp.Required(), mcp.Description("URI of the input audio file (local path or gs://).")),
 		mcp.WithNumber("volume_db_change", mcp.Required(), mcp.Description("Volume change in dB (e.g., -10 for -10dB, 5 for +5dB).")),
-		mcp.WithString("output_file_name", mcp.Description("Optional. Desired name for the output audio file.")),
+		mcp.WithString("output_filename", mcp.Description("Optional. Desired name for the output audio file. The client-provided extension is honored and selects the output format. Takes precedence over the deprecated output_file_name. If omitted, a unique name is generated. An existing file of the same name is overwritten.")),
+		mcp.WithString("output_file_name", mcp.Description("Optional (deprecated; use output_filename). Desired name for the output audio file.")),
 		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output audio file.")),
 		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output audio file to.")),
 	)
@@ -1046,7 +1595,7 @@ func ffmpegAdjustVolumeHandler(ctx context.Context, request mcp.CallToolRequest,
 		return mcp.NewToolResultError("Parameter 'volume_db_change' is required and must be a number."), nil
 	}
 	volumeDBChange := int(volumeDBChangeFloat)
-	outputFileName, _ := argsMap["output_file_name"].(string)
+	outputFileName := resolveAVToolOutputFilename(argsMap)
 	outputLocalDir, _ := argsMap["output_local_dir"].(string)
 	outputGCSBucket, _ := argsMap["output_gcs_bucket"].(string)
 	outputGCSBucket = strings.TrimSpace(outputGCSBucket)
@@ -1137,7 +1686,8 @@ func addLayerAudioTool(s *server.MCPServer, cfg *common.Config) {
 	tool := mcp.NewTool("ffmpeg_layer_audio_files",
 		mcp.WithDescription("Layers multiple audio files together (mixing)."),
 		mcp.WithArray("input_audio_uris", mcp.Required(), mcp.Description("Array of URIs for the input audio files to layer (local paths or gs://)."), mcp.Items(map[string]any{"type": "string"})),
-		mcp.WithString("output_file_name", mcp.Description("Optional. Desired name for the output mixed audio file (e.g., 'layered_audio.mp3').")),
+		mcp.WithString("output_filename", mcp.Description("Optional. Desired name for the output file (e.g., 'layered_audio.mp3'). The client-provided extension is honored and selects the output format. Takes precedence over the deprecated output_file_name. If omitted, a unique name is generated. An existing file of the same name is overwritten.")),
+		mcp.WithString("output_file_name", mcp.Description("Optional (deprecated; use output_filename). Desired name for the output mixed audio file (e.g., 'layered_audio.mp3').")),
 		mcp.WithString("output_local_dir", mcp.Description("Optional. Local directory to save the output file.")),
 		mcp.WithString("output_gcs_bucket", mcp.Description("Optional. GCS bucket to upload the output file to.")),
 	)
@@ -1213,7 +1763,7 @@ func ffmpegLayerAudioHandler(ctx context.Context, request mcp.CallToolRequest, c
 		}
 	}
 
-	outputFileName, _ := argsMap["output_file_name"].(string)
+	outputFileName := resolveAVToolOutputFilename(argsMap)
 	outputLocalDir, _ := argsMap["output_local_dir"].(string)
 	outputGCSBucket, _ := argsMap["output_gcs_bucket"].(string)
 	outputGCSBucket = strings.TrimSpace(outputGCSBucket)
